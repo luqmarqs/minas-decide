@@ -10,5 +10,5 @@
 - Turnstile: validar no servidor via Siteverify; checar `success`, `hostname`, `action` (se houver) e uso único.
 - RSVP anônimo: cookie `Secure; HttpOnly; SameSite=Lax`, HMAC no servidor, unique constraint; nunca listar participantes.
 - Admin: verificação server-side contra a tabela de admins + e-mail verificado (conta não anônima); MFA opcional (D35, risco aceito pelo proprietário); moderação e revelação de contatos auditadas em `audit_events`. Autenticação: Clerk (ADR 0005); `CLERK_SECRET_KEY` só no Worker.
-- Não implementar autenticação/criptografia próprias. Usar Supabase Auth e WebCrypto.
+- Não implementar autenticação/criptografia próprias. Usar Clerk (identidade) e WebCrypto.
 - Sem deploy de produção, sem DNS, sem contratação de serviço.
