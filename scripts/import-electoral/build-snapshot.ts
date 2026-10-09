@@ -234,6 +234,9 @@ function buildMetrics(t: TerritoryAgg): TerritoryMetrics {
       if (!c || c.cd_cargo !== cargo) continue;
       sumCand += v;
       if (c.tipo !== 'nominal') continue; // legenda votes count in valid but are not candidates
+      if (tot.val > 0 && v > tot.val) {
+        warnings.push(`${office}: candidatura ${c.nm_urna ?? c.numero} tem ${v} votos acima dos ${tot.val} válidos (votos possivelmente anulados sub judice na fonte).`);
+      }
       list.push({
         candidate_id: String(cid),
         ballot_name: c.nm_urna ?? `Nº ${c.numero}`,
@@ -365,7 +368,7 @@ const methodology: Methodology = {
     'Sem 2º turno de 2026 nesta versão.',
     'Histórico de 2022 disponível apenas para candidaturas rastreadas; sem abstenção de 2022.',
     'Para Deputado Federal e Estadual, exibe-se as 10 candidaturas mais votadas por território além das rastreadas; votos de legenda compõem os válidos mas não aparecem como candidaturas.',
-    'Pequenas divergências entre soma de candidaturas e votos válidos (votos sub judice) são mantidas e sinalizadas.',
+    'A fonte exclui dos votos válidos os votos de candidaturas anuladas sub judice; por isso a soma dos votos de candidaturas pode superar os válidos (em Deputado Federal, 94.114 votos em MG, 0,75 %). As divergências são mantidas e sinalizadas, nunca corrigidas.',
     `${terr.get('mg')!.approxCount} locais de votação com coordenada aproximada.`,
   ],
 };

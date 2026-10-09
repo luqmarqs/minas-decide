@@ -73,7 +73,7 @@ function checkMetrics(tm: TerritoryMetrics, rel: string) {
     const valid = tm.valid_by_office[office as keyof typeof tm.valid_by_office] ?? 0;
     for (const c of list ?? []) {
       if (c.votes < 0) errors.push(`${rel} ${tm.territory_id}: negative votes`);
-      if (valid > 0 && c.votes > valid) errors.push(`${rel} ${tm.territory_id}: candidate votes exceed valid (${office})`);
+      if (valid > 0 && c.votes > valid) warn.push(`${rel} ${tm.territory_id}: candidate votes exceed valid (${office}) — sub judice in source`);
     }
   }
   if (tm.status === 'validated' && m.status !== 'validated') errors.push(`${rel} ${tm.territory_id}: territory status validated but manifest is ${m.status}`);
