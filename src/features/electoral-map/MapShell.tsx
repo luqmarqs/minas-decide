@@ -1,4 +1,13 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import type { PublicActivity } from '@shared/contracts/activities.ts';
 import { OFFICE_LABEL_PT, type MapLayerCode } from '@shared/contracts/metrics.ts';
 import { municipalityIdOf } from '@shared/contracts/snapshot.ts';
@@ -14,7 +23,7 @@ import { useActivities } from '@/features/activities/api';
 import {
   useCandidates,
   useLayerValues,
-  useMunicipalityMetrics,
+  useMunicipalitiesMetrics,
   usePois,
   useTerritoryIndex,
 } from './hooks';
@@ -32,19 +41,18 @@ import {
 import { deriveMobilizationLayer, MOBILIZATION_SIDE_LABEL, sideOf } from './mobilization';
 import { PoiPopover } from './PoiPopover';
 import type { BasemapProblem } from './MapCanvas';
+import { MapControlBar } from './MapControlBar';
 import { MapLayerSelector } from './MapLayerSelector';
-import { MapLegend, StatusBadge } from './MapLegend';
+import { MapLegend, MapLegendChip, StatusBadge } from './MapLegend';
 import { TerritoryListFallback, type FallbackReason } from './TerritoryListFallback';
 import type { MapUrlState } from './useMapUrlState';
-import { SHEET_HALF } from '@/features/territory/sheet';
+import { cameraPadding, sheetOverlap } from './viewport';
+import { useSheetHeight } from '@/features/territory/sheet';
 
 const MapCanvas = lazy(() => import('./MapCanvas'));
 
-/** Height reserved for the layer selector overlay on mobile (camera padding). */
-const MOBILE_TOP_PAD = 140;
-
 export { MAP_ATTRIBUTION, MapAttribution } from './MapAttribution';
-import { MapAttribution } from './MapAttribution';
+import { MapAttribution, MapAttributionCompact } from './MapAttribution';
 
 export interface MapShellProps {
   state: MapUrlState;
@@ -154,22 +162,32 @@ export function MapShell({
   const layerData = mobilization ? mobilizationValues : layerQ.data;
   const layerLoading = mobilization ? mobAbstQ.isLoading || mobMarginQ.isLoading : layerQ.isLoading;
   const selectedMuni = state.territoryId ? municipalityIdOf(state.territoryId) : null;
-  const muniMetricsQ = useMunicipalityMetrics(
-    selectedMuni && selectedMuni !== 'mg' ? selectedMuni : null,
-  );
+  // Municipalities whose neighborhood areas the map draws (selected + on screen from zoom
+  // 10, FE-10): their metrics colour the areas by the active layer.
+  const [areaMunis, setAreaMunis] = useState<string[]>([]);
+  const metricsIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (selectedMuni && selectedMuni !== 'mg') ids.add(selectedMuni);
+    for (const id of areaMunis) ids.add(id);
+    return [...ids];
+  }, [selectedMuni, areaMunis]);
+  const metricsFiles = useMunicipalitiesMetrics(metricsIds);
   const neighborhoodValues = useMemo(() => {
-    const file = muniMetricsQ.data;
-    if (!file) return null;
     const out: Record<string, number> = {};
-    for (const [id, rows] of Object.entries(file.children)) {
-      const v =
-        layer === 'president_margin'
-          ? marginFromComparison(pickPresidentComparison(rows), layerYear, layerRound)
-          : valueForLayer(pickMetrics(rows, layerYear, layerRound), layer, candidateId);
-      if (v !== null) out[id] = v;
+    let any = false;
+    for (const file of metricsFiles) {
+      if (!file) continue;
+      any = true;
+      for (const [id, rows] of Object.entries(file.children)) {
+        const v =
+          layer === 'president_margin'
+            ? marginFromComparison(pickPresidentComparison(rows), layerYear, layerRound)
+            : valueForLayer(pickMetrics(rows, layerYear, layerRound), layer, candidateId);
+        if (v !== null) out[id] = v;
+      }
     }
-    return out;
-  }, [muniMetricsQ.data, layer, layerYear, layerRound, candidateId]);
+    return any ? out : null;
+  }, [metricsFiles, layer, layerYear, layerRound, candidateId]);
 
   const activitiesQ = useActivities({});
   const activities = activitiesOverride ?? activitiesQ.data?.items ?? [];
@@ -206,83 +224,171 @@ export function MapShell({
 
   const showPanelSpace = !!panel && desktop && variant === 'full';
 
-  // P-UX-2: measure how much of the map the mobile sheet covers once it has opened (and
-  // the page scrolled the map up), so the camera frames the territory in the visible part.
+  // FE-10 (phones): compact bar on top, collapsed sheet at the bottom. Measure the bar and
+  // the part of the map the fixed sheet covers, so the camera frames the territory — and
+  // the legend chip / popovers sit — in the map that is actually visible.
+  const compact = !desktop && variant === 'full';
+  const sheetHeight = useSheetHeight();
   const mapBoxRef = useRef<HTMLDivElement>(null);
-  const [sheetOverlap, setSheetOverlap] = useState(0);
-  // Mobile: the layer selector (chips, sub-selection, overlay switches) can be ~250 px tall;
-  // measure it so the camera never frames the territory (or a marker) behind it.
-  const selectorRef = useRef<HTMLDivElement>(null);
-  const [selectorHeight, setSelectorHeight] = useState(MOBILE_TOP_PAD);
+  const barRef = useRef<HTMLDivElement>(null);
+  const [barBottom, setBarBottom] = useState(64);
+  const [mapHeight, setMapHeight] = useState(0);
   useEffect(() => {
-    const el = selectorRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
+    const box = mapBoxRef.current;
+    if (!box || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => {
-      const h = Math.round(el.getBoundingClientRect().height);
-      if (h > 0) setSelectorHeight(h + 16);
+      const top = box.getBoundingClientRect().top;
+      setMapHeight(Math.round(box.getBoundingClientRect().height));
+      const bar = barRef.current?.getBoundingClientRect();
+      if (bar && bar.height > 0) setBarBottom(Math.round(bar.bottom - top));
     });
-    ro.observe(el);
+    ro.observe(box);
+    if (barRef.current) ro.observe(barRef.current);
     return () => ro.disconnect();
-  });
-  const topPad = variant === 'full' && !desktop ? Math.max(MOBILE_TOP_PAD, selectorHeight) : 72;
-  const topPadRef = useRef(topPad);
+  }, [compact, snapshot]);
+  const sheetCase = compact && !!panel && !!state.territoryId;
+  const [overlap, setOverlap] = useState(0);
   useEffect(() => {
-    topPadRef.current = topPad;
-  });
-  const sheetCase = !desktop && variant === 'full' && !!panel && !!state.territoryId;
-  useEffect(() => {
-    if (!sheetCase) return;
+    if (!sheetCase || sheetHeight <= 0) return;
     const measure = () => {
       const box = mapBoxRef.current?.getBoundingClientRect();
-      if (!box) return;
-      const sheet = document.querySelector('[data-vaul-drawer]')?.getBoundingClientRect();
-      const sheetTop = sheet?.top ?? window.innerHeight * (1 - SHEET_HALF);
-      const overlap = Math.round(box.bottom - sheetTop);
-      // Keep at least ~120 px of map for the territory itself.
-      setSheetOverlap(Math.max(0, Math.min(overlap, box.height - topPadRef.current - 120)));
+      // Map off screen (deep link before scrolling): keep the last value.
+      if (!box || box.top >= window.innerHeight || box.bottom <= 0) return;
+      setOverlap(
+        sheetOverlap({
+          mapTop: box.top,
+          mapBottom: box.bottom,
+          viewportHeight: window.innerHeight,
+          sheetHeight,
+          topInset: barBottom,
+        }),
+      );
     };
-    let t = setTimeout(measure, 500);
-    // Deep links open the sheet before the map is scrolled into view: re-measure (debounced)
-    // after the page scrolls so the camera re-frames in the part of the map left visible.
-    const onScroll = () => {
+    measure();
+    // Re-measure (debounced) after the page scrolls the map into view.
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const later = () => {
       clearTimeout(t);
-      t = setTimeout(measure, 250);
+      t = setTimeout(measure, 150);
     };
-    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scroll', later, { passive: true });
+    window.addEventListener('resize', later);
     return () => {
       clearTimeout(t);
-      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scroll', later);
+      window.removeEventListener('resize', later);
     };
-  }, [sheetCase, state.territoryId]);
-  const padding = {
-    // Mobile: the measured height of the layer selector at the top of the map.
-    top: topPad,
-    right: showPanelSpace ? 420 : 0,
-    // Mobile: only the part of the map actually covered by the half-open sheet.
-    bottom: sheetCase ? sheetOverlap : 0,
-  };
+  }, [sheetCase, sheetHeight, barBottom, state.territoryId]);
+  const bottomInset = sheetCase && sheetHeight > 0 ? overlap : 0;
+  const padding = cameraPadding({
+    compact,
+    barBottom,
+    overlap: bottomInset,
+    panelRight: showPanelSpace ? 420 : 0,
+  });
+  // Popovers never grow over the bar nor under the sheet.
+  const popoverMax = Math.max(160, mapHeight - barBottom - bottomInset - 24);
 
-  const legend = snapshot ? (
-    <MapLegend
+  const setActivities = (on: boolean) => {
+    if (!on) setActivityId(null);
+    onStateChange({ activities: on });
+  };
+  const setPois = (on: boolean) => {
+    if (!on) setPoiId(null);
+    onStateChange({ pois: on });
+  };
+  // Qualifier shown in the compact bar ("2026 · 1º turno", candidate, Lula/Bolsonaro…).
+  // Short on screen ("2026 · 1º"); "turno" stays in the accessible name.
+  const yearRoundShort = (
+    <>
+      {layerYear} · {layerRound}º<span className="sr-only"> turno</span>
+    </>
+  );
+  const layerDetail =
+    meta.needsCandidate && candidateLabel
+      ? candidateLabel.split(' · ')[0]!
+      : (meta.scale === 'sequential' && !fixedYear) || layer === 'president_margin'
+        ? yearRoundShort
+        : null;
+  const renderSelector = (inPopover: boolean) => (
+    <MapLayerSelector
       layer={layer}
-      values={layerData}
-      loading={layerLoading}
-      status={snapshot.status}
-      releaseId={snapshot.releaseId}
-      year={layerYear}
-      round={layerRound}
-      candidateLabel={candidateLabel}
-      showActivities={showActivities}
-      activityCount={mappedActivities.length}
-      activitiesUnavailable={!!activitiesQ.error && !activitiesOverride}
-      activitiesDemo={activitiesQ.data?.demo}
-      showPois={showPois}
-      poiCount={pois?.length ?? null}
-      poiLoading={poisQ.isLoading}
-      poiUnavailable={!!poisQ.error || poisQ.data === null}
-      defaultCollapsed={!desktop || variant === 'context'}
+      onLayerChange={(l) => onStateChange({ layer: l })}
+      yearRound={`${layerYear}-${layerRound}`}
+      yearRoundOptions={yearRoundOptions}
+      marginOptions={MARGIN_ROUNDS.map((r) => ({
+        value: `${r.year}-${r.round}`,
+        label: r.label,
+      }))}
+      onYearRoundChange={(v) => {
+        const [y, r] = v.split('-').map(Number);
+        if (y && r) onStateChange({ year: y, round: r });
+      }}
+      candidateId={candidateId}
+      candidateOptions={candidateOptions}
+      onCandidateChange={(id) => onStateChange({ candidateId: id })}
+      overlays={
+        inPopover
+          ? undefined
+          : {
+              activities: showActivities,
+              onActivitiesChange: setActivities,
+              pois: showPois,
+              onPoisChange: setPois,
+            }
+      }
+      wrapChips={inPopover}
+      trailing={
+        !inPopover && webglOk && !mapFailed ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              iconBefore={<Icon name={state.view === 'lista' ? 'map' : 'list'} size={18} />}
+              onClick={() => onStateChange({ view: state.view === 'lista' ? 'mapa' : 'lista' })}
+            >
+              {state.view === 'lista' ? 'Ver mapa' : 'Ver como lista'}
+            </Button>
+            {basemapProblem ? (
+              <p role="status" className="text-xs text-warning">
+                Mapa de fundo indisponível; dados e contornos continuam visíveis.
+              </p>
+            ) : null}
+          </div>
+        ) : null
+      }
     />
-  ) : null;
+  );
+
+  const renderLegend = (defaultCollapsed: boolean, className?: string) =>
+    snapshot ? (
+      <MapLegend
+        className={className}
+        layer={layer}
+        values={layerData}
+        loading={layerLoading}
+        status={snapshot.status}
+        releaseId={snapshot.releaseId}
+        year={layerYear}
+        round={layerRound}
+        candidateLabel={candidateLabel}
+        showActivities={showActivities}
+        activityCount={mappedActivities.length}
+        activitiesUnavailable={!!activitiesQ.error && !activitiesOverride}
+        activitiesDemo={activitiesQ.data?.demo}
+        showPois={showPois}
+        poiCount={pois?.length ?? null}
+        poiLoading={poisQ.isLoading}
+        poiUnavailable={!!poisQ.error || poisQ.data === null}
+        defaultCollapsed={defaultCollapsed}
+      />
+    ) : null;
+  const legend = renderLegend(!desktop || variant === 'context');
+  // Phones: the full legend (details open) inside the chip's popover.
+  const legendFull = renderLegend(
+    false,
+    'max-w-none rounded-none border-0 bg-transparent shadow-none backdrop-blur-none',
+  );
 
   let body: ReactNode;
   if (isLoading || !snapshot) {
@@ -317,7 +423,7 @@ export function MapShell({
         onBackToMap={fallbackReason === 'user' ? () => onStateChange({ view: 'mapa' }) : undefined}
         className={cn(
           showPanelSpace && 'lg:pr-[calc(var(--panel-width)+2.5rem)]',
-          variant === 'full' && 'pt-32 lg:pt-28',
+          variant === 'full' && 'pt-16 lg:pt-28',
         )}
       />
     );
@@ -355,6 +461,7 @@ export function MapShell({
           }}
           onFatalError={() => setMapFailed(true)}
           onBasemapProblem={setBasemapProblem}
+          onAreaMunicipalitiesChange={setAreaMunis}
           padding={padding}
         />
       </Suspense>
@@ -366,86 +473,75 @@ export function MapShell({
       <div
         ref={mapBoxRef}
         className={cn(
-          'relative min-h-0 flex-1 overflow-hidden bg-surface-alt',
+          'mm-map-box relative min-h-0 flex-1 overflow-hidden bg-surface-alt',
           showPanelSpace && 'mm-map-has-panel',
         )}
+        style={{ '--mm-bottom-inset': `${bottomInset}px` } as CSSProperties}
       >
         {body}
 
-        {variant === 'full' && snapshot ? (
+        {variant === 'full' && snapshot && compact ? (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-(--z-panel) p-2 [&>*]:pointer-events-auto">
+            <MapControlBar
+              ref={barRef}
+              layerLabel={meta.label}
+              layerDetail={layerDetail}
+              selector={renderSelector(true)}
+              activities={showActivities}
+              onActivitiesChange={setActivities}
+              pois={showPois}
+              onPoisChange={setPois}
+              listMode={
+                webglOk && !mapFailed
+                  ? {
+                      list: state.view === 'lista',
+                      onToggle: () =>
+                        onStateChange({ view: state.view === 'lista' ? 'mapa' : 'lista' }),
+                    }
+                  : null
+              }
+              popoverMaxHeight={popoverMax}
+            />
+            {basemapProblem ? (
+              <p
+                role="status"
+                className="mt-1 w-fit rounded-sm bg-surface-raised/95 px-2 py-1 text-xs text-warning"
+              >
+                Mapa de fundo indisponível; dados e contornos continuam visíveis.
+              </p>
+            ) : null}
+          </div>
+        ) : variant === 'full' && snapshot ? (
           <div
             className={cn(
               'pointer-events-none absolute inset-x-0 top-0 z-(--z-panel) p-2 sm:p-3',
               showPanelSpace && 'right-(--panel-width) pr-6',
             )}
           >
-            <div
-              ref={selectorRef}
-              className="pointer-events-auto flex w-fit max-w-full flex-col gap-2 rounded-md border border-border bg-surface-raised/95 p-2 shadow-raised backdrop-blur-sm"
-            >
-              <MapLayerSelector
-                layer={layer}
-                onLayerChange={(l) => onStateChange({ layer: l })}
-                yearRound={`${layerYear}-${layerRound}`}
-                yearRoundOptions={yearRoundOptions}
-                marginOptions={MARGIN_ROUNDS.map((r) => ({
-                  value: `${r.year}-${r.round}`,
-                  label: r.label,
-                }))}
-                onYearRoundChange={(v) => {
-                  const [y, r] = v.split('-').map(Number);
-                  if (y && r) onStateChange({ year: y, round: r });
-                }}
-                candidateId={candidateId}
-                candidateOptions={candidateOptions}
-                onCandidateChange={(id) => onStateChange({ candidateId: id })}
-                overlays={{
-                  activities: showActivities,
-                  onActivitiesChange: (on) => {
-                    if (!on) setActivityId(null);
-                    onStateChange({ activities: on });
-                  },
-                  pois: showPois,
-                  onPoisChange: (on) => {
-                    if (!on) setPoiId(null);
-                    onStateChange({ pois: on });
-                  },
-                }}
-                trailing={
-                  webglOk && !mapFailed ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        iconBefore={
-                          <Icon name={state.view === 'lista' ? 'map' : 'list'} size={18} />
-                        }
-                        onClick={() =>
-                          onStateChange({ view: state.view === 'lista' ? 'mapa' : 'lista' })
-                        }
-                      >
-                        {state.view === 'lista' ? 'Ver mapa' : 'Ver como lista'}
-                      </Button>
-                      {basemapProblem ? (
-                        <p role="status" className="text-xs text-warning">
-                          Mapa de fundo indisponível; dados e contornos continuam visíveis.
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null
-                }
-              />
+            <div className="pointer-events-auto flex w-fit max-w-full flex-col gap-2 rounded-md border border-border bg-surface-raised/95 p-2 shadow-raised backdrop-blur-sm">
+              {renderSelector(false)}
             </div>
           </div>
         ) : null}
 
-        {snapshot && !fallbackReason && variant === 'full' ? (
+        {snapshot && !fallbackReason && variant === 'full' && compact ? (
           <div
-            className={cn(
-              'pointer-events-none absolute left-0 z-(--z-panel) w-full p-2 sm:p-3 lg:w-auto [&>*]:pointer-events-auto',
-              'bottom-0',
-            )}
+            className="pointer-events-none absolute right-0 left-0 z-(--z-panel) flex items-end justify-between gap-2 p-2 [&>*]:pointer-events-auto"
+            style={{ bottom: bottomInset }}
           >
+            <MapLegendChip
+              layer={layer}
+              values={layerData}
+              status={snapshot.status}
+              maxHeight={popoverMax}
+              className="min-w-0"
+            >
+              {legendFull}
+            </MapLegendChip>
+            <MapAttributionCompact className="mr-10 shrink-0" />
+          </div>
+        ) : snapshot && !fallbackReason && variant === 'full' ? (
+          <div className="pointer-events-none absolute bottom-0 left-0 z-(--z-panel) w-full p-2 sm:p-3 lg:w-auto [&>*]:pointer-events-auto">
             {legend}
           </div>
         ) : null}
@@ -453,10 +549,13 @@ export function MapShell({
         {selectedActivity || selectedPoi ? (
           <div
             className={cn(
-              'absolute inset-x-2 z-(--z-panel) max-h-[calc(100%-1rem)] overflow-y-auto sm:right-auto sm:left-3 sm:w-96',
-              // Mobile with the territory sheet open: show it at the top, above the sheet.
-              sheetCase ? 'top-2' : 'bottom-2',
+              'absolute z-(--z-panel) overflow-y-auto overscroll-contain',
+              compact
+                ? 'inset-x-2'
+                : 'inset-x-2 bottom-2 max-h-[calc(100%-1rem)] sm:right-auto sm:left-3 sm:w-96',
             )}
+            // Phones: anchored to the bottom of the free map, right above the sheet.
+            style={compact ? { bottom: bottomInset + 8, maxHeight: popoverMax } : undefined}
           >
             {selectedActivity ? (
               <ActivityPopover
@@ -497,7 +596,13 @@ export function MapShell({
           </span>
         </p>
       ) : null}
-      <MapAttribution className="px-2 py-1" />
+      <MapAttribution
+        className={cn(
+          'px-2 py-1',
+          variant === 'full' && 'max-lg:hidden',
+          compact && fallbackReason && 'max-lg:block',
+        )}
+      />
     </div>
   );
 }

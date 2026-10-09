@@ -1,13 +1,23 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { municipalityIdOf } from '@shared/contracts/snapshot.ts';
 import type { SnapPoint } from '@/components/ui/BottomSheet';
 import { Icon } from '@/components/ui/Icon';
 import { SidePanel } from '@/components/ui/SidePanel';
 import { cn } from '@/lib/cn';
 import { DESKTOP_QUERY, useMediaQuery } from '@/lib/media';
-import { useTerritoryIndex } from '@/features/electoral-map/hooks';
+import { useMunicipalityMetrics, useTerritoryIndex } from '@/features/electoral-map/hooks';
+import { pickMetrics } from '@/features/electoral-map/layers';
+import { StatusBadge } from '@/features/electoral-map/MapLegend';
 import { TerritoryDetails, type TerritoryDetailsProps } from './TerritoryDetails';
 import { territoryLabel } from './search';
-import { nextSheetSnap, SHEET_SNAPS, SHEET_TOGGLE_LABEL, sheetStateOf } from './sheet';
+import {
+  nextSheetSnap,
+  setSheetHeight,
+  SHEET_SNAPS,
+  SHEET_TOGGLE_LABEL,
+  sheetStateOf,
+  sheetSummary,
+} from './sheet';
 
 export interface TerritoryPanelProps extends Omit<
   TerritoryDetailsProps,
@@ -18,7 +28,7 @@ export interface TerritoryPanelProps extends Omit<
   onClose: () => void;
 }
 
-// vaul is only needed on mobile: keep it out of the desktop/initial bundle.
+// The sheet is only needed on mobile: keep it out of the desktop/initial bundle.
 const BottomSheet = lazy(() =>
   import('@/components/ui/BottomSheet').then((m) => ({ default: m.BottomSheet })),
 );
@@ -29,15 +39,26 @@ const BottomSheet = lazy(() =>
  */
 export function TerritoryPanel({ territoryId, onClose, ...details }: TerritoryPanelProps) {
   const desktop = useMediaQuery(DESKTOP_QUERY);
-  const { index } = useTerritoryIndex();
+  const { index, snapshot } = useTerritoryIndex();
   const [collapsed, setCollapsed] = useState(false);
-  const [snap, setSnap] = useState<SnapPoint | null>(SHEET_SNAPS[1]!);
-  // Each new selection opens the sheet in the "half" state, with the map visible.
+  const [snap, setSnap] = useState<SnapPoint | null>(SHEET_SNAPS[0]!);
+  // FE-10: each new selection opens the sheet *collapsed* (name + summary line), so the
+  // map keeps the screen; half/expanded only when the person pulls or taps.
   const [snapFor, setSnapFor] = useState(territoryId);
   if (snapFor !== territoryId) {
     setSnapFor(territoryId);
-    setSnap(SHEET_SNAPS[1]!);
+    setSnap(SHEET_SNAPS[0]!);
   }
+  const sheetEntry = !desktop && territoryId ? index?.byId.get(territoryId) : undefined;
+  const metricsQ = useMunicipalityMetrics(
+    sheetEntry && sheetEntry.type !== 'state' ? municipalityIdOf(sheetEntry.id) : null,
+  );
+  const summary = useMemo(() => {
+    const file = metricsQ.data;
+    if (!file || !sheetEntry) return null;
+    const rows = sheetEntry.type === 'neighborhood' ? file.children[sheetEntry.id] : file.self;
+    return sheetSummary(pickMetrics(rows, details.year, details.round));
+  }, [metricsQ.data, sheetEntry, details.year, details.round]);
   const sheetState = sheetStateOf(snap);
   const shownId = territoryId ?? 'mg';
   const entry = index?.byId.get(shownId);
@@ -70,9 +91,12 @@ export function TerritoryPanel({ territoryId, onClose, ...details }: TerritoryPa
         }}
         title={title}
         description={subtitle}
+        summary={summary}
+        badge={snapshot ? <StatusBadge status={snapshot.status} /> : null}
         snapPoints={SHEET_SNAPS}
         activeSnapPoint={snap}
         onActiveSnapPointChange={setSnap}
+        onHeightChange={setSheetHeight}
         headerExtra={
           <button
             type="button"

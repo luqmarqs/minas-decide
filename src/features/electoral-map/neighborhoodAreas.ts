@@ -1,9 +1,11 @@
 /**
  * Approximate neighborhood areas (owner decision D29): Voronoi cells of the polling places,
  * clipped by the IBGE municipal polygon and merged by neighborhood, generated offline into
- * `public/geo/bairros/<ibge7>.geojson`. They are NOT official boundaries. Loaded only when a
- * municipality is selected (never at state level), cached in memory per municipality.
- * Missing/invalid file → `null` and the map keeps the neighborhood points (fallback).
+ * `public/geo/bairros/<ibge7>.geojson`. They are NOT official boundaries. Loaded for the
+ * selected municipality and, from zoom ≥ AUTO_AREAS_MIN_ZOOM, automatically for the
+ * municipalities on screen (at most AUTO_AREAS_LIMIT at a time; never at state level),
+ * cached in memory per municipality; fetches of municipalities that leave the viewport
+ * are aborted. Missing/invalid file → `null` and the map keeps the points (fallback).
  */
 export const NEIGHBORHOOD_AREAS_BASE = '/geo/bairros';
 export const NEIGHBORHOOD_AREAS_NOTE =
@@ -27,6 +29,53 @@ export interface NeighborhoodAreas {
 }
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+/** From this zoom on, areas of every municipality on screen load automatically. */
+export const AUTO_AREAS_MIN_ZOOM = 10;
+/** Upper bound of municipalities with areas at once (network + GPU). */
+export const AUTO_AREAS_LIMIT = 12;
+
+export type BBox = [number, number, number, number];
+
+/**
+ * Municipalities whose polygon bbox intersects the viewport (`[w, s, e, n]`), nearest to
+ * the viewport centre first, at most `limit`. Below `minZoom` only the selected one. The
+ * selected municipality always comes first (its areas stay visible at any zoom).
+ * Ids are `mg-<ibge7>`; `boxes` is keyed by the IBGE code.
+ */
+export function visibleMunicipalities(
+  boxes: ReadonlyMap<string, BBox>,
+  view: BBox,
+  zoom: number,
+  selectedMunicipalityId: string | null = null,
+  { minZoom = AUTO_AREAS_MIN_ZOOM, limit = AUTO_AREAS_LIMIT } = {},
+): string[] {
+  const out: string[] = [];
+  const selected =
+    selectedMunicipalityId && /^mg-\d{7}$/.test(selectedMunicipalityId)
+      ? selectedMunicipalityId
+      : null;
+  if (selected) out.push(selected);
+  if (zoom < minZoom) return out;
+  const [w, s, e, n] = view;
+  const cx = (w + e) / 2;
+  const cy = (s + n) / 2;
+  const hits: { id: string; d: number }[] = [];
+  for (const [code, b] of boxes) {
+    if (b[2] < w || b[0] > e || b[3] < s || b[1] > n) continue;
+    const id = `mg-${code}`;
+    if (id === selected) continue;
+    const dx = (b[0] + b[2]) / 2 - cx;
+    const dy = (b[1] + b[3]) / 2 - cy;
+    hits.push({ id, d: dx * dx + dy * dy });
+  }
+  hits.sort((a, b) => a.d - b.d || a.id.localeCompare(b.id));
+  for (const h of hits) {
+    if (out.length >= limit) break;
+    out.push(h.id);
+  }
+  return out;
+}
 
 const cache = new Map<string, Promise<NeighborhoodAreas | null>>();
 
@@ -74,6 +123,7 @@ function isAreaFeature(f: unknown, municipalityId: string): f is AreaFeature {
 export function loadNeighborhoodAreas(
   municipalityId: string,
   fetchImpl: FetchLike = (i, init) => fetch(i, init),
+  signal?: AbortSignal,
 ): Promise<NeighborhoodAreas | null> {
   const m = /^mg-(\d{7})$/.exec(municipalityId);
   if (!m) return Promise.resolve(null);
@@ -84,9 +134,10 @@ export function loadNeighborhoodAreas(
       try {
         res = await fetchImpl(`${NEIGHBORHOOD_AREAS_BASE}/${m[1]}.geojson`, {
           headers: { Accept: 'application/geo+json, application/json' },
+          signal,
         });
       } catch {
-        cache.delete(municipalityId); // network: allow a retry later
+        cache.delete(municipalityId); // network/aborted: allow a retry later
         return null;
       }
       const type = res.headers.get('content-type') ?? '';
@@ -95,6 +146,7 @@ export function loadNeighborhoodAreas(
       try {
         json = await res.json();
       } catch {
+        if (signal?.aborted) cache.delete(municipalityId);
         return null;
       }
       const fc = json as { type?: string; features?: unknown[] };

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { MapLayerCode, MapLayerValues, SnapshotStatus } from '@shared/contracts/metrics.ts';
 import { Badge } from '@/components/ui/Badge';
@@ -10,6 +10,8 @@ import { formatLayerValue, LAYERS } from './layers';
 import { MARGIN_GRADIENT, safeDomain } from './palette';
 import { PoiMarker } from './PoiMarker';
 import { SNAPSHOT_STATUS_LABEL } from './snapshotStatus';
+import { legendChipText, legendGradient } from './legendText';
+import { useDismiss } from './useDismiss';
 
 export interface MapLegendProps {
   layer: MapLayerCode;
@@ -287,4 +289,95 @@ function legendSource(layer: MapLayerCode): string {
   if (layer === 'pois') return 'OpenStreetMap';
   if (LAYERS[layer].scale === 'none') return 'TSE';
   return 'TSE · IBGE';
+}
+
+export interface MapLegendChipProps {
+  layer: MapLayerCode;
+  values: MapLayerValues | null | undefined;
+  status: SnapshotStatus;
+  /** The full legend (MapLegend, expanded) shown in the popover. */
+  children: ReactNode;
+  /** Max height of the popover (px). */
+  maxHeight?: number;
+  className?: string;
+}
+
+/**
+ * Phone legend (FE-10): collapsed by default into a chip in the bottom-left corner of the
+ * map ("Abstenção · 14% – 40%", gradient swatch, snapshot status when not validated —
+ * DEMO is always visible). Tapping it opens the full legend in a non-modal popover
+ * (light-dismiss: tap outside, Esc or the close button).
+ */
+export function MapLegendChip({
+  layer,
+  values,
+  status,
+  children,
+  maxHeight,
+  className,
+}: MapLegendChipProps) {
+  const [open, setOpen] = useState(false);
+  const popId = useId();
+  const popRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const close = () => {
+    setOpen(false);
+    btnRef.current?.focus({ preventScroll: true });
+  };
+  useDismiss(popRef, close, { enabled: open, ignore: btnRef });
+  useEffect(() => {
+    if (open) popRef.current?.focus({ preventScroll: true });
+  }, [open]);
+  const statistical = LAYERS[layer].scale !== 'none';
+  return (
+    <div className={cn('flex flex-col items-start gap-1', className)}>
+      {open ? (
+        <div
+          ref={popRef}
+          id={popId}
+          role="dialog"
+          aria-modal="false"
+          aria-label="Legenda completa do mapa"
+          tabIndex={-1}
+          data-testid="legend-popover"
+          style={maxHeight ? { maxHeight } : undefined}
+          className="flex w-full max-w-80 flex-col overflow-y-auto overscroll-contain rounded-md border border-border bg-surface-raised/95 shadow-raised outline-none focus-visible:outline-3 focus-visible:outline-focus"
+        >
+          {children}
+          <button
+            type="button"
+            onClick={close}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1 border-t border-border text-sm font-semibold text-primary hover:bg-surface-alt"
+          >
+            <Icon name="close" size={16} /> Fechar legenda
+          </button>
+        </div>
+      ) : null}
+      <button
+        ref={btnRef}
+        type="button"
+        data-testid="legend-chip"
+        aria-expanded={open}
+        aria-controls={open ? popId : undefined}
+        aria-haspopup="dialog"
+        aria-label={`Legenda: ${legendChipText(layer, values)}. ${SNAPSHOT_STATUS_LABEL[status]}. Toque para ver a legenda completa`}
+        onClick={() => (open ? close() : setOpen(true))}
+        className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-pill border border-border bg-surface-raised/95 px-3 text-sm text-primary shadow-raised backdrop-blur-sm"
+      >
+        {statistical ? (
+          <span
+            aria-hidden="true"
+            className="inline-block h-2.5 w-8 shrink-0 rounded-pill"
+            style={{ backgroundImage: legendGradient(layer) }}
+          />
+        ) : (
+          <Icon name="info" size={16} className="shrink-0 text-secondary" />
+        )}
+        <span className="min-w-0 truncate font-medium tabular-nums">
+          {legendChipText(layer, values)}
+        </span>
+        {status !== 'validated' ? <StatusBadge status={status} /> : null}
+      </button>
+    </div>
+  );
 }

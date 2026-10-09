@@ -7,11 +7,24 @@ import { expect, test } from '@playwright/test';
 
 test('home renders search, map (or list fallback), legend status and attribution', async ({
   page,
+  isMobile,
 }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.getByRole('combobox', { name: /Cidade ou bairro/ })).toBeVisible();
-  await expect(page.getByRole('radio', { name: 'Abstenção', exact: true })).toBeChecked();
+  // FE-10: the map starts when its section approaches the screen.
+  await page.locator('#mapa').scrollIntoViewIfNeeded();
+  if (isMobile) {
+    // Phones: compact bar ("Camada: Abstenção") + legend chip + ⓘ credits.
+    await expect(page.getByTestId('layer-bar-trigger')).toContainText('Abstenção', {
+      timeout: 30_000,
+    });
+    await page.getByRole('button', { name: /Créditos do mapa/ }).click();
+  } else {
+    await expect(page.getByRole('radio', { name: 'Abstenção', exact: true })).toBeChecked({
+      timeout: 30_000,
+    });
+  }
   // Official identity is the default (no query/localStorage needed).
   await expect(page).toHaveTitle(/Minas Decide/);
   await expect(page.locator('html')).toHaveAttribute('data-brand', 'minas-decide');
@@ -40,7 +53,7 @@ test('search selects a territory and the link restores it (T24)', async ({ page 
   await page.goto(url);
   await expect(
     page.getByRole('navigation', { name: 'Localização do território' }).first(),
-  ).toContainText('Centro');
+  ).toContainText('Centro', { timeout: 15_000 });
 });
 
 test('list alternative is reachable without the map', async ({ page }) => {

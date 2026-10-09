@@ -19,12 +19,13 @@ export function ActivityCard({ activity, demo, compact, className }: ActivityCar
   return (
     <article
       className={cn(
-        'group relative flex gap-3 rounded-md border border-border bg-surface-raised p-3 text-primary',
+        // FE-10: tighter on phones (agenda compacta); same content.
+        'group relative flex gap-2.5 rounded-md border border-border bg-surface-raised p-2.5 text-primary sm:gap-3 sm:p-3',
         'transition-colors duration-(--duration-fast) ease-(--easing-standard) hover:border-action',
         className,
       )}
     >
-      <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-sm bg-surface-alt py-1 text-center">
+      <div className="flex w-12 shrink-0 flex-col items-center justify-center rounded-sm bg-surface-alt py-1 text-center sm:w-14">
         <span className="text-xs font-semibold uppercase text-muted">
           {formatDateShort(activity.starts_at).split(' ')[1]}
         </span>

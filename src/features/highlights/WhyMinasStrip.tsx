@@ -7,6 +7,7 @@ import { useAfterIdle } from '@/lib/idle';
 import { useHighlights, useSnapshot } from '@/features/electoral-map/hooks';
 import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshotStatus';
 import { buildStripCards, type StripCard } from './cards';
+import { Carousel } from './Carousel';
 import { buildInfographic } from './infographic';
 import { WhyMinasInfographic } from './WhyMinasInfographic';
 
@@ -20,7 +21,7 @@ function SourceLine({ source }: { source: string }) {
 
 function Card({ c }: { c: StripCard }) {
   return (
-    <li className="flex w-[78%] min-w-0 shrink-0 snap-start flex-col rounded-md border border-border bg-surface-raised p-3 sm:w-[45%] md:w-auto">
+    <li className="flex w-[calc(100%-1.25rem)] min-w-0 shrink-0 snap-start flex-col rounded-md border border-border bg-surface-raised p-3 sm:w-[45%] md:w-auto">
       <p className="text-xs leading-snug font-semibold text-secondary">{c.label}</p>
       <p className="mt-1 text-2xl leading-tight font-bold tabular-nums break-words">{c.value}</p>
       {c.detail.map((d) => (
@@ -94,16 +95,16 @@ export function WhyMinasStrip({ className, start }: WhyMinasStripProps) {
       <WhyMinasInfographic data={info} />
     ) : cards.length ? (
       // Fallback (demo or unknown file): compact cards; phones get a snap carousel.
-      <ul
-        aria-label="Números de Minas Gerais"
-        tabIndex={0}
-        data-testid="why-minas-cards"
-        className="-mx-(--gutter) flex snap-x snap-mandatory gap-2 overflow-x-auto px-(--gutter) pb-2 [scrollbar-width:thin] md:mx-0 md:grid md:auto-rows-fr md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]"
+      <Carousel
+        label="Números de Minas Gerais"
+        itemNoun="número"
+        testId="why-minas-cards"
+        className="md:grid md:auto-rows-fr md:grid-cols-3 xl:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]"
       >
         {cards.map((c) => (
           <Card key={c.key} c={c} />
         ))}
-      </ul>
+      </Carousel>
     ) : (
       <Note>Os números-chave de Minas Gerais ainda não foram publicados neste snapshot.</Note>
     );

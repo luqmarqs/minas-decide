@@ -38,7 +38,8 @@ export const StoryMap = memo(function StoryMap({
           role="img"
           aria-label={label}
           aria-describedby={descId}
-          className="h-auto w-full"
+          // FE-10: ≤ 42vh tall on phones (the whole step stays readable on one screen).
+          className="h-auto max-h-[42vh] w-full"
           data-testid="story-map"
         >
           {map.paths.map((p) => (
@@ -54,12 +55,12 @@ export const StoryMap = memo(function StoryMap({
           ))}
         </svg>
       ) : failed ? (
-        <p className="grid aspect-[4/3] place-items-center rounded-md bg-surface-alt p-4 text-sm text-secondary">
+        <p className="grid aspect-[4/3] max-h-[42vh] w-full place-items-center rounded-md bg-surface-alt p-4 text-sm text-secondary">
           Contornos municipais indisponíveis; os números estão no texto.
         </p>
       ) : (
         <div role="status" aria-label="Carregando mapa">
-          <Skeleton className="aspect-[4/3] w-full" />
+          <Skeleton className="mx-auto aspect-[4/3] max-h-[42vh] w-full" />
         </div>
       )}
       {legend}

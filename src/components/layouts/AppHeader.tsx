@@ -21,7 +21,9 @@ export function AppHeader() {
   const brand = useBrandActive();
   return (
     <header className="sticky top-0 z-(--z-header) border-b border-border bg-surface/95 backdrop-blur-sm">
-      <div className="mx-auto flex h-(--header-height) max-w-(--content-max) items-center gap-2 px-(--gutter) lg:max-w-none lg:px-6">
+      {/* FE-10: tighter gap/padding under 640 px so lockup + search + session actions fit
+          in 360–390 px without widening the layout viewport (no horizontal overflow). */}
+      <div className="mx-auto flex h-(--header-height) max-w-(--content-max) items-center gap-1 px-3 sm:gap-2 sm:px-(--gutter) lg:max-w-none lg:px-6">
         <Link
           to="/"
           className="mr-auto flex min-h-11 items-center gap-2 rounded-md no-underline"

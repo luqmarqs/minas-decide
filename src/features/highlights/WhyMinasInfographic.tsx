@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { formatInt, formatPercent, formatPp } from '@/lib/format';
+import { Carousel } from './Carousel';
 import { compactNumber, type Infographic } from './infographic';
 
 /*
@@ -24,7 +25,7 @@ function Tile({
   testId,
 }: {
   big: ReactNode;
-  label: string;
+  label: ReactNode;
   source: string;
   children: ReactNode;
   className?: string;
@@ -34,7 +35,8 @@ function Tile({
     <li
       data-testid={testId}
       className={cn(
-        'flex h-40 w-[80%] min-w-0 shrink-0 snap-start flex-col overflow-hidden rounded-md border border-border bg-surface-raised px-3 pt-2 pb-1.5 sm:w-[46%] md:h-auto md:min-h-40 md:w-auto',
+        // Phones: width leaves ~28 px of the next tile visible (peek, FE-10); ≤ 160 px tall.
+        'flex h-40 w-[calc(100%-1.25rem)] min-w-0 shrink-0 snap-start flex-col overflow-hidden rounded-md border border-border bg-surface-raised px-3 pt-2 pb-1.5 sm:w-[46%] md:h-auto md:min-h-40 md:w-auto',
         className,
       )}
     >
@@ -97,7 +99,8 @@ function DuelBars({ duel }: { duel: Infographic['duel'] }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${duel.length * rowH}`}
-      className="h-[50px] w-full max-w-[22rem] md:h-[76px] md:max-w-[30rem]"
+      // Height follows the width (scale ≈ 1.2–1.3 on phones): labels render ≥ 11 px (FE-10).
+      className="h-auto w-full max-w-[22rem] md:h-[76px] md:max-w-[30rem]"
       preserveAspectRatio="xMinYMin meet"
       role="img"
       aria-label={`Votos válidos para Presidente em Minas — ${aria}`}
@@ -108,7 +111,7 @@ function DuelBars({ duel }: { duel: Infographic['duel'] }) {
         const wb = (r.bolsonaro.share / max) * barW;
         return (
           <g key={r.label}>
-            <text x="0" y={y + 12} fontSize="9.5" style={INK}>
+            <text x="0" y={y + 12} fontSize="10" style={INK}>
               {r.label}
             </text>
             <rect
@@ -121,7 +124,7 @@ function DuelBars({ duel }: { duel: Infographic['duel'] }) {
             >
               <title>{`Lula, ${r.label}: ${pct100(r.lula.share)}${r.lula.votes !== null ? ` (${formatInt(r.lula.votes)} votos)` : ''}`}</title>
             </rect>
-            <text x={labelW + wl + 3} y={y + 8.5} fontSize="8.5" style={INK}>
+            <text x={labelW + wl + 3} y={y + 8.8} fontSize="9.5" style={INK}>
               {pct100(r.lula.share)}
             </text>
             <rect
@@ -134,7 +137,7 @@ function DuelBars({ duel }: { duel: Infographic['duel'] }) {
             >
               <title>{`${r.bolsonaro.name}, ${r.label}: ${pct100(r.bolsonaro.share)}${r.bolsonaro.votes !== null ? ` (${formatInt(r.bolsonaro.votes)} votos)` : ''}`}</title>
             </rect>
-            <text x={labelW + wb + 3} y={y + 17.5} fontSize="8.5" style={INK}>
+            <text x={labelW + wb + 3} y={y + 18.2} fontSize="9.5" style={INK}>
               {pct100(r.bolsonaro.share)}
             </text>
           </g>
@@ -152,7 +155,7 @@ function MarginDot({ pp, votes }: { pp: number; votes: number }) {
   return (
     <svg
       viewBox={`0 0 ${W} 30`}
-      className="h-[30px] w-full max-w-[18rem]"
+      className="h-auto w-full max-w-[18rem]"
       preserveAspectRatio="xMinYMid meet"
       role="img"
       aria-label={`Margem de Lula em Minas no 2º turno de 2022: ${formatPp(pp, 2)}, ${formatInt(votes)} votos, numa escala de −2 a +2 pontos percentuais`}
@@ -191,13 +194,13 @@ function MarginDot({ pp, votes }: { pp: number; votes: number }) {
       >
         <title>{`Lula +${formatInt(votes)} votos (${formatPp(pp, 2)})`}</title>
       </circle>
-      <text x="10" y="28" fontSize="8.5" style={MUTED}>
+      <text x="10" y="28.5" fontSize="9" style={MUTED}>
         −2 p.p.
       </text>
-      <text x={x(0)} y="28" fontSize="8.5" textAnchor="middle" style={MUTED}>
+      <text x={x(0)} y="28.5" fontSize="9" textAnchor="middle" style={MUTED}>
         empate
       </text>
-      <text x={W - 10} y="28" fontSize="8.5" textAnchor="end" style={MUTED}>
+      <text x={W - 10} y="28.5" fontSize="9" textAnchor="end" style={MUTED}>
         +2 p.p.
       </text>
     </svg>
@@ -330,11 +333,11 @@ function Blocks({ pct }: { pct: number }) {
 export function WhyMinasInfographic({ data }: { data: Infographic }) {
   const last = data.duel[data.duel.length - 1];
   return (
-    <ul
-      aria-label="Números de Minas Gerais"
-      tabIndex={0}
-      data-testid="why-minas-cards"
-      className="-mx-(--gutter) flex snap-x snap-mandatory gap-2 overflow-x-auto px-(--gutter) pb-2 [scrollbar-width:thin] md:mx-0 md:grid md:auto-rows-fr md:grid-cols-4 md:overflow-visible md:px-0 md:pb-0"
+    <Carousel
+      label="Números de Minas Gerais"
+      itemNoun="número"
+      testId="why-minas-carousel"
+      className="md:grid md:auto-rows-fr md:grid-cols-4"
     >
       <Tile
         testId="tile-nacional"
@@ -349,18 +352,22 @@ export function WhyMinasInfographic({ data }: { data: Infographic }) {
           testId="tile-duelo"
           className="md:col-span-2"
           big={`${pct100(last.lula.share)} × ${pct100(last.bolsonaro.share)}`}
-          label="Lula × Bolsonaro (Jair 2022, Flávio 2026)"
+          // Colour key inline in the label (saves the legend row: the tile stays ≤ 160 px).
+          label={
+            <>
+              <span className="inline-flex items-center gap-1">
+                <Swatch color="var(--map-lula)" /> Lula
+              </span>{' '}
+              ×{' '}
+              <span className="inline-flex items-center gap-1">
+                <Swatch color="var(--map-bolsonaro)" /> Bolsonaro
+              </span>{' '}
+              (Jair 2022, Flávio 2026)
+            </>
+          }
           source="TSE"
         >
           <DuelBars duel={data.duel} />
-          <p className="mt-0.5 flex flex-wrap gap-x-3 text-[0.7rem] text-secondary">
-            <span className="inline-flex items-center gap-1">
-              <Swatch color="var(--map-lula)" /> Lula
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Swatch color="var(--map-bolsonaro)" /> Bolsonaro
-            </span>
-          </p>
         </Tile>
       ) : null}
       <Tile
@@ -400,6 +407,6 @@ export function WhyMinasInfographic({ data }: { data: Infographic }) {
           {data.neither.pctEligible !== null ? <Blocks pct={data.neither.pctEligible} /> : null}
         </Tile>
       ) : null}
-    </ul>
+    </Carousel>
   );
 }

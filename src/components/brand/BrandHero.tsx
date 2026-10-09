@@ -48,14 +48,14 @@ export function BrandHero({ titleId, notice, search, actions }: BrandHeroProps) 
               Minas decide Lula.
             </span>
           </h1>
-          <p className="mt-3 max-w-xl text-secondary">
+          <p className="mt-2 max-w-xl text-secondary sm:mt-3">
             Venha fazer a campanha de Lula em Minas Gerais: encontre uma atividade perto de você,
             marque “Eu vou” ou organize uma ação no seu bairro. E veja, cidade por cidade, como
             Minas votou.
           </p>
           {notice ? <div className="mt-2">{notice}</div> : null}
-          {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
-          <div className="mt-4 w-full max-w-md">{search}</div>
+          {actions ? <div className="mt-3 flex flex-wrap gap-2 sm:mt-4">{actions}</div> : null}
+          <div className="mt-3 w-full max-w-md sm:mt-4">{search}</div>
         </div>
       </div>
       <HorizonDivider />

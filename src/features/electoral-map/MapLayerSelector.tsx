@@ -1,4 +1,5 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
+import { edgeFadeMask, useScrollEdges } from '@/features/highlights/scrollHints';
 import type { MapLayerCode } from '@shared/contracts/metrics.ts';
 import { Select, type SelectOption } from '@/components/ui/Select';
 import { cn } from '@/lib/cn';
@@ -28,6 +29,8 @@ export interface MapLayerSelectorProps {
   overlays?: MapOverlaySwitches;
   /** Extra controls rendered at the end of the second row (e.g. list toggle). */
   trailing?: ReactNode;
+  /** Wrap the layer chips in rows instead of one scrolling row (phone popover, FE-10). */
+  wrapChips?: boolean;
   className?: string;
 }
 
@@ -103,8 +106,12 @@ export function MapLayerSelector({
   onCandidateChange,
   overlays,
   trailing,
+  wrapChips = false,
   className,
 }: MapLayerSelectorProps) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const edges = useScrollEdges(rowRef);
+  const fade = wrapChips ? undefined : edgeFadeMask(edges);
   const name = useId();
   const subName = useId();
   const marginName = useId();
@@ -118,7 +125,18 @@ export function MapLayerSelector({
     <div className={cn('flex flex-col gap-2', className)}>
       <fieldset className="min-w-0">
         <legend className="sr-only">Camada do mapa</legend>
-        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+        <div
+          ref={rowRef}
+          data-testid="layer-chips"
+          // Fade on the side with more chips: the row visibly continues (FE-10).
+          style={fade ? { maskImage: fade, WebkitMaskImage: fade } : undefined}
+          className={cn(
+            '-mx-1 flex gap-1 px-1 pb-1',
+            wrapChips
+              ? 'flex-wrap'
+              : 'overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          )}
+        >
           {LAYER_ORDER.map((code) => {
             const checked = code === layer;
             return (

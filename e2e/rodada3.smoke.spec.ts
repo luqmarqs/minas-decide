@@ -11,7 +11,8 @@ const mapZoom = async (page: Page): Promise<number> =>
   Number((await page.locator('[data-zoom]').first().getAttribute('data-zoom')) ?? 'NaN');
 
 test('hero search zooms the map to the territory and opens the panel', async ({ page }, info) => {
-  await page.goto('/');
+  // FE-10: the map starts when its section approaches the screen.
+  await page.goto('/#mapa');
   // Map started (after idle) and settled on the whole state.
   await expect(page.locator('[data-zoom]')).toHaveCount(1, { timeout: 30_000 });
   const before = await mapZoom(page);
@@ -23,7 +24,7 @@ test('hero search zooms the map to the territory and opens the panel', async ({ 
   await expect(page).toHaveURL(/[?&]t=mg-3136702(&|$)/);
   await expect.poll(() => mapZoom(page), { timeout: 15_000 }).toBeGreaterThan(before + 1.5);
   if (info.project.name === 'mobile') {
-    // Sheet opens (half state) and the map is scrolled up under the header.
+    // Sheet opens (collapsed, FE-10) and the map is scrolled up under the header.
     await expect(page.getByRole('dialog', { name: 'Juiz de Fora' })).toBeVisible();
     const top = await page.locator('#mapa').evaluate((el) => el.getBoundingClientRect().top);
     expect(Math.abs(top)).toBeLessThan(120);
@@ -37,16 +38,24 @@ test('hero search zooms the map to the territory and opens the panel', async ({ 
 test('activity markers stay on any layer and open a popover with "Eu vou"', async ({
   page,
 }, info) => {
-  // BH neighborhoods at zoom 13 where the Rodoviária example is an unclustered sun marker
-  // inside the free part of the map: east of the desktop legend; on phones, in the band
-  // between the layer selector and the half-open sheet.
-  const t = info.project.name === 'mobile' ? 'mg-3106200-floresta' : 'mg-3106200';
+  // BH where the Rodoviária example is an unclustered sun marker inside the free part of
+  // the map: east of the desktop legend; on phones (FE-10: map under the header, compact
+  // bar, collapsed sheet) between the bar and the legend chip.
+  const t = 'mg-3106200';
   await page.goto(`/?t=${t}&camada=lula-bolsonaro`);
-  await expect(page.getByRole('switch', { name: /Atividades/ })).toHaveAttribute(
-    'aria-checked',
-    'true',
-    { timeout: 30_000 },
-  );
+  if (info.project.name === 'mobile')
+    // FE-10: phones have icon toggles in the compact bar.
+    await expect(page.getByRole('button', { name: 'Atividades no mapa' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+      { timeout: 30_000 },
+    );
+  else
+    await expect(page.getByRole('switch', { name: /Atividades/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+      { timeout: 30_000 },
+    );
   // The narrative and key numbers sit between hero and map: bring the map into view.
   await page.locator('#mapa').scrollIntoViewIfNeeded();
   const canvasBox = page.locator('[data-activity-points]');
@@ -86,12 +95,24 @@ test('activity markers stay on any layer and open a popover with "Eu vou"', asyn
   await expect(pop).toHaveCount(0);
 });
 
-test('terminals overlay is off by default and credits OpenStreetMap when on', async ({ page }) => {
-  await page.goto('/');
-  const sw = page.getByRole('switch', { name: /Terminais/ });
-  await expect(sw).toHaveAttribute('aria-checked', 'false', { timeout: 30_000 });
-  await sw.click();
-  await expect(page).toHaveURL(/terminais=1/);
+test('terminals overlay is off by default and credits OpenStreetMap when on', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('/#mapa');
+  if (isMobile) {
+    // FE-10: icon toggle in the compact bar; the legend lives behind the chip.
+    const btn = page.getByRole('button', { name: 'Terminais e estações no mapa' });
+    await expect(btn).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
+    await btn.click();
+    await expect(page).toHaveURL(/terminais=1/);
+    await page.getByTestId('legend-chip').click();
+  } else {
+    const sw = page.getByRole('switch', { name: /Terminais/ });
+    await expect(sw).toHaveAttribute('aria-checked', 'false', { timeout: 30_000 });
+    await sw.click();
+    await expect(page).toHaveURL(/terminais=1/);
+  }
   const legend = page.getByTestId('legend-pois');
   await expect(legend).toContainText('© OpenStreetMap contributors (ODbL)');
   await expect(legend).toContainText(/\d+ locais/);

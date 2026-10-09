@@ -1,0 +1,56 @@
+[
+ {
+  "route": "/",
+  "run": 1,
+  "perf": 66,
+  "a11y": 100,
+  "bp": 96,
+  "fcp": "2.1 s",
+  "lcp": "3.0 s",
+  "tbt": "1,610 ms",
+  "cls": "0",
+  "si": "3.0 s",
+  "bootup": [
+   "/assets/maplibre-jYHiI_-f.js:2047ms",
+   "/assets/index-Dh00-oJ5.js:1181ms",
+   "/:51ms",
+   "Unattributable:219ms"
+  ]
+ },
+ {
+  "route": "/",
+  "run": 2,
+  "perf": 64,
+  "a11y": 100,
+  "bp": 96,
+  "fcp": "2.0 s",
+  "lcp": "2.9 s",
+  "tbt": "2,610 ms",
+  "cls": "0",
+  "si": "2.9 s",
+  "bootup": [
+   "/assets/maplibre-jYHiI_-f.js:3101ms",
+   "/assets/index-Dh00-oJ5.js:1322ms",
+   "/:51ms",
+   "Unattributable:208ms"
+  ]
+ },
+ {
+  "route": "/",
+  "run": 3,
+  "perf": 66,
+  "a11y": 100,
+  "bp": 96,
+  "fcp": "2.0 s",
+  "lcp": "2.7 s",
+  "tbt": "2,170 ms",
+  "cls": "0",
+  "si": "2.5 s",
+  "bootup": [
+   "/assets/maplibre-jYHiI_-f.js:2541ms",
+   "/assets/index-Dh00-oJ5.js:1292ms",
+   "/:44ms",
+   "Unattributable:213ms"
+  ]
+ }
+]

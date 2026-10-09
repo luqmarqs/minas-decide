@@ -7,7 +7,7 @@ import { ButtonLink } from '@/components/ui/Button';
 import { JoinCta } from '@/features/registration/JoinCta';
 import { cn } from '@/lib/cn';
 import { formatInt } from '@/lib/format';
-import { useAfterIdle } from '@/lib/idle';
+import { useAfterIdle, useNearViewport } from '@/lib/idle';
 import { prefersReducedMotion } from '@/lib/media';
 import { useHighlights, useLayerValues, useSnapshot } from '@/features/electoral-map/hooks';
 import { MARGIN_GRADIENT, marginVar } from '@/features/electoral-map/palette';
@@ -72,7 +72,8 @@ function Step({
       data-step={n}
       data-shown={shown || undefined}
       className={cn(
-        'grid items-center gap-6 border-t border-border py-10 first:border-t-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,32rem)] lg:gap-10',
+        'grid items-center gap-5 border-t border-border py-7 first:border-t-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,32rem)] lg:gap-10 lg:py-10',
+
         'motion-safe:transition-[opacity,translate] motion-safe:duration-(--duration-panel) motion-safe:ease-(--easing-standard)',
         shown ? 'translate-y-0 opacity-100' : 'motion-safe:translate-y-4 motion-safe:opacity-0',
       )}
@@ -165,9 +166,8 @@ export function StoryIntroView({
           {demo ? <Badge variant="demo">{SNAPSHOT_STATUS_LABEL.demo}</Badge> : null}
         </div>
         <p className="mt-1 max-w-2xl text-sm text-secondary">
-          Cinco passos sobre o que os mapas de Minas mostram — e o que eles escondem. Só nesta seção
-          e na camada de margem do mapa usamos as cores das campanhas (vermelho para Lula, azul para
-          Bolsonaro).
+          Cinco passos sobre o que os mapas de Minas mostram — e o que escondem. Só aqui e na camada
+          de margem do mapa usamos as cores das campanhas (vermelho: Lula; azul: Bolsonaro).
         </p>
         <ol className="mt-4">
           <Step
@@ -331,11 +331,16 @@ export function StoryIntroView({
 function StoryWithData() {
   const { data: snap } = useSnapshot();
   const hq = useHighlights();
-  const m26 = useLayerValues('president_margin', 2026, 1, null);
-  const m22 = useLayerValues('president_margin', 2022, 2, null);
+  // FE-10: the IBGE mesh (~130 KB gz, 853 paths to project) and the two margin layers are
+  // only requested when the narrative approaches the screen, not right after idle.
+  const boxRef = useRef<HTMLDivElement>(null);
+  const near = useNearViewport(boxRef, false, '50% 0px');
+  const m26 = useLayerValues('president_margin', 2026, 1, null, { enabled: near });
+  const m22 = useLayerValues('president_margin', 2022, 2, null, { enabled: near });
   const [map, setMap] = useState<ProjectedMap | null>(null);
   const [geoFailed, setGeoFailed] = useState(false);
   useEffect(() => {
+    if (!near) return;
     let cancelled = false;
     loadMunicipalGeo()
       .then((g) => {
@@ -347,17 +352,19 @@ function StoryWithData() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [near]);
   return (
-    <StoryIntroView
-      highlights={hq.data}
-      margin2026={m26.data}
-      margin2022r2={m22.data}
-      map={map}
-      geoFailed={geoFailed}
-      releaseId={snap?.releaseId ?? null}
-      demo={snap?.status === 'demo'}
-    />
+    <div ref={boxRef}>
+      <StoryIntroView
+        highlights={hq.data}
+        margin2026={m26.data}
+        margin2022r2={m22.data}
+        map={map}
+        geoFailed={geoFailed}
+        releaseId={snap?.releaseId ?? null}
+        demo={snap?.status === 'demo'}
+      />
+    </div>
   );
 }
 

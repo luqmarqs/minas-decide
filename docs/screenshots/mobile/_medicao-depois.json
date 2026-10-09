@@ -1,0 +1,70 @@
+{
+ "pixel7": {
+  "home": {
+   "viewport": "412x839",
+   "visibleHeightPx": 0,
+   "visibleHeightPct": 0,
+   "visibleAreaPct": 0,
+   "mapSection": {
+    "top": 4480,
+    "height": 783
+   },
+   "overflowX": false
+  },
+  "selected": {
+   "viewport": "412x839",
+   "visibleHeightPx": 608,
+   "visibleHeightPct": 72.4,
+   "visibleAreaPct": 73.2,
+   "mapSection": {
+    "top": 56,
+    "height": 783
+   },
+   "overflowX": false
+  },
+  "axeSelected": [
+   {
+    "id": "target-size",
+    "impact": "serious",
+    "count": 1,
+    "nodes": [
+     ".xl\\:max-w-none.max-w-\\(--content-max\\).mx-auto > .px-4.text-on-action[href$=\"#participar\"]"
+    ]
+   }
+  ]
+ },
+ "iphone13": {
+  "home": {
+   "viewport": "390x664",
+   "visibleHeightPx": 0,
+   "visibleHeightPct": 0,
+   "visibleAreaPct": 0,
+   "mapSection": {
+    "top": 4384,
+    "height": 608
+   },
+   "overflowX": false
+  },
+  "selected": {
+   "viewport": "390x664",
+   "visibleHeightPx": 424,
+   "visibleHeightPct": 63.9,
+   "visibleAreaPct": 65.2,
+   "mapSection": {
+    "top": 56,
+    "height": 608
+   },
+   "overflowX": false
+  },
+  "axeSelected": [
+   {
+    "id": "target-size",
+    "impact": "serious",
+    "count": 1,
+    "nodes": [
+     ".xl\\:max-w-none.max-w-\\(--content-max\\).mx-auto > .px-4.text-on-action[href$=\"#participar\"]"
+    ]
+   }
+  ]
+ }
+}

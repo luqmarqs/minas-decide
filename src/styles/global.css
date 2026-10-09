@@ -275,9 +275,10 @@
 .brand-hero__art {
   position: relative;
   overflow: hidden;
-  /* 36vh no celular; 40–52vh no desktop (empilhado até 1279px). */
-  height: clamp(36vh, 40vw, 52vh);
-  min-height: 220px;
+  /* FE-10: ≤ 28vh no celular (hero inteiro mais curto, mapa mais perto); 40–52vh no desktop
+     (empilhado até 1279px). */
+  height: clamp(26vh, 40vw, 52vh);
+  min-height: 180px;
 }
 .brand-hero__art img {
   display: block;
@@ -336,4 +337,9 @@
   .brand-horizon {
     height: 26px;
   }
+}
+
+/* FE-10: MapLibre's own controls (zoom) sit above the mobile territory sheet. */
+.mm-map-box .maplibregl-ctrl-bottom-right {
+  bottom: var(--mm-bottom-inset, 0px);
 }

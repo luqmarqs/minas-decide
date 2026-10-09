@@ -8,3 +8,4 @@ public/data
 package-lock.json
 *.md
 public/geo/bairros
+docs/screenshots/**/*.json

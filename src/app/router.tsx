@@ -5,7 +5,7 @@ import { RootLayout, RouteError } from './layout';
 
 /**
  * Only the home (map explorer) ships in the initial chunk. Every other page is a
- * lazy route chunk (P-PERF-1): forms, Zod contracts, vaul and the
+ * lazy route chunk (P-PERF-1): forms, Zod contracts and the
  * admin panel never block the first paint of the public map.
  */
 function page(load: () => Promise<{ default: ComponentType }>): Pick<RouteObject, 'lazy'> {

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
+import { useDismiss } from './useDismiss';
 
 export interface MapPopoverProps {
   title: ReactNode;
@@ -17,8 +18,8 @@ export interface MapPopoverProps {
  * Non-modal popover over the map (activity / point of interest). It is a labelled
  * `dialog` that receives focus when it opens, closes with Esc or the close button and
  * never traps focus — the map and the page stay usable behind it. Placement is fixed
- * (bottom of the map) rather than anchored to the marker, so it never leaves the
- * viewport on small screens.
+ * (bottom of the map, above the mobile sheet) rather than anchored to the marker, so it
+ * never leaves the viewport on small screens. A tap outside closes it too (FE-10).
  */
 export function MapPopover({
   title,
@@ -35,6 +36,7 @@ export function MapPopover({
   useEffect(() => {
     onCloseRef.current = onClose;
   });
+  useDismiss(ref, onClose);
   useEffect(() => {
     ref.current?.focus({ preventScroll: true });
     // Esc with focus inside the popover closes the popover only. Window capture runs before

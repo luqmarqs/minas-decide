@@ -3,9 +3,11 @@
  * (and its CSS) live in a separate chunk. Rendering rules:
  * - municipalities: IBGE polygons (lazy fetched GeoJSON) coloured through
  *   GeoJSON properties (bucketed in the worker; feature-state only for hover); centroid circles if the mesh fails;
- * - neighborhoods of the selected municipality: approximate AREAS (Voronoi of the polling
- *   places, generated offline, D29; never official boundaries) coloured by the active layer,
- *   with the selected one outlined; points remain as fallback where there is no area;
+ * - neighborhoods: approximate AREAS (Voronoi of the polling places, generated offline, D29;
+ *   never official boundaries) coloured by the active layer, for the selected municipality
+ *   and — from zoom ≥ AUTO_AREAS_MIN_ZOOM — for every municipality on screen (≤ 12, FE-10);
+ *   the selected one is outlined; points remain as fallback where there is no area. Labels:
+ *   municipality names between zoom 8 and 12, neighborhood names from zoom 12;
  * - activities: clustered GeoJSON source (WebGL, no DOM markers), drawn as a sun with halo
  *   ABOVE any statistical layer (rodada 3: an overlay, on by default);
  * - points of interest (terminals/stations, OSM): clustered overlay, off by default;
@@ -25,7 +27,7 @@ import {
   type MapLayerMouseEvent,
   type StyleSpecification,
 } from 'maplibre-gl';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PublicActivity } from '@shared/contracts/activities.ts';
 import type { MapLayerCode, MapLayerValues } from '@shared/contracts/metrics.ts';
 import { municipalityIdOf, type PoiFile } from '@shared/contracts/snapshot.ts';
@@ -43,7 +45,12 @@ import {
   trimBasemapStyle,
 } from './mapExpressions';
 import { drawPoiIcon, drawSunIcon, ICON_POI, ICON_SUN } from './mapIcons';
-import { loadNeighborhoodAreas, type NeighborhoodAreas } from './neighborhoodAreas';
+import {
+  loadNeighborhoodAreas,
+  visibleMunicipalities,
+  type BBox,
+  type NeighborhoodAreas,
+} from './neighborhoodAreas';
 
 setWorkerUrl(maplibreWorkerUrl);
 
@@ -96,8 +103,10 @@ export interface MapCanvasProps {
   selectedId: string | null;
   layer: MapLayerCode;
   layerValues: MapLayerValues | null | undefined;
-  /** Values for neighborhoods of the selected municipality (territory_id → value). */
+  /** Values for neighborhoods of the municipalities with areas (territory_id → value). */
   neighborhoodValues: Record<string, number> | null;
+  /** Municipalities whose neighborhood areas are drawn (selected first; FE-10). */
+  onAreaMunicipalitiesChange?: (ids: string[]) => void;
   activities: PublicActivity[];
   /** Activities overlay switch (on by default; independent of the statistical layer). */
   showActivities?: boolean;
@@ -189,6 +198,9 @@ export default function MapCanvas(props: MapCanvasProps) {
   const [ready, setReady] = useState(false);
   const [geoState, setGeoState] = useState<'loading' | 'ok' | 'failed'>('loading');
   const [hover, setHover] = useState<HoverInfo | null>(null);
+  // Viewport (bounds + zoom) at the end of each camera move: drives the automatic areas.
+  const [view, setView] = useState<{ box: BBox; zoom: number } | null>(null);
+  const [muniBoxes, setMuniBoxes] = useState<ReadonlyMap<string, BBox>>(() => new Map());
 
   useEffect(() => {
     propsRef.current = props;
@@ -395,6 +407,48 @@ export default function MapCanvas(props: MapCanvasProps) {
           },
           beforeId,
         );
+        if (hasGlyphs) {
+          // Names (FE-10): municipalities between zoom 8 and 12, neighborhoods from 12.
+          // Cream/ink halo (surface token), no overlap, basemap font.
+          const labelPaint = {
+            'text-color': palette.textPrimary,
+            'text-halo-color': palette.surface,
+            'text-halo-width': 1.6,
+          };
+          map.addLayer({
+            id: 'mm-muni-label',
+            type: 'symbol',
+            source: SRC_MUNI,
+            minzoom: 8,
+            maxzoom: 12,
+            filter: ['has', 'name'],
+            layout: {
+              'text-field': ['get', 'name'],
+              'text-font': ['Noto Sans Bold'],
+              'text-size': ['interpolate', ['linear'], ['zoom'], 8, 11, 11, 13],
+              'text-allow-overlap': false,
+              'text-padding': 4,
+              'text-max-width': 8,
+            },
+            paint: labelPaint,
+          });
+          map.addLayer({
+            id: 'mm-neigh-label',
+            type: 'symbol',
+            source: SRC_NEIGH_AREA,
+            minzoom: 12,
+            filter: ['has', 'name'],
+            layout: {
+              'text-field': ['get', 'name'],
+              'text-font': ['Noto Sans Regular'],
+              'text-size': ['interpolate', ['linear'], ['zoom'], 12, 11, 15, 13],
+              'text-allow-overlap': false,
+              'text-padding': 3,
+              'text-max-width': 7,
+            },
+            paint: labelPaint,
+          });
+        }
         map.addLayer({
           id: 'mm-neigh',
           type: 'circle',
@@ -691,6 +745,22 @@ export default function MapCanvas(props: MapCanvasProps) {
           const id = e.features?.[0]?.properties?.id as string | undefined;
           if (id) propsRef.current.onPoiSelect?.(id);
         });
+        // Viewport for the automatic neighborhood areas (only at the end of a move).
+        const publishView = () => {
+          if (!map) return;
+          const b = map.getBounds();
+          setView({
+            box: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+            zoom: map.getZoom(),
+          });
+        };
+        map.on('moveend', publishView);
+        publishView();
+        // Test hook (e2e only, no data): `mm-test-jump` CustomEvent moves the camera.
+        containerRef.current?.addEventListener('mm-test-jump', (ev) => {
+          const d = (ev as CustomEvent<{ center: [number, number]; zoom: number }>).detail;
+          if (d?.center) map?.jumpTo({ center: d.center, zoom: d.zoom });
+        });
         // Test/diagnostic hook (no PII): zoom and screen position of visible activity points.
         map.on('idle', () => {
           const el = containerRef.current;
@@ -744,6 +814,7 @@ export default function MapCanvas(props: MapCanvasProps) {
         const boxes = new Map<string, [number, number, number, number]>();
         for (const f of geo.features) boxes.set(String(f.properties.codarea), bboxOf(f.geometry));
         bboxesRef.current = boxes;
+        setMuniBoxes(boxes);
         geoRef.current = geo;
         // Data (with values) is set by the choropleth effect once geoState = 'ok'.
         setGeoState('ok');
@@ -773,10 +844,16 @@ export default function MapCanvas(props: MapCanvasProps) {
       map.getSource<GeoJSONSource>(SRC_MUNI)?.setData({
         type: 'FeatureCollection',
         features: geo.features.map((f) => {
-          const v = valueOf(String(f.properties.codarea));
+          const code = String(f.properties.codarea);
+          const v = valueOf(code);
+          const name = index.byId.get(`mg-${code}`)?.name;
           return {
             ...f,
-            properties: v === undefined ? f.properties : { ...f.properties, v },
+            properties: {
+              ...f.properties,
+              ...(name ? { name } : {}),
+              ...(v === undefined ? {} : { v }),
+            },
           };
         }),
       });
@@ -837,22 +914,67 @@ export default function MapCanvas(props: MapCanvasProps) {
     map.getSource<GeoJSONSource>(SRC_POI)?.setData({ type: 'FeatureCollection', features });
   }, [ready, pois]);
 
-  // ---- neighborhood areas of the selected municipality (lazy, cached; D29) ----------
+  // ---- neighborhood areas (lazy, cached; D29 + FE-10 automatic by zoom) -------------
+  // Selected municipality at any zoom; from zoom ≥ AUTO_AREAS_MIN_ZOOM every municipality
+  // whose polygon bbox intersects the viewport (≤ AUTO_AREAS_LIMIT, nearest first).
   const { selectedId, neighborhoodValues } = props;
   const selectedMuniId = selectedId ? municipalityIdOf(selectedId) : null;
-  const [areas, setAreas] = useState<NeighborhoodAreas | null>(null);
+  const areaIds = useMemo(
+    () =>
+      ready && geoState !== 'loading'
+        ? visibleMunicipalities(
+            muniBoxes,
+            view?.box ?? [0, 0, 0, 0],
+            view?.zoom ?? 0,
+            selectedMuniId,
+          )
+        : [],
+    [ready, geoState, muniBoxes, view, selectedMuniId],
+  );
+  const areaKey = areaIds.join(',');
+  const [areasById, setAreasById] = useState<ReadonlyMap<string, NeighborhoodAreas>>(
+    () => new Map(),
+  );
+  const controllersRef = useRef(new Map<string, AbortController>());
   useEffect(() => {
-    let cancelled = false;
-    // Never at state level (performance): only for a selected municipality.
-    if (!ready || !selectedMuniId || selectedMuniId === 'mg') return;
-    loadNeighborhoodAreas(selectedMuniId).then((a) => {
-      if (!cancelled) setAreas(a);
-    });
+    const ids = areaKey ? areaKey.split(',') : [];
+    const wanted = new Set(ids);
+    // Abort fetches of municipalities that left the viewport.
+    for (const [id, c] of controllersRef.current) {
+      if (!wanted.has(id)) {
+        c.abort();
+        controllersRef.current.delete(id);
+      }
+    }
+    for (const id of ids) {
+      if (controllersRef.current.has(id)) continue;
+      const ctrl = new AbortController();
+      controllersRef.current.set(id, ctrl);
+      void loadNeighborhoodAreas(id, undefined, ctrl.signal).then((a) => {
+        if (ctrl.signal.aborted || controllersRef.current.get(id) !== ctrl) return;
+        if (a) setAreasById((prev) => new Map(prev).set(id, a));
+      });
+    }
+  }, [areaKey]);
+  useEffect(() => {
+    const controllers = controllersRef.current;
     return () => {
-      cancelled = true;
+      for (const c of controllers.values()) c.abort();
+      controllers.clear();
     };
-  }, [ready, selectedMuniId]);
-  const activeAreas = areas && areas.municipalityId === selectedMuniId ? areas : null;
+  }, []);
+  const onAreaMunisRef = useRef(props.onAreaMunicipalitiesChange);
+  useEffect(() => {
+    onAreaMunisRef.current = props.onAreaMunicipalitiesChange;
+  });
+  useEffect(() => {
+    onAreaMunisRef.current?.(areaKey ? areaKey.split(',') : []);
+  }, [areaKey]);
+  const activeAreas = selectedMuniId ? (areasById.get(selectedMuniId) ?? null) : null;
+  const shownAreas = useMemo(
+    () => areaIds.flatMap((id) => areasById.get(id) ?? []),
+    [areaIds, areasById],
+  );
 
   // ---- selection: outline + neighborhood areas/points ------------------------------
   useEffect(() => {
@@ -864,21 +986,23 @@ export default function MapCanvas(props: MapCanvasProps) {
     map.setFilter('mm-muni-selected', ['==', ['get', 'codarea'], muni?.ibge_code ?? '']);
     map.setFilter('mm-muni-selected-casing', ['==', ['get', 'codarea'], muni?.ibge_code ?? '']);
     const children = muni ? (index.childrenOf.get(muni.id) ?? []) : [];
-    const withArea = new Set(activeAreas?.bboxes.keys() ?? []);
+    const withArea = new Set(shownAreas.flatMap((a) => [...a.bboxes.keys()]));
     map.getSource<GeoJSONSource>(SRC_NEIGH_AREA)?.setData({
       type: 'FeatureCollection',
-      features: (activeAreas?.features ?? []).map((f) => {
-        const v = neighborhoodValues?.[f.properties.territory_id];
-        return {
-          type: 'Feature',
-          geometry: f.geometry,
-          properties: {
-            territory_id: f.properties.territory_id,
-            name: f.properties.name,
-            ...(v !== undefined ? { v } : {}),
-          },
-        };
-      }) as GeoFeature[],
+      features: shownAreas
+        .flatMap((a) => a.features)
+        .map((f) => {
+          const v = neighborhoodValues?.[f.properties.territory_id];
+          return {
+            type: 'Feature',
+            geometry: f.geometry,
+            properties: {
+              territory_id: f.properties.territory_id,
+              name: f.properties.name,
+              ...(v !== undefined ? { v } : {}),
+            },
+          };
+        }) as GeoFeature[],
     });
     const selectedArea = selectedId && withArea.has(selectedId) ? selectedId : '';
     map.setFilter('mm-neigh-selected', ['==', ['get', 'territory_id'], selectedArea]);
@@ -909,7 +1033,7 @@ export default function MapCanvas(props: MapCanvasProps) {
       'circle-color',
       neighborhoodColor(palette, layer, layerValues),
     );
-  }, [ready, selectedId, neighborhoodValues, index, layer, layerValues, activeAreas]);
+  }, [ready, selectedId, neighborhoodValues, index, layer, layerValues, shownAreas]);
 
   // ---- activities ---------------------------------------------------------------
   const { activities } = props;

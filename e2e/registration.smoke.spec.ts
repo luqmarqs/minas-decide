@@ -15,6 +15,8 @@ test('participar: accessible form, territory pre-filled, client errors block sub
   });
   await page.goto('/participar?territorio=mg-3140001-centro');
   const phone = page.getByLabel(/^WhatsApp/);
+  // The form is a lazy chunk (+ Clerk script): allow more time under full-suite load.
+  await expect(phone).toBeVisible({ timeout: 20_000 });
   await expect(phone).toHaveAttribute('inputmode', 'tel');
   await expect(phone).toHaveAttribute('autocomplete', 'tel');
   await expect(page.getByLabel(/^E-mail/)).toHaveAttribute('autocomplete', 'email');

@@ -181,10 +181,8 @@ describe('/admin', () => {
       public_address: 'Praça Sete',
       starts_at: '2030-01-15T17:30:00.000Z',
       status: 'published',
-      // shared/contracts/admin.ts still types creator_user_id as uuid (pre-ADR 0005); with
-      // Clerk the Worker returns `user_…` and this queue would fail validation. Contract
-      // change requested in the FE-11 report; uuid kept here so the fixture matches it.
-      creator_user_id: '22222222-2222-4222-8222-222222222222',
+      // ADR 0005: ids are Clerk `user_…` (contract `ClerkUserId`).
+      creator_user_id: 'user_2abcDEFghijKLMnopQRstuVWxyz',
       public_contact_opt_in: false,
       created_at: '2026-10-08T12:00:00Z',
       reviewed_at: null,

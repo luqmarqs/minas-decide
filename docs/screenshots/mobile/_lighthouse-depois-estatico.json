@@ -1,0 +1,56 @@
+[
+ {
+  "route": "/",
+  "run": 1,
+  "perf": 73,
+  "a11y": 100,
+  "bp": 73,
+  "fcp": "2.0 s",
+  "lcp": "4.2 s",
+  "tbt": "450 ms",
+  "cls": "0",
+  "si": "2.0 s",
+  "bootup": [
+   "/assets/index-c_xVqpUz.js:1027ms",
+   "/:72ms",
+   "Unattributable:164ms",
+   "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js:107ms"
+  ]
+ },
+ {
+  "route": "/",
+  "run": 2,
+  "perf": 82,
+  "a11y": 100,
+  "bp": 73,
+  "fcp": "2.0 s",
+  "lcp": "3.0 s",
+  "tbt": "430 ms",
+  "cls": "0",
+  "si": "2.0 s",
+  "bootup": [
+   "/assets/index-c_xVqpUz.js:1019ms",
+   "/:73ms",
+   "Unattributable:152ms",
+   "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js:76ms"
+  ]
+ },
+ {
+  "route": "/",
+  "run": 3,
+  "perf": 78,
+  "a11y": 100,
+  "bp": 73,
+  "fcp": "2.0 s",
+  "lcp": "4.2 s",
+  "tbt": "310 ms",
+  "cls": "0",
+  "si": "2.0 s",
+  "bootup": [
+   "/assets/index-c_xVqpUz.js:898ms",
+   "/:71ms",
+   "Unattributable:111ms",
+   "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js:63ms"
+  ]
+ }
+]

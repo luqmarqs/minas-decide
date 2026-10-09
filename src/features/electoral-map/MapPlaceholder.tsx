@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import type { MapLayerCode } from '@shared/contracts/metrics.ts';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
@@ -17,11 +18,16 @@ export interface MapPlaceholderProps {
  * so swapping it never shifts the page (CLS). Surface colour + skeleton only — no
  * mesh, no tiles, no WebGL.
  */
-export function MapPlaceholder({ layer, variant = 'full', className }: MapPlaceholderProps) {
+export function MapPlaceholder({
+  layer,
+  variant = 'full',
+  className,
+  ref,
+}: MapPlaceholderProps & { ref?: Ref<HTMLDivElement> }) {
   const meta = LAYERS[layer];
   const diverging = meta.scale === 'diverging';
   return (
-    <div className={cn('flex flex-col', className)} data-testid="map-placeholder">
+    <div ref={ref} className={cn('flex flex-col', className)} data-testid="map-placeholder">
       <div className="relative min-h-0 flex-1 overflow-hidden bg-surface-alt" role="status">
         <span className="sr-only">Carregando o mapa…</span>
         {variant === 'full' ? (
@@ -30,14 +36,29 @@ export function MapPlaceholder({ layer, variant = 'full', className }: MapPlaceh
               className="pointer-events-none absolute inset-x-0 top-0 p-2 sm:p-3"
               aria-hidden="true"
             >
-              <div className="flex w-fit max-w-full gap-2 rounded-md border border-border bg-surface-raised/95 p-2">
+              {/* Phones (FE-10): same one-row compact bar as MapControlBar (52 px). */}
+              <div className="flex h-13 w-full items-center gap-1 rounded-md border border-border bg-surface-raised/95 p-1 lg:hidden">
+                <Skeleton className="h-11 min-w-0 flex-1" />
+                <Skeleton className="size-11" />
+                <Skeleton className="size-11" />
+                <Skeleton className="size-11" />
+              </div>
+              <div className="hidden w-fit max-w-full gap-2 rounded-md border border-border bg-surface-raised/95 p-2 lg:flex">
                 <Skeleton className="h-11 w-28" />
                 <Skeleton className="h-11 w-28" />
-                <Skeleton className="hidden h-11 w-40 sm:block" />
+                <Skeleton className="h-11 w-40" />
               </div>
             </div>
             <div
-              className="pointer-events-none absolute bottom-0 left-0 w-full p-2 sm:p-3 lg:w-auto"
+              className="pointer-events-none absolute bottom-0 left-0 p-2 lg:hidden"
+              aria-hidden="true"
+            >
+              <div className="inline-flex min-h-11 items-center gap-2 rounded-pill border border-border bg-surface-raised/95 px-3 text-sm text-primary">
+                {meta.label}
+              </div>
+            </div>
+            <div
+              className="pointer-events-none absolute bottom-0 left-0 hidden w-full p-2 sm:p-3 lg:block lg:w-auto"
               aria-hidden="true"
             >
               <div className="w-full max-w-80 rounded-md border border-border bg-surface-raised/95 p-3 lg:w-80">
@@ -61,7 +82,7 @@ export function MapPlaceholder({ layer, variant = 'full', className }: MapPlaceh
           </>
         ) : null}
       </div>
-      <MapAttribution className="px-2 py-1" />
+      <MapAttribution className={cn('px-2 py-1', variant === 'full' && 'max-lg:hidden')} />
     </div>
   );
 }

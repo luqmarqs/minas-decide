@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { MapLayerCode } from '@shared/contracts/metrics.ts';
 import type { TerritoryIndexEntry } from '@shared/contracts/territory.ts';
@@ -95,6 +95,27 @@ export function useMunicipalityMetrics(municipalityId: string | null) {
     queryFn: () => client!.getMunicipalityMetrics(municipalityId!),
     enabled: !!client && !!municipalityId,
     staleTime: Infinity,
+  });
+}
+
+type MetricsFile = Awaited<ReturnType<SnapshotClient['getMunicipalityMetrics']>>;
+// Stable reference: `combine` only re-runs (new array) when a query result changes.
+const pickFiles = (rs: { data?: MetricsFile }[]) => rs.map((r) => r.data ?? null);
+
+/**
+ * Metrics files of several municipalities (neighborhood areas drawn on screen, FE-10), same
+ * cache keys as `useMunicipalityMetrics`. Returns a stable array of files (null = missing).
+ */
+export function useMunicipalitiesMetrics(municipalityIds: string[]): (MetricsFile | null)[] {
+  const { data: client } = useSnapshot();
+  return useQueries({
+    queries: municipalityIds.map((id) => ({
+      queryKey: snapshotKeys.metrics(client?.releaseId ?? 'none', id),
+      queryFn: () => client!.getMunicipalityMetrics(id),
+      enabled: !!client,
+      staleTime: Infinity,
+    })),
+    combine: pickFiles,
   });
 }
 

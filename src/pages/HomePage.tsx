@@ -20,7 +20,7 @@ import { StoryIntro } from '@/features/story/StoryIntro';
 import { WhatsAppShare } from '@/components/ui/WhatsAppShare';
 import { homeShareText } from '@/lib/share';
 
-// Heavy parts (Zod contracts, API client, details panel, vaul) load after idle.
+// Heavy parts (Zod contracts, API client, details panel) load after idle.
 const TerritoryPanel = lazy(() =>
   import('@/features/territory/TerritoryPanel').then((m) => ({ default: m.TerritoryPanel })),
 );
@@ -37,6 +37,36 @@ function AgendaPlaceholder() {
 }
 
 const SEARCH_ID = 'busca-territorio';
+
+/**
+ * FE-10: content above the map (narrative maps, key numbers) can still change height while
+ * the smooth scroll runs; once it settles, align the map under the header again — unless
+ * the person scrolled/touched in the meantime (never fight the user).
+ */
+function realignMap(section: HTMLElement | null) {
+  if (!section || typeof window === 'undefined') return;
+  let userMoved = false;
+  const mark = () => {
+    userMoved = true;
+  };
+  const opts = { passive: true, once: true } as const;
+  // Next tick: the Enter/click that selected the territory must not count as "moved".
+  window.setTimeout(() => {
+    window.addEventListener('wheel', mark, opts);
+    window.addEventListener('touchstart', mark, opts);
+    window.addEventListener('keydown', mark, { once: true });
+  }, 0);
+  window.setTimeout(() => {
+    window.removeEventListener('wheel', mark);
+    window.removeEventListener('touchstart', mark);
+    window.removeEventListener('keydown', mark);
+    const header = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--header-height'),
+    );
+    const off = section.getBoundingClientRect().top - (Number.isFinite(header) ? header : 56);
+    if (!userMoved && Math.abs(off) > 4) section.scrollIntoView?.({ block: 'start' });
+  }, 1200);
+}
 
 /**
  * Home (spec §12.5 + rodadas 3/D28): campaign hero (CTA + search) → narrative → "Por que
@@ -75,6 +105,7 @@ export default function HomePage() {
           block: 'start',
           behavior: prefersReducedMotion() ? 'auto' : 'smooth',
         });
+        realignMap(mapSectionRef.current);
       }}
     />
   );
@@ -161,10 +192,13 @@ export default function HomePage() {
           ref={mapSectionRef}
           id="mapa"
           aria-label="Mapa de Minas Gerais"
+          // FE-10 (phones): the map takes the whole screen under the header (the compact bar
+          // and the collapsed sheet are overlays), so selecting a territory leaves ≥ 55 % of
+          // the viewport as visible map. Page scroll still works (cooperative gestures).
           className={
             brand
-              ? 'h-[72dvh] min-h-[440px] scroll-mt-(--header-height) lg:h-[calc(100dvh-var(--header-height)-1px)] lg:min-h-[560px]'
-              : 'h-[72dvh] min-h-[440px] scroll-mt-(--header-height) lg:h-auto lg:min-h-[560px] lg:flex-1'
+              ? 'h-[calc(100dvh-var(--header-height))] min-h-[440px] scroll-mt-(--header-height) lg:h-[calc(100dvh-var(--header-height)-1px)] lg:min-h-[560px]'
+              : 'h-[calc(100dvh-var(--header-height))] min-h-[440px] scroll-mt-(--header-height) lg:h-auto lg:min-h-[560px] lg:flex-1'
           }
         >
           <DeferredMapShell
@@ -194,7 +228,8 @@ export default function HomePage() {
       <section
         id="agenda"
         aria-labelledby="agenda-title"
-        className="scroll-mt-(--header-height) px-(--gutter) py-10 lg:px-6"
+        // FE-10: compact on phones; rendering skipped while far below the fold.
+        className="scroll-mt-(--header-height) px-(--gutter) py-6 [contain-intrinsic-size:auto_900px] [content-visibility:auto] lg:px-6 lg:py-10"
       >
         <div className="mx-auto max-w-(--content-max)">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -202,7 +237,7 @@ export default function HomePage() {
               <h2 id="agenda-title" className="text-2xl">
                 Agenda da campanha
               </h2>
-              <p className="text-secondary">
+              <p className="text-sm text-secondary sm:text-base">
                 Panfletagens, encontros, caminhadas e mutirões da campanha de Lula em Minas,
                 publicados depois de revisão. Horários de Brasília.
               </p>
