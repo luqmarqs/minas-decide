@@ -53,7 +53,7 @@ export function MapLegend({
   values,
   loading,
   status,
-  releaseId,
+  releaseId: _releaseId,
   year,
   round,
   candidateLabel,
@@ -265,11 +265,13 @@ export function MapLegend({
             </>
           ) : null}
           {statistical ? (
-            <p>Bairros aparecem como pontos aproximados (sem limites oficiais).</p>
+            <p data-testid="legend-neighborhood-note">
+              Bairros: áreas aproximadas pelos locais de votação (Voronoi), não são limites oficiais
+              (pontos onde não há área).
+            </p>
           ) : null}
           <p>
-            <span className="font-semibold">Fonte:</span> {meta.source ? `${meta.source} · ` : ''}
-            snapshot <span className="font-mono">{releaseId}</span> ·{' '}
+            <span className="font-semibold">Fonte:</span> {legendSource(layer)} ·{' '}
             <Link to="/metodologia" className="inline-flex min-h-6 items-center underline">
               metodologia
             </Link>
@@ -278,4 +280,11 @@ export function MapLegend({
       ) : null}
     </section>
   );
+}
+
+/** D32: short source in the legend ("TSE · IBGE"); provenance only on /metodologia. */
+function legendSource(layer: MapLayerCode): string {
+  if (layer === 'pois') return 'OpenStreetMap';
+  if (LAYERS[layer].scale === 'none') return 'TSE';
+  return 'TSE · IBGE';
 }

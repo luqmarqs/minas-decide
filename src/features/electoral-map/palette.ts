@@ -64,7 +64,7 @@ export function readMapPalette(): MapPalette {
       cssVar('--map-diverging-pos', 'rgb(47,109,83)'),
     ],
     margin: [
-      cssVar('--map-bolsonaro', 'rgb(31,78,138)'),
+      cssVar('--map-bolsonaro', 'rgb(42,95,165)'),
       cssVar('--map-bolsonaro-soft', 'rgb(195,212,236)'),
       cssVar('--map-margin-zero', 'rgb(243,239,233)'),
       cssVar('--map-lula-soft', 'rgb(240,198,191)'),

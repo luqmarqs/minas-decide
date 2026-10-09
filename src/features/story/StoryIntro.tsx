@@ -4,6 +4,7 @@ import type { Highlights } from '@shared/contracts/snapshot.ts';
 import { SunMark } from '@/components/brand/SunMark';
 import { Badge } from '@/components/ui/Badge';
 import { ButtonLink } from '@/components/ui/Button';
+import { JoinCta } from '@/features/registration/JoinCta';
 import { cn } from '@/lib/cn';
 import { formatInt } from '@/lib/format';
 import { useAfterIdle } from '@/lib/idle';
@@ -141,9 +142,9 @@ export function StoryIntroView({
   const abst = it('mg_2026_r1_abstention_votes') ?? it('mg_abstention_2026_r1');
   const blankNull = it('mg_2026_r1_blank_null_votes');
   const others = it('mg_2026_r1_other_candidates_votes');
-  const src = releaseId
-    ? `Fonte: TSE (dados abertos de 2022; extrato de 2026), snapshot ${releaseId}.`
-    : 'Fonte: TSE (dados abertos de 2022; extrato de 2026).';
+  // D32: short source; provenance (files, release, dates) only on /metodologia.
+  const src = 'Fonte: TSE · IBGE.';
+  void releaseId;
   const fill26 = useMemo(() => marginFill(margin2026), [margin2026]);
   const fill22 = useMemo(() => marginFill(margin2022r2), [margin2022r2]);
   const solid = bolsonaroLeads ? 'var(--map-bolsonaro)' : 'var(--map-lula)';
@@ -265,6 +266,9 @@ export function StoryIntroView({
               comparecimento e votos válidos) — não se somam e não indicam preferência por nenhuma
               candidatura. {src}
             </p>
+            <div>
+              <JoinCta>Quero participar</JoinCta>
+            </div>
           </Step>
           <Step
             n={4}
@@ -312,9 +316,7 @@ export function StoryIntroView({
               </span>
             </p>
             <div className="flex flex-wrap gap-2">
-              <ButtonLink to="/participar" size="lg">
-                Quero participar
-              </ButtonLink>
+              <JoinCta size="lg">Quero participar</JoinCta>
               <ButtonLink to="/#mapa" variant="secondary" size="lg">
                 Ver atividades no mapa
               </ButtonLink>

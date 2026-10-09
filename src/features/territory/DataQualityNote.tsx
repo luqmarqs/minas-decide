@@ -16,14 +16,13 @@ const QUALITY_TEXT: Record<string, string> = {
 export function DataQualityNote({
   entry,
   metrics,
-  releaseId,
+  releaseId: _releaseId,
 }: {
   entry: TerritoryIndexEntry;
   metrics?: TerritoryMetrics | null;
   releaseId: string;
 }) {
   const quality = metrics?.data_quality ?? entry.data_quality;
-  const warnings = metrics?.warnings ?? [];
   return (
     <section aria-label="Qualidade e método dos dados" className="flex flex-col gap-2">
       {quality === 'demo' ? (
@@ -38,21 +37,18 @@ export function DataQualityNote({
         <Note>
           “Bairro” aqui é uma <strong>aproximação</strong>: agrega os locais de votação cujo
           endereço fica neste bairro. Quem vota nesses locais não necessariamente mora no bairro.
-          Não há limites oficiais de bairro — por isso ele aparece como ponto no mapa.
+          Não há limites oficiais de bairro: no mapa, a área do bairro é aproximada pelos locais de
+          votação (Voronoi) e não é um limite oficial.
         </Note>
+      ) : entry.type === 'municipality' ? (
+        <p className="text-sm text-secondary" data-testid="neighborhood-areas-note">
+          Bairros no mapa: áreas aproximadas pelos locais de votação (Voronoi), não são limites
+          oficiais.
+        </p>
       ) : null}
-      {warnings.length ? (
-        <Note tone="warning">
-          <p className="font-semibold">Alertas de consistência</p>
-          <ul className="mt-1 list-disc pl-4">
-            {warnings.map((w) => (
-              <li key={w}>{w}</li>
-            ))}
-          </ul>
-        </Note>
-      ) : null}
+      {/* D30: snapshot warnings stay in the files and the methodology data, not in the UI. */}
       <p className="text-xs text-muted">
-        Fonte: snapshot <span className="font-mono">{releaseId}</span>
+        Fonte: TSE
         {entry.polling_places !== undefined
           ? ` · ${entry.polling_places} locais de votação agregados`
           : ''}{' '}

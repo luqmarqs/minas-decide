@@ -14,6 +14,7 @@ import {
 } from '@/features/electoral-map/hooks';
 import { pickMetrics } from '@/features/electoral-map/layers';
 import {
+  combinedTotal,
   rankMobilization,
   rowFromMetrics,
   rowsFromLayers,
@@ -37,7 +38,7 @@ export function MobilizationList({
   ranking,
   childLabel,
   onSelectTerritory,
-  releaseId,
+  releaseId: _releaseId,
 }: {
   ranking: MobilizationRanking;
   childLabel: { one: string; many: string };
@@ -72,6 +73,13 @@ export function MobilizationList({
                     : `${formatInt(r.abstention)} abstenções`}{' '}
                   · margem de Lula {formatPp(r.margin)}
                 </span>
+                <span className="block text-xs text-muted tabular-nums">
+                  brancos e nulos:{' '}
+                  {r.blankNull !== null && r.blankNull !== undefined ? formatInt(r.blankNull) : '…'}
+                  {r.blankNullRate !== null && r.blankNullRate !== undefined
+                    ? ` (${formatPercent(r.blankNullRate)} do comparecimento)`
+                    : ''}
+                </span>
               </span>
               <span className="shrink-0 font-semibold tabular-nums">{formatPercent(r.rate)}</span>
               <Icon name="chevronRight" size={16} className="shrink-0 text-muted" />
@@ -93,10 +101,25 @@ export function MobilizationList({
           ? ` Em todos os ${formatInt(ranking.count)} ${childLabel.many} onde Lula liderou: ${formatInt(ranking.totalAll)}.`
           : ` Lula liderou em ${formatInt(ranking.count)} ${childLabel.many} com dados.`}
       </p>
+      {ranking.totalTop !== null && ranking.blankNullTop !== null ? (
+        <p className="text-sm text-secondary" data-testid="mobilization-combined">
+          Brancos e nulos nesses {formatInt(ranking.top.length)}{' '}
+          {ranking.top.length === 1 ? childLabel.one : childLabel.many}:{' '}
+          <strong className="text-primary">{formatInt(ranking.blankNullTop)}</strong>. Abstenção +
+          brancos e nulos:{' '}
+          <strong className="text-primary">
+            {formatInt(combinedTotal(ranking.totalTop, ranking.blankNullTop))}
+          </strong>{' '}
+          (soma de dois grupos distintos de eleitores).
+          {ranking.totalAll !== null && ranking.blankNullAll !== null
+            ? ` Em todos os ${childLabel.many} onde Lula liderou: ${formatInt(combinedTotal(ranking.totalAll, ranking.blankNullAll))}.`
+            : ''}
+        </p>
+      ) : null}
       <p className="text-xs text-muted">
         Taxa = abstenções ÷ eleitorado apto, 1º turno de 2026, só onde Lula teve mais votos válidos
         que Bolsonaro. Priorização territorial de comparecimento, não inferência sobre pessoas.
-        Fonte: TSE (extrato de 2026), snapshot <span className="font-mono">{releaseId}</span>.
+        Fonte: TSE.
       </p>
     </div>
   );
@@ -117,13 +140,17 @@ export function MobilizationBlock({
   const isState = entry.type === 'state';
   const abstQ = useLayerValues('abstention', 2026, 1, null, { enabled: isState });
   const marginQ = useLayerValues('president_margin', 2026, 1, null, { enabled: isState });
+  const blankNullQ = useLayerValues('blank_null', 2026, 1, null, { enabled: isState });
   const { data: client } = useSnapshot();
 
   const baseRanking = useMemo<MobilizationRanking | null>(() => {
     if (isState) {
       if (!abstQ.data || !marginQ.data) return null;
       const names = new Map(index.municipalities.map((m) => [m.id, m.name]));
-      return rankMobilization(rowsFromLayers(abstQ.data, marginQ.data, names, 'lula'), N);
+      return rankMobilization(
+        rowsFromLayers(abstQ.data, marginQ.data, names, 'lula', blankNullQ.data),
+        N,
+      );
     }
     if (!municipalityFile) return null;
     const rows: MobilizationRow[] = [];
@@ -132,7 +159,7 @@ export function MobilizationBlock({
       if (r) rows.push(r);
     }
     return rankMobilization(rows, N);
-  }, [isState, abstQ.data, marginQ.data, municipalityFile, index, entry.id]);
+  }, [isState, abstQ.data, marginQ.data, blankNullQ.data, municipalityFile, index, entry.id]);
 
   // State level: absolute abstentions come from the top municipalities' files (≤ 10 small files).
   const topIds = isState && baseRanking ? baseRanking.top.map((r) => r.id) : [];
@@ -144,22 +171,37 @@ export function MobilizationBlock({
       staleTime: Infinity,
     })),
   });
-  const absolutes = files.map(
-    (q) => pickMetrics(q.data?.self, 2026, 1)?.turnout?.abstention ?? null,
-  );
-  const absKey = absolutes.join(',');
+  // "abstention:blankNull" per top municipality ('' = still loading), as a stable memo key.
+  const absKey = files
+    .map((q) => {
+      const t = pickMetrics(q.data?.self, 2026, 1)?.turnout;
+      return t ? `${t.abstention}:${t.blank + t.null_votes}` : '';
+    })
+    .join(',');
 
   const ranking = useMemo<MobilizationRanking | null>(() => {
     if (!baseRanking || !isState) return baseRanking;
     const abs = absKey ? absKey.split(',') : [];
     const top = baseRanking.top.map((r, i) => {
-      const v = abs[i];
-      return { ...r, abstention: v ? Number(v) : null };
+      const [a, b] = (abs[i] ?? '').split(':');
+      return {
+        ...r,
+        abstention: a ? Number(a) : null,
+        blankNull: b ? Number(b) : null,
+      };
     });
-    const totalTop = top.every((r) => r.abstention !== null)
-      ? top.reduce((a, r) => a + (r.abstention ?? 0), 0)
-      : null;
-    return { ...baseRanking, top, totalTop, totalAll: null };
+    const known = <K extends 'abstention' | 'blankNull'>(k: K) =>
+      top.every((r) => r[k] !== null && r[k] !== undefined)
+        ? top.reduce((acc, r) => acc + (r[k] ?? 0), 0)
+        : null;
+    return {
+      ...baseRanking,
+      top,
+      totalTop: known('abstention'),
+      totalAll: null,
+      blankNullTop: known('blankNull'),
+      blankNullAll: null,
+    };
   }, [baseRanking, isState, absKey]);
 
   if (isState && (abstQ.isLoading || marginQ.isLoading)) {

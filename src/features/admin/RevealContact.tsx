@@ -7,7 +7,7 @@ import { revealProposalContact } from './api';
 import { adminErrorMessage, isForbidden } from './errors';
 
 /**
- * "Revelar contato do proponente": audited server-side, requires a real aal2
+ * "Revelar contato do proponente": audited server-side, (D35: no second factor required; still audited)
  * session. The full e-mail/phone live only in this component's state: they are
  * never cached, and disappear when the review closes or the tab is hidden.
  */
@@ -36,7 +36,7 @@ export function RevealContact({ proposalId }: { proposalId: string }) {
     } catch (err) {
       setError(
         isForbidden(err)
-          ? 'Não autorizado. Para ver o contato é preciso estar na lista de administradores e ter confirmado o segundo fator (MFA) nesta sessão. A tentativa foi registrada.'
+          ? 'Sem permissão. Para ver o contato é preciso estar na lista de administradores. A tentativa foi registrada.'
           : adminErrorMessage(err),
       );
       setConfirming(false);
@@ -75,7 +75,7 @@ export function RevealContact({ proposalId }: { proposalId: string }) {
   return (
     <div className="flex flex-col gap-1">
       <p className="text-xs text-muted">
-        Contatos chegam mascarados. Revelar exige MFA e fica registrado na auditoria.
+        Contatos chegam mascarados. Revelar fica registrado na auditoria.
       </p>
       <div>
         <Button size="sm" variant="secondary" onClick={() => setConfirming(true)}>

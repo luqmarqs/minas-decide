@@ -160,7 +160,7 @@ describe('mobilization (D27)', () => {
     ] as TerritoryMetrics[];
 
   it('neighborhoods use turnout + presidential comparison (unavailable precision is out)', () => {
-    expect(rowFromMetrics('n1', 'N1', row(0.3, 300, 0.55, 0.4), 'lula')).toEqual({
+    expect(rowFromMetrics('n1', 'N1', row(0.3, 300, 0.55, 0.4), 'lula')).toMatchObject({
       id: 'n1',
       name: 'N1',
       rate: 0.3,

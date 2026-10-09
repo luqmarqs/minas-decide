@@ -4,6 +4,7 @@ import { ErrorState } from '@/components/ui/States';
 import { formatDateNumeric } from '@/lib/format';
 import { StatusBadge } from '@/features/electoral-map/MapLegend';
 import { useMethodology, useSnapshot } from '@/features/electoral-map/hooks';
+import { ProvenanceSection } from '@/features/electoral-map/ProvenanceSection';
 
 export default function MetodologiaPage() {
   const { data: snap } = useSnapshot();
@@ -41,16 +42,7 @@ export default function MetodologiaPage() {
               <li key={n}>{n}</li>
             ))}
           </ul>
-          {snap.manifest.warnings.length ? (
-            <>
-              <h3>Alertas registrados</h3>
-              <ul>
-                {snap.manifest.warnings.map((w) => (
-                  <li key={w}>{w}</li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+          <ProvenanceSection />
 
           <h2>Bairros são aproximados</h2>
           <p>{q.data.neighborhood_note}</p>
@@ -90,17 +82,6 @@ export default function MetodologiaPage() {
             {q.data.limitations.map((l) => (
               <li key={l}>{l}</li>
             ))}
-          </ul>
-
-          <h2>O que não fazemos</h2>
-          <ul>
-            <li>
-              Não criamos índices de persuasão, rankings políticos nem inferências sobre pessoas.
-            </li>
-            <li>Não corrigimos divergências silenciosamente: elas aparecem como alertas.</li>
-            <li>
-              O mapa não consulta bancos de dados em tempo real: usa arquivos estáticos versionados.
-            </li>
           </ul>
         </Prose>
       )}

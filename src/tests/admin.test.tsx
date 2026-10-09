@@ -79,7 +79,7 @@ describe('/admin', () => {
     expect(callsTo(fetchMock, '/api/v1/admin')).toHaveLength(0);
   });
 
-  it('403 from the queue (e.g. no MFA) shows a clear message', async () => {
+  it('403 from the queue shows a clear "sem permissão" message (D35: no MFA wording)', async () => {
     stubFetch((url) => {
       if (url === '/api/v1/me') return Promise.resolve(ok(me(true)));
       if (url.startsWith('/api/v1/admin/queue'))
@@ -89,12 +89,8 @@ describe('/admin', () => {
       return undefined;
     });
     renderAdmin();
-    expect(await screen.findByText(/A tentativa foi registrada/)).toBeInTheDocument();
-    // No factor yet: the gate lets the panel load but points to enrolment.
-    expect(screen.getByRole('link', { name: /ativar em Segurança da conta/ })).toHaveAttribute(
-      'href',
-      '/conta/seguranca',
-    );
+    expect(await screen.findByText(/Sem permissão\. É preciso estar na lista/)).toBeInTheDocument();
+    expect(screen.queryByText(/MFA|segundo fator|duas etapas/)).not.toBeInTheDocument();
   });
 
   it('review shows public vs private (masked) and approval requires a reason + confirmation', async () => {
@@ -136,7 +132,7 @@ describe('/admin', () => {
     expect(screen.getByRole('button', { name: 'Suspender grupo' })).toBeInTheDocument();
   });
 
-  it('MfaGate: with a verified factor and an aal1 session, asks the code BEFORE loading the panel', async () => {
+  it('D35: an admin with a verified factor and an aal1 session opens the panel directly (no code asked)', async () => {
     const fake = createFakeSupabase(makeSession({ anonymous: false })).withVerifiedFactor();
     sb.current = fake;
     const fetchMock = stubFetch((url) => {
@@ -145,32 +141,12 @@ describe('/admin', () => {
         return Promise.resolve(ok({ kind: 'groups', items: [], next_cursor: null }));
       return undefined;
     });
-    const user = userEvent.setup();
     renderAdmin();
-    expect(
-      await screen.findByRole('heading', { name: 'Confirme o segundo fator' }),
-    ).toBeInTheDocument();
-    expect(callsTo(fetchMock, '/api/v1/admin')).toHaveLength(0);
-
-    const input = screen.getByLabelText(/Código de 6 números/);
-    expect(input).toHaveAttribute('autocomplete', 'one-time-code');
-    expect(input).toHaveAttribute('inputmode', 'numeric');
-    await user.type(input, '000000');
-    await user.click(screen.getByRole('button', { name: 'Verificar e continuar' }));
-    expect(await screen.findByText(/Código incorreto ou expirado/)).toBeInTheDocument();
-    expect(callsTo(fetchMock, '/api/v1/admin')).toHaveLength(0);
-
-    await user.clear(input);
-    await user.type(input, '123456');
-    await user.click(screen.getByRole('button', { name: 'Verificar e continuar' }));
     expect(await screen.findByText('Nenhuma proposta neste status.')).toBeInTheDocument();
-    expect(fake.auth.mfa.challenge).toHaveBeenCalledWith({ factorId: 'factor-verified' });
-    expect(fake.auth.mfa.verify).toHaveBeenLastCalledWith({
-      factorId: 'factor-verified',
-      challengeId: 'challenge-1',
-      code: '123456',
-    });
-    expect(fake.auth.refreshSession).toHaveBeenCalled();
+    expect(
+      screen.queryByRole('heading', { name: 'Confirme o segundo fator' }),
+    ).not.toBeInTheDocument();
+    expect(fake.auth.mfa.challenge).not.toHaveBeenCalled();
     expect(callsTo(fetchMock, '/api/v1/admin/queue').length).toBeGreaterThan(0);
   });
 
@@ -283,13 +259,13 @@ describe('/admin', () => {
     expect(screen.queryByText('joao@exemplo.com.br')).not.toBeInTheDocument();
   });
 
-  it('reveal contact without aal2 → clear 403 message, nothing shown', async () => {
+  it('reveal contact refused (403) → clear "sem permissão" message, nothing shown', async () => {
     stubFetch((url) => {
       if (url === '/api/v1/me') return Promise.resolve(ok(me(true)));
       if (url.startsWith('/api/v1/admin/queue'))
         return Promise.resolve(ok({ kind: 'groups', items: [proposal], next_cursor: null }));
       if (url.includes('/reveal-contact'))
-        return Promise.resolve(apiError('FORBIDDEN', 403, 'Confirme o segundo fator (MFA).'));
+        return Promise.resolve(apiError('FORBIDDEN', 403, 'Sem permissão.'));
       return undefined;
     });
     const user = userEvent.setup();
@@ -297,7 +273,9 @@ describe('/admin', () => {
     await user.click(await screen.findByRole('button', { name: 'Revisar' }));
     await user.click(screen.getByRole('button', { name: 'Revelar contato do proponente' }));
     await user.click(await screen.findByRole('button', { name: 'Revelar e registrar acesso' }));
-    expect(await screen.findByText(/confirmado o segundo fator \(MFA\)/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Para ver o contato é preciso estar na lista/),
+    ).toBeInTheDocument();
   });
 
   it('without a session asks to sign in by e-mail', async () => {

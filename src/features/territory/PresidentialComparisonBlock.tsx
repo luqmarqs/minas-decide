@@ -88,7 +88,7 @@ function CandidateCard({ e, demo }: { e: PresidentialComparisonEntry; demo?: boo
  */
 export function PresidentialComparisonBlock({
   comparison,
-  releaseId,
+  releaseId: _releaseId,
   demo,
 }: PresidentialComparisonBlockProps) {
   if (!comparison) {
@@ -137,10 +137,7 @@ export function PresidentialComparisonBlock({
       {!unavailable && comparison.note ? (
         <p className="text-xs text-muted">{comparison.note}</p>
       ) : null}
-      <p className="text-xs text-muted">
-        Fonte: TSE (dados abertos de 2022) e snapshot <span className="font-mono">{releaseId}</span>{' '}
-        (2026).
-      </p>
+      <p className="text-xs text-muted">Fonte: TSE.</p>
     </section>
   );
 }

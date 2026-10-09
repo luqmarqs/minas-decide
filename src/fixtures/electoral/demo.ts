@@ -543,6 +543,22 @@ export function buildDemoSnapshot(): DemoSnapshotData {
     });
   for (const { year, round, offices } of ROUNDS) {
     const ms = muniMetrics(year, round);
+    if (year === 2026 && round === 1) {
+      const values: Record<string, number> = {};
+      for (const m of ms) {
+        if (m.turnout && m.turnout.turnout > 0)
+          values[m.territory_id] = (m.turnout.blank + m.turnout.null_votes) / m.turnout.turnout;
+      }
+      addLayer({
+        layer: 'blank_null',
+        year,
+        round,
+        unit: 'rate',
+        candidate_id: null,
+        values,
+        domain: domainOf(Object.values(values), false),
+      });
+    }
     for (const layer of ['abstention', 'turnout'] as const) {
       const values: Record<string, number> = {};
       for (const m of ms) {

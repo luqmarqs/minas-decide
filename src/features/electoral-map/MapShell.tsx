@@ -88,7 +88,7 @@ export function MapShell({
   });
   const latestYear = snapshot ? Math.max(...snapshot.manifest.years) : state.year;
   // The presidential comparison is always 2026 (1st round) against 2022.
-  const fixedYear = layer === 'comparison' || president || mobilization;
+  const fixedYear = layer === 'comparison' || president || mobilization || layer === 'blank_null';
   const marginRound = marginRoundOf(state.year, state.round);
   const layerYear =
     layer === 'president_margin' ? marginRound.year : fixedYear ? latestYear : state.year;
@@ -493,8 +493,7 @@ export function MapShell({
           <StatusBadge status={snapshot.status} />
           <span>
             {meta.label}
-            {meta.scale === 'none' ? '' : ` · ${meta.unit}`} · snapshot{' '}
-            <span className="font-mono">{snapshot.releaseId}</span>
+            {meta.scale === 'none' ? '' : ` · ${meta.unit}`} · Fonte: TSE
           </span>
         </p>
       ) : null}

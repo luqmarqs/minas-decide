@@ -62,7 +62,7 @@
      president_margin (margem Lula − Bolsonaro). Nenhuma outra escala de dados usa estas cores. */
   --map-lula: #b03a2e;
   --map-lula-soft: #f0c6bf;
-  --map-bolsonaro: #1f4e8a;
+  --map-bolsonaro: #2a5fa5; /* validado: banda de luminância + CVD (dataviz) */
   --map-bolsonaro-soft: #c3d4ec;
   --map-margin-zero: #f3efe9;
 
@@ -196,9 +196,9 @@
     --map-activity-halo: rgb(95 184 217 / 0.3);
     --map-poi: #ebd6ca;
     --map-poi-bg: #1e1f1c;
-    --map-lula: #e46b5d;
+    --map-lula: #d0584b;
     --map-lula-soft: #5b2a25;
-    --map-bolsonaro: #6f9fe0;
+    --map-bolsonaro: #4f86d0;
     --map-bolsonaro-soft: #233a5e;
     --map-margin-zero: #2a2820;
   }
@@ -250,9 +250,9 @@
   --map-activity-halo: rgb(95 184 217 / 0.3);
   --map-poi: #ebd6ca;
   --map-poi-bg: #1e1f1c;
-  --map-lula: #e46b5d;
+  --map-lula: #d0584b;
   --map-lula-soft: #5b2a25;
-  --map-bolsonaro: #6f9fe0;
+  --map-bolsonaro: #4f86d0;
   --map-bolsonaro-soft: #233a5e;
   --map-margin-zero: #2a2820;
 }

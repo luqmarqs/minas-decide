@@ -3,7 +3,7 @@ import type { MapLayerCode } from '@shared/contracts/metrics.ts';
 import { Select, type SelectOption } from '@/components/ui/Select';
 import { cn } from '@/lib/cn';
 import { ActivityMarker } from '@/features/activities/ActivityMarker';
-import { LAYER_ORDER, LAYERS } from './layers';
+import { isFixedRoundLayer, LAYER_ORDER, LAYERS } from './layers';
 import { PoiMarker } from './PoiMarker';
 
 export interface MapOverlaySwitches {
@@ -113,7 +113,7 @@ export function MapLayerSelector({
   const mobilization = layer === 'mobilization';
   const chips = president || mobilization;
   const needsCandidate = LAYERS[layer].needsCandidate && !chips;
-  const showYear = LAYERS[layer].scale === 'sequential' && !mobilization;
+  const showYear = LAYERS[layer].scale === 'sequential' && !isFixedRoundLayer(layer);
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       <fieldset className="min-w-0">

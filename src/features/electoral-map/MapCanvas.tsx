@@ -3,7 +3,9 @@
  * (and its CSS) live in a separate chunk. Rendering rules:
  * - municipalities: IBGE polygons (lazy fetched GeoJSON) coloured through
  *   GeoJSON properties (bucketed in the worker; feature-state only for hover); centroid circles if the mesh fails;
- * - neighborhoods: points (no invented polygons) for the selected municipality;
+ * - neighborhoods of the selected municipality: approximate AREAS (Voronoi of the polling
+ *   places, generated offline, D29; never official boundaries) coloured by the active layer,
+ *   with the selected one outlined; points remain as fallback where there is no area;
  * - activities: clustered GeoJSON source (WebGL, no DOM markers), drawn as a sun with halo
  *   ABOVE any statistical layer (rodada 3: an overlay, on by default);
  * - points of interest (terminals/stations, OSM): clustered overlay, off by default;
@@ -19,7 +21,6 @@ import {
   Map as MapLibreMap,
   NavigationControl,
   setWorkerUrl,
-  type ExpressionSpecification,
   type GeoJSONSource,
   type MapLayerMouseEvent,
   type StyleSpecification,
@@ -31,17 +32,18 @@ import { municipalityIdOf, type PoiFile } from '@shared/contracts/snapshot.ts';
 import { cssDurationMs, prefersReducedMotion } from '@/lib/media';
 import type { TerritoryIndex } from './hooks';
 import { formatLayerValue, LAYERS } from './layers';
-import { readMapPalette, safeDomain, type MapPalette } from './palette';
+import { readMapPalette, type MapPalette } from './palette';
 import {
   ACTIVITY_LAYER_IDS,
   BASEMAP_STYLE_URLS,
   fillExpression,
-  marginRamp,
+  neighborhoodColor,
   overlayVisibility,
   POI_LAYER_IDS,
   trimBasemapStyle,
 } from './mapExpressions';
 import { drawPoiIcon, drawSunIcon, ICON_POI, ICON_SUN } from './mapIcons';
+import { loadNeighborhoodAreas, type NeighborhoodAreas } from './neighborhoodAreas';
 
 setWorkerUrl(maplibreWorkerUrl);
 
@@ -83,6 +85,7 @@ interface GeoFeatureCollection<G extends GeoGeometry = GeoGeometry, P = Record<s
 const SRC_MUNI = 'mm-municipalities';
 const SRC_MUNI_PTS = 'mm-municipality-points';
 const SRC_NEIGH = 'mm-neighborhoods';
+const SRC_NEIGH_AREA = 'mm-neighborhood-areas';
 const SRC_ACT = 'mm-activities';
 const SRC_POI = 'mm-pois';
 
@@ -173,33 +176,6 @@ function fallbackStyle(p: MapPalette): StyleSpecification {
       { id: 'mm-background', type: 'background', paint: { 'background-color': p.surfaceAlt } },
     ],
   };
-}
-
-function neighborhoodColor(
-  p: MapPalette,
-  layer: MapLayerCode,
-  values: MapLayerValues | null | undefined,
-): ExpressionSpecification | string {
-  if (LAYERS[layer].scale === 'none' || !values) return p.none;
-  const diverging = LAYERS[layer].scale === 'diverging';
-  const [a, b] = safeDomain(values.domain, diverging);
-  const v: ExpressionSpecification = ['to-number', ['get', 'v'], 0];
-  if (LAYERS[layer].palette === 'partisan')
-    return ['case', ['has', 'v'], marginRamp(p, v, b), p.none];
-  const ramp: ExpressionSpecification = diverging
-    ? ['interpolate', ['linear'], v, a, p.diverging[0], 0, p.diverging[1], b, p.diverging[2]]
-    : [
-        'interpolate',
-        ['linear'],
-        v,
-        a,
-        p.sequential[0],
-        (a + b) / 2,
-        p.sequential[2],
-        b,
-        p.sequential[4],
-      ];
-  return ['case', ['has', 'v'], ramp, p.none];
 }
 
 export default function MapCanvas(props: MapCanvasProps) {
@@ -296,6 +272,11 @@ export default function MapCanvas(props: MapCanvasProps) {
         map.addSource(SRC_MUNI, { type: 'geojson', data: empty, promoteId: 'codarea' });
         map.addSource(SRC_MUNI_PTS, { type: 'geojson', data: empty, promoteId: 'codarea' });
         map.addSource(SRC_NEIGH, { type: 'geojson', data: empty, promoteId: 'id' });
+        map.addSource(SRC_NEIGH_AREA, {
+          type: 'geojson',
+          data: empty,
+          promoteId: 'territory_id',
+        });
         map.addSource(SRC_POI, {
           type: 'geojson',
           data: empty,
@@ -367,6 +348,50 @@ export default function MapCanvas(props: MapCanvasProps) {
               'circle-stroke-color': palette.stroke,
               'circle-stroke-width': 0.6,
             },
+          },
+          beforeId,
+        );
+        // Neighborhood areas (D29): fill by the active layer, thin outlines, selected outline
+        // (yellow over an ink casing, like the municipality).
+        map.addLayer(
+          {
+            id: 'mm-neigh-fill',
+            type: 'fill',
+            source: SRC_NEIGH_AREA,
+            paint: { 'fill-color': palette.none, 'fill-opacity': 0.85 },
+          },
+          beforeId,
+        );
+        map.addLayer(
+          {
+            id: 'mm-neigh-line',
+            type: 'line',
+            source: SRC_NEIGH_AREA,
+            paint: {
+              'line-color': palette.stroke,
+              'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.9, 0.35],
+              'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 1.6, 0.5],
+            },
+          },
+          beforeId,
+        );
+        map.addLayer(
+          {
+            id: 'mm-neigh-selected-casing',
+            type: 'line',
+            source: SRC_NEIGH_AREA,
+            filter: ['==', ['get', 'territory_id'], ''],
+            paint: { 'line-color': palette.selectedCasing, 'line-width': 5 },
+          },
+          beforeId,
+        );
+        map.addLayer(
+          {
+            id: 'mm-neigh-selected',
+            type: 'line',
+            source: SRC_NEIGH_AREA,
+            filter: ['==', ['get', 'territory_id'], ''],
+            paint: { 'line-color': palette.selected, 'line-width': 2.6 },
           },
           beforeId,
         );
@@ -566,7 +591,9 @@ export default function MapCanvas(props: MapCanvasProps) {
             map!.queryRenderedFeatures(e.point, { layers: overlayIds }).length
           )
             return;
-          const neigh = map!.queryRenderedFeatures(e.point, { layers: ['mm-neigh'] });
+          const neigh = map!.queryRenderedFeatures(e.point, {
+            layers: ['mm-neigh', 'mm-neigh-fill'],
+          });
           if (neigh.length) return;
           const code = e.features?.[0]?.properties?.codarea as string | undefined;
           if (code && p.index.byId.has(`mg-${code}`)) p.onSelect(`mg-${code}`);
@@ -597,6 +624,40 @@ export default function MapCanvas(props: MapCanvasProps) {
           });
         });
         map.on('mouseleave', 'mm-neigh', muniLeave);
+        map.on('mousemove', 'mm-neigh-fill', (e) => {
+          const f = e.features?.[0];
+          const id = f?.properties?.territory_id as string | undefined;
+          const p = propsRef.current;
+          if (!id) return;
+          const entry = p.index.byId.get(id);
+          map!.getCanvas().style.cursor = 'pointer';
+          setHoverState(SRC_NEIGH_AREA, id);
+          const v = f?.properties?.v as number | undefined;
+          setHover({
+            x: e.point.x,
+            y: e.point.y,
+            title: `${entry?.name ?? (f?.properties?.name as string) ?? id} (bairro, área aprox.)`,
+            value:
+              LAYERS[p.layer].scale === 'none'
+                ? ''
+                : `${LAYERS[p.layer].short}: ${formatLayerValue(p.layer, v ?? null)}`,
+          });
+        });
+        map.on('mouseleave', 'mm-neigh-fill', muniLeave);
+        map.on('click', 'mm-neigh-fill', (e) => {
+          const p = propsRef.current;
+          const overlayIds = [...ACTIVITY_LAYER_IDS, ...POI_LAYER_IDS].filter((id) =>
+            map!.getLayer(id),
+          );
+          if (
+            overlayIds.length &&
+            map!.queryRenderedFeatures(e.point, { layers: overlayIds }).length
+          )
+            return;
+          if (map!.queryRenderedFeatures(e.point, { layers: ['mm-neigh'] }).length) return;
+          const id = e.features?.[0]?.properties?.territory_id as string | undefined;
+          if (id && p.index.byId.has(id)) p.onSelect(id);
+        });
         map.on('click', 'mm-neigh', (e) => {
           const id = e.features?.[0]?.properties?.id as string | undefined;
           if (id) propsRef.current.onSelect(id);
@@ -635,6 +696,14 @@ export default function MapCanvas(props: MapCanvasProps) {
           const el = containerRef.current;
           if (!el || !map) return;
           el.dataset.zoom = map.getZoom().toFixed(2);
+          // Neighborhood areas on screen and the outlined (selected) one (D29).
+          el.dataset.neighborhoodAreas = String(
+            map.queryRenderedFeatures({ layers: ['mm-neigh-fill'] }).length,
+          );
+          el.dataset.selectedArea = String(
+            map.queryRenderedFeatures({ layers: ['mm-neigh-selected'] })[0]?.properties
+              ?.territory_id ?? '',
+          );
           const pts = map.getLayer('mm-act-points')
             ? map.queryRenderedFeatures({ layers: ['mm-act-points'] })
             : [];
@@ -768,8 +837,24 @@ export default function MapCanvas(props: MapCanvasProps) {
     map.getSource<GeoJSONSource>(SRC_POI)?.setData({ type: 'FeatureCollection', features });
   }, [ready, pois]);
 
-  // ---- selection: outline + neighborhood points ------------------------------
+  // ---- neighborhood areas of the selected municipality (lazy, cached; D29) ----------
   const { selectedId, neighborhoodValues } = props;
+  const selectedMuniId = selectedId ? municipalityIdOf(selectedId) : null;
+  const [areas, setAreas] = useState<NeighborhoodAreas | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    // Never at state level (performance): only for a selected municipality.
+    if (!ready || !selectedMuniId || selectedMuniId === 'mg') return;
+    loadNeighborhoodAreas(selectedMuniId).then((a) => {
+      if (!cancelled) setAreas(a);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, selectedMuniId]);
+  const activeAreas = areas && areas.municipalityId === selectedMuniId ? areas : null;
+
+  // ---- selection: outline + neighborhood areas/points ------------------------------
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
@@ -779,8 +864,33 @@ export default function MapCanvas(props: MapCanvasProps) {
     map.setFilter('mm-muni-selected', ['==', ['get', 'codarea'], muni?.ibge_code ?? '']);
     map.setFilter('mm-muni-selected-casing', ['==', ['get', 'codarea'], muni?.ibge_code ?? '']);
     const children = muni ? (index.childrenOf.get(muni.id) ?? []) : [];
+    const withArea = new Set(activeAreas?.bboxes.keys() ?? []);
+    map.getSource<GeoJSONSource>(SRC_NEIGH_AREA)?.setData({
+      type: 'FeatureCollection',
+      features: (activeAreas?.features ?? []).map((f) => {
+        const v = neighborhoodValues?.[f.properties.territory_id];
+        return {
+          type: 'Feature',
+          geometry: f.geometry,
+          properties: {
+            territory_id: f.properties.territory_id,
+            name: f.properties.name,
+            ...(v !== undefined ? { v } : {}),
+          },
+        };
+      }) as GeoFeature[],
+    });
+    const selectedArea = selectedId && withArea.has(selectedId) ? selectedId : '';
+    map.setFilter('mm-neigh-selected', ['==', ['get', 'territory_id'], selectedArea]);
+    map.setFilter('mm-neigh-selected-casing', ['==', ['get', 'territory_id'], selectedArea]);
+    map.setPaintProperty(
+      'mm-neigh-fill',
+      'fill-color',
+      neighborhoodColor(palette, layer, layerValues),
+    );
+    // Points only where there is no area (fallback).
     const features: GeoFeature<GeoPoint>[] = children
-      .filter((c) => c.centroid)
+      .filter((c) => c.centroid && !withArea.has(c.id))
       .map((c) => {
         const v = neighborhoodValues?.[c.id];
         return {
@@ -799,7 +909,7 @@ export default function MapCanvas(props: MapCanvasProps) {
       'circle-color',
       neighborhoodColor(palette, layer, layerValues),
     );
-  }, [ready, selectedId, neighborhoodValues, index, layer, layerValues]);
+  }, [ready, selectedId, neighborhoodValues, index, layer, layerValues, activeAreas]);
 
   // ---- activities ---------------------------------------------------------------
   const { activities } = props;
@@ -827,7 +937,11 @@ export default function MapCanvas(props: MapCanvasProps) {
     // Re-frame a municipality once its polygon bbox becomes available (deep links).
     // Padding is part of the key: the mobile sheet overlap is measured after it opens and
     // the territory is re-framed in the visible part of the map.
-    const key = `${selectedId ?? ''}|${selectedEntry?.type === 'municipality' ? geoState : ''}|${padding.top ?? 72}|${padding.bottom}`;
+    const areaBox =
+      selectedEntry?.type === 'neighborhood'
+        ? activeAreas?.bboxes.get(selectedEntry.id)
+        : undefined;
+    const key = `${selectedId ?? ''}|${selectedEntry?.type === 'municipality' ? geoState : ''}|${areaBox ? 'area' : ''}|${padding.top ?? 72}|${padding.bottom}`;
     if (lastCameraRef.current === key) return;
     const firstMove = lastCameraRef.current === undefined;
     lastCameraRef.current = key;
@@ -854,6 +968,12 @@ export default function MapCanvas(props: MapCanvasProps) {
       move(() => map.fitBounds(MG_BOUNDS, { padding: pad, duration }));
       return;
     }
+    if (entry.type === 'neighborhood' && areaBox) {
+      // Deep links / search: frame the approximate area of the neighborhood.
+      const b = new LngLatBounds([areaBox[0], areaBox[1]], [areaBox[2], areaBox[3]]);
+      move(() => map.fitBounds(b, { padding: pad, duration, maxZoom: 14 }));
+      return;
+    }
     if (entry.type === 'neighborhood' && entry.centroid) {
       const center = entry.centroid;
       move(() =>
@@ -875,7 +995,7 @@ export default function MapCanvas(props: MapCanvasProps) {
           : map.flyTo({ center, zoom: 9, padding: pad, duration, essential: false }),
       );
     }
-  }, [ready, geoState, selectedId, index, padding.top, padding.right, padding.bottom]);
+  }, [ready, geoState, selectedId, index, activeAreas, padding.top, padding.right, padding.bottom]);
 
   return (
     <div className="absolute inset-0">

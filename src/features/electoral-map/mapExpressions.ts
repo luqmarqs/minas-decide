@@ -91,3 +91,31 @@ export function marginRamp(
     p.margin[4],
   ];
 }
+
+/** Colour of neighborhood areas/points (same scale and domain as the municipal layer). */
+export function neighborhoodColor(
+  p: MapPalette,
+  layer: MapLayerCode,
+  values: MapLayerValues | null | undefined,
+): ExpressionSpecification | string {
+  if (LAYERS[layer].scale === 'none' || !values) return p.none;
+  const diverging = LAYERS[layer].scale === 'diverging';
+  const [a, b] = safeDomain(values.domain, diverging);
+  const v: ExpressionSpecification = ['to-number', ['get', 'v'], 0];
+  if (LAYERS[layer].palette === 'partisan')
+    return ['case', ['has', 'v'], marginRamp(p, v, b), p.none];
+  const ramp: ExpressionSpecification = diverging
+    ? ['interpolate', ['linear'], v, a, p.diverging[0], 0, p.diverging[1], b, p.diverging[2]]
+    : [
+        'interpolate',
+        ['linear'],
+        v,
+        a,
+        p.sequential[0],
+        (a + b) / 2,
+        p.sequential[2],
+        b,
+        p.sequential[4],
+      ];
+  return ['case', ['has', 'v'], ramp, p.none];
+}

@@ -60,6 +60,13 @@ export function RegistrationForm({ initialTerritoryId }: RegistrationFormProps) 
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [territoryId, setTerritoryId] = useState<string | null>(initialTerritoryId);
+  // Home (D28): follow the territory selected on the map until the person picks one here.
+  const [territoryTouched, setTerritoryTouched] = useState(false);
+  const [lastInitial, setLastInitial] = useState(initialTerritoryId);
+  if (lastInitial !== initialTerritoryId) {
+    setLastInitial(initialTerritoryId);
+    if (!territoryTouched) setTerritoryId(initialTerritoryId);
+  }
   const [terms, setTerms] = useState(false);
   const [optIn, setOptIn] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -210,7 +217,10 @@ export function RegistrationForm({ initialTerritoryId }: RegistrationFormProps) 
           id={IDS.territory_id!}
           label="Cidade ou bairro onde quer atuar"
           value={territoryId}
-          onChange={(entry) => setTerritoryId(entry.id)}
+          onChange={(entry) => {
+            setTerritoryTouched(true);
+            setTerritoryId(entry.id);
+          }}
           error={errors.territory_id}
         />
         <div className="flex flex-col gap-3">

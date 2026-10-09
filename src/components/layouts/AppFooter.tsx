@@ -63,16 +63,16 @@ export function AppFooter() {
           >
             Fonte dos dados
           </h2>
-          <p className="mt-2 text-sm">
-            Indicadores eleitorais de um snapshot estático e versionado
-            {snap ? (
-              <>
-                {' '}
-                (<span className="font-mono text-xs">{snap.releaseId}</span> ·{' '}
-                {SNAPSHOT_STATUS_LABEL[snap.status]})
-              </>
-            ) : null}
-            . Bairros são aproximações por local de votação.
+          <p className="mt-2 text-sm" data-testid="footer-fonte">
+            Fonte dos dados: TSE, IBGE e OpenStreetMap
+            {snap ? ` (${SNAPSHOT_STATUS_LABEL[snap.status]})` : ''}. Bairros são aproximações por
+            local de votação.{' '}
+            <Link
+              to="/metodologia"
+              className="inline-flex min-h-6 items-center underline-offset-2 hover:underline"
+            >
+              Proveniência e metodologia
+            </Link>
           </p>
           <p className="mt-2 text-xs text-muted">
             Mapa: © OpenFreeMap © OpenMapTiles Dados © OpenStreetMap contributors · Malha municipal:
@@ -92,6 +92,18 @@ export function AppFooter() {
           </p>
           <p className="mt-2 text-sm">Contato: [canal oficial a definir]</p>
         </section>
+      </div>
+      {/* D33: discreet signature, last thing on the page. */}
+      <div className="mx-auto max-w-(--content-max) px-(--gutter) pb-4 text-center sm:text-right lg:px-6">
+        <a
+          href="https://luqmarqs.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex min-h-6 items-center text-xs text-muted underline-offset-2 hover:underline"
+          data-testid="footer-assinatura"
+        >
+          luqmarqs.dev
+        </a>
       </div>
     </footer>
   );

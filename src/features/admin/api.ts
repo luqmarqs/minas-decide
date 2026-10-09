@@ -1,6 +1,6 @@
 import { ActivitySuspensionResult, GroupSuspensionResult } from '@shared/contracts/admin';
 /**
- * Admin API (admins table + MFA, checked server-side on every call). Response
+ * Admin API (admins table, checked server-side on every call; D35: no MFA). Response
  * schemas for moderation/manager/security-events are not in `shared/contracts`
  * yet; they mirror the Worker (`worker/routes/admin.ts`) and are listed as a
  * desired contract change in the FE-2 report.

@@ -64,6 +64,8 @@ describe('WhyMinasStrip states', () => {
     renderWithApp(<WhyMinasStrip start />);
     expect(screen.getByText('DADOS DEMONSTRATIVOS')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
-    expect(screen.getAllByText('Fonte: DEMONSTRAÇÃO').length).toBe(2);
+    expect(screen.getAllByText('Fonte: Demonstração (dados sintéticos)').length).toBe(1);
+    // D34: no why_minas paragraphs on the home.
+    expect(screen.queryByText('Sintético.')).not.toBeInTheDocument();
   });
 });

@@ -57,6 +57,21 @@ export function TurnoutCards({ m }: { m: TerritoryMetrics }) {
         detail={`${formatInt(t.abstention)} de ${formatInt(t.eligible)} aptos`}
       />
       <MetricCard
+        label={
+          t.basis_office === 'president'
+            ? 'Brancos e nulos'
+            : `Brancos e nulos · ${OFFICE_LABEL_PT[t.basis_office]}`
+        }
+        value={formatPercent(t.turnout > 0 ? (t.blank + t.null_votes) / t.turnout : null)}
+        detail={
+          <>
+            {formatInt(t.blank + t.null_votes)} de {formatInt(t.turnout)} comparecimentos ·{' '}
+            <span className="font-semibold text-primary">votos que podem ser conquistados</span>
+          </>
+        }
+      />
+      <MetricCard
+        className="col-span-2"
         label={`Válidos · ${OFFICE_LABEL_PT[t.basis_office]}`}
         value={formatInt(t.valid)}
         detail={`brancos ${formatInt(t.blank)} · nulos ${formatInt(t.null_votes)} · de ${formatInt(t.turnout)} comparecimentos`}

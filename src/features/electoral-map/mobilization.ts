@@ -59,6 +59,10 @@ export interface MobilizationRow {
   rate: number;
   /** absolute abstentions, when known */
   abstention: number | null;
+  /** blank + null votes (President), when known (D30) */
+  blankNull?: number | null;
+  /** (blank + null) ÷ turnout, when known */
+  blankNullRate?: number | null;
   /** Lula − Bolsonaro, p.p. of valid votes (2026 r1) */
   margin: number;
 }
@@ -78,6 +82,9 @@ export function rowFromMetrics(
     name,
     rate: m.turnout.abstention_rate,
     abstention: m.turnout.abstention,
+    blankNull: m.turnout.blank + m.turnout.null_votes,
+    blankNullRate:
+      m.turnout.turnout > 0 ? (m.turnout.blank + m.turnout.null_votes) / m.turnout.turnout : null,
     margin,
   };
 }
@@ -88,13 +95,22 @@ export function rowsFromLayers(
   margin: MapLayerValues | null | undefined,
   names: Map<string, string>,
   side: MobilizationSide,
+  blankNull?: MapLayerValues | null,
 ): MobilizationRow[] {
   if (!abstention || !margin) return [];
   const out: MobilizationRow[] = [];
   for (const [id, rate] of Object.entries(abstention.values)) {
     const mg = margin.values[id];
     if (mg === undefined || !ledBy(mg, side)) continue;
-    out.push({ id, name: names.get(id) ?? id, rate, abstention: null, margin: mg });
+    out.push({
+      id,
+      name: names.get(id) ?? id,
+      rate,
+      abstention: null,
+      margin: mg,
+      blankNull: null,
+      blankNullRate: blankNull?.values[id] ?? null,
+    });
   }
   return out;
 }
@@ -107,12 +123,24 @@ export interface MobilizationRanking {
   totalTop: number | null;
   /** sum over every territory in the cut (null if any is unknown) */
   totalAll: number | null;
+  /** blank + null votes summed over the top rows / every row (null if any is unknown) */
+  blankNullTop: number | null;
+  blankNullAll: number | null;
 }
 
 const sum = (rows: MobilizationRow[]) =>
   rows.every((r) => r.abstention !== null)
     ? rows.reduce((a, r) => a + (r.abstention ?? 0), 0)
     : null;
+const sumBlankNull = (rows: MobilizationRow[]) =>
+  rows.length && rows.every((r) => r.blankNull !== null && r.blankNull !== undefined)
+    ? rows.reduce((a, r) => a + (r.blankNull ?? 0), 0)
+    : null;
+
+/** "abstenção + brancos e nulos" (sum of two distinct groups), null if either is unknown. */
+export function combinedTotal(abstention: number | null, blankNull: number | null) {
+  return abstention === null || blankNull === null ? null : abstention + blankNull;
+}
 
 /** Highest abstention rate first (ties: more abstentions, then name). */
 export function rankMobilization(rows: MobilizationRow[], n = 10): MobilizationRanking {
@@ -124,5 +152,12 @@ export function rankMobilization(rows: MobilizationRow[], n = 10): MobilizationR
       collator.compare(a.name, b.name),
   );
   const top = sorted.slice(0, n);
-  return { top, count: rows.length, totalTop: sum(top), totalAll: sum(rows) };
+  return {
+    top,
+    count: rows.length,
+    totalTop: sum(top),
+    totalAll: sum(rows),
+    blankNullTop: sumBlankNull(top),
+    blankNullAll: sumBlankNull(rows),
+  };
 }

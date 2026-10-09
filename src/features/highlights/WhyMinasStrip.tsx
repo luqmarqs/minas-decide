@@ -2,14 +2,25 @@ import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Note } from '@/components/ui/States';
 import { cn } from '@/lib/cn';
+import { shortSource } from '@/lib/source';
 import { useAfterIdle } from '@/lib/idle';
 import { useHighlights, useSnapshot } from '@/features/electoral-map/hooks';
 import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshotStatus';
 import { buildStripCards, type StripCard } from './cards';
+import { buildInfographic } from './infographic';
+import { WhyMinasInfographic } from './WhyMinasInfographic';
+
+/**
+ * Short source line (D32: "Fonte: TSE", "TSE 2022", "IBGE"…). Files, releases and dates
+ * are listed only on /metodologia ("Proveniência"), so cards stay short and uniform (D28).
+ */
+function SourceLine({ source }: { source: string }) {
+  return <p className="mt-auto pt-2 text-xs text-muted">Fonte: {shortSource(source)}</p>;
+}
 
 function Card({ c }: { c: StripCard }) {
   return (
-    <li className="flex min-w-0 flex-col rounded-md border border-border bg-surface-raised p-3">
+    <li className="flex w-[78%] min-w-0 shrink-0 snap-start flex-col rounded-md border border-border bg-surface-raised p-3 sm:w-[45%] md:w-auto">
       <p className="text-xs leading-snug font-semibold text-secondary">{c.label}</p>
       <p className="mt-1 text-2xl leading-tight font-bold tabular-nums break-words">{c.value}</p>
       {c.detail.map((d) => (
@@ -18,7 +29,7 @@ function Card({ c }: { c: StripCard }) {
         </p>
       ))}
       {c.note ? <p className="mt-1 text-xs text-muted">{c.note}</p> : null}
-      <p className="mt-auto pt-2 text-[0.7rem] leading-snug text-muted">Fonte: {c.source}</p>
+      <SourceLine source={c.source} />
     </li>
   );
 }
@@ -76,28 +87,25 @@ export function WhyMinasStrip({ className, start }: WhyMinasStripProps) {
       </Note>
     );
   else {
-    const cards = buildStripCards(h);
-    body = (
-      <div className="flex flex-col gap-4">
-        {cards.length ? (
-          <ul className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-            {cards.map((c) => (
-              <Card key={c.key} c={c} />
-            ))}
-          </ul>
-        ) : null}
-        {h.why_minas.length ? (
-          <ul className="grid gap-x-6 gap-y-3 text-sm md:grid-cols-2 xl:grid-cols-3">
-            {h.why_minas.slice(0, 6).map((w) => (
-              <li key={w.title} className="min-w-0">
-                <p className="font-semibold text-primary">{w.title}</p>
-                <p className="text-secondary">{w.text}</p>
-                <p className="mt-0.5 text-[0.7rem] leading-snug text-muted">Fonte: {w.source}</p>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
+    const info = buildInfographic(h);
+    const cards = info ? [] : buildStripCards(h);
+    // D34: infographic (no paragraphs); the long why_minas texts stay on /metodologia only.
+    body = info ? (
+      <WhyMinasInfographic data={info} />
+    ) : cards.length ? (
+      // Fallback (demo or unknown file): compact cards; phones get a snap carousel.
+      <ul
+        aria-label="Números de Minas Gerais"
+        tabIndex={0}
+        data-testid="why-minas-cards"
+        className="-mx-(--gutter) flex snap-x snap-mandatory gap-2 overflow-x-auto px-(--gutter) pb-2 [scrollbar-width:thin] md:mx-0 md:grid md:auto-rows-fr md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]"
+      >
+        {cards.map((c) => (
+          <Card key={c.key} c={c} />
+        ))}
+      </ul>
+    ) : (
+      <Note>Os números-chave de Minas Gerais ainda não foram publicados neste snapshot.</Note>
     );
   }
 

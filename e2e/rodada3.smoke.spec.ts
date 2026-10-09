@@ -40,7 +40,7 @@ test('activity markers stay on any layer and open a popover with "Eu vou"', asyn
   // BH neighborhoods at zoom 13 where the Rodoviária example is an unclustered sun marker
   // inside the free part of the map: east of the desktop legend; on phones, in the band
   // between the layer selector and the half-open sheet.
-  const t = info.project.name === 'mobile' ? 'mg-3106200-floresta' : 'mg-3106200-barro-preto';
+  const t = info.project.name === 'mobile' ? 'mg-3106200-floresta' : 'mg-3106200';
   await page.goto(`/?t=${t}&camada=lula-bolsonaro`);
   await expect(page.getByRole('switch', { name: /Atividades/ })).toHaveAttribute(
     'aria-checked',
@@ -110,4 +110,50 @@ test('home shows the narrative steps and the key numbers before the map', async 
     'document.documentElement.scrollWidth > document.documentElement.clientWidth',
   );
   expect(overflow).toBe(false);
+});
+
+test('FE-7: header "Participar" scrolls to the sign-up at the end of the home', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('banner').getByRole('link', { name: 'Participar' }).click();
+  await expect(page).toHaveURL(/#participar$/);
+  const title = page.getByRole('heading', { name: 'Entre para a campanha em Minas' });
+  await expect(title).toBeInViewport({ timeout: 10_000 });
+  await expect(title).toBeFocused();
+  await expect(page.getByTestId('home-participar').getByLabel(/^Nome/)).toBeVisible({
+    timeout: 20_000,
+  });
+});
+
+test('FE-8: Mariana shows approximate neighborhood areas; choosing Centro outlines it', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const input = page.getByRole('combobox', { name: /Cidade ou bairro/ });
+  await input.fill('Mariana');
+  await expect(page.getByRole('option').first()).toContainText('Mariana');
+  await page
+    .getByRole('option', { name: /^Mariana\/MG/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/[?&]t=mg-3140001(&|$)/);
+  const map = page.locator('[data-neighborhood-areas]');
+  await expect
+    .poll(async () => Number((await map.getAttribute('data-neighborhood-areas')) ?? '0'), {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(5);
+  // Search the neighborhood (same flow as clicking an area).
+  await input.fill('Centro Mariana');
+  await page
+    .getByRole('option', { name: /^Centro — Mariana/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/[?&]t=mg-3140001-centro(&|$)/);
+  await expect
+    .poll(async () => (await map.getAttribute('data-selected-area')) ?? '', { timeout: 30_000 })
+    .toBe('mg-3140001-centro');
+  // Panel/legend note (on phones it sits in the collapsed legend or lower in the sheet).
+  await expect(page.getByText(/pelos locais de votação \(Voronoi\)/).first()).toBeAttached();
 });

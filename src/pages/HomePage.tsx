@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { BrandHero } from '@/components/brand/BrandHero';
 import { Badge } from '@/components/ui/Badge';
 import { ButtonLink } from '@/components/ui/Button';
@@ -13,6 +13,9 @@ import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshotStatus';
 import { useMapUrlState } from '@/features/electoral-map/useMapUrlState';
 import { TerritorySearch } from '@/features/territory/TerritorySearch';
 import { WhyMinasStrip } from '@/features/highlights/WhyMinasStrip';
+import { HomeJoinSection } from '@/features/registration/HomeJoinSection';
+import { JoinCta } from '@/features/registration/JoinCta';
+import { scrollToJoin } from '@/features/registration/join';
 import { StoryIntro } from '@/features/story/StoryIntro';
 import { WhatsAppShare } from '@/components/ui/WhatsAppShare';
 import { homeShareText } from '@/lib/share';
@@ -36,8 +39,9 @@ function AgendaPlaceholder() {
 const SEARCH_ID = 'busca-territorio';
 
 /**
- * Home (spec §12.5 + rodada 3): campaign hero (CTA + search) → "Por que Minas decide" key
- * numbers → map+layers (activities always on) → panel → agenda → footer.
+ * Home (spec §12.5 + rodadas 3/D28): campaign hero (CTA + search) → narrative → "Por que
+ * Minas decide" key numbers + CTA → map+layers (activities always on) → panel → agenda →
+ * sign-up (#participar) → footer. Every "participar" CTA scrolls to the sign-up section.
  */
 export default function HomePage() {
   const [state, update] = useMapUrlState();
@@ -53,6 +57,7 @@ export default function HomePage() {
     if (location.hash === '#busca') document.getElementById(SEARCH_ID)?.focus();
     if (location.hash === '#agenda') document.getElementById('agenda')?.scrollIntoView();
     if (location.hash === '#mapa') document.getElementById('mapa')?.scrollIntoView();
+    if (location.hash === '#participar') scrollToJoin();
   }, [location.hash, location.key]);
 
   const search = (
@@ -102,9 +107,7 @@ export default function HomePage() {
             search={search}
             actions={
               <>
-                <ButtonLink to="/participar" size="lg">
-                  Quero participar da campanha
-                </ButtonLink>
+                <JoinCta size="lg">Quero participar da campanha</JoinCta>
                 <ButtonLink to="/#agenda" variant="secondary" size="lg">
                   Ver atividades
                 </ButtonLink>
@@ -141,6 +144,18 @@ export default function HomePage() {
         <StoryIntro start={interacted} />
 
         <WhyMinasStrip start={interacted} />
+
+        <section
+          aria-label="Entre para a campanha"
+          className="border-b border-border bg-surface px-(--gutter) py-5 lg:px-6"
+        >
+          <div className="mx-auto flex max-w-(--content-max) flex-wrap items-center justify-between gap-3 xl:max-w-none">
+            <p className="text-lg font-semibold text-primary">
+              Minas se decide no corpo a corpo. Entre para a campanha.
+            </p>
+            <JoinCta>Quero participar</JoinCta>
+          </div>
+        </section>
 
         <section
           ref={mapSectionRef}
@@ -192,9 +207,7 @@ export default function HomePage() {
                 publicados depois de revisão. Horários de Brasília.
               </p>
             </div>
-            <ButtonLink to="/criar-atividade" variant="secondary" size="sm">
-              Propor atividade
-            </ButtonLink>
+            <JoinCta>Quero participar</JoinCta>
           </div>
           <div className="max-w-3xl">
             {agendaReady ? (
@@ -204,9 +217,21 @@ export default function HomePage() {
             ) : (
               <AgendaPlaceholder />
             )}
+            <p className="mt-4 text-secondary">
+              Não encontrou uma atividade perto de você?{' '}
+              <Link to="/criar-atividade" className="font-semibold text-primary underline">
+                Proponha uma
+              </Link>
+              .
+            </p>
           </div>
         </div>
       </section>
+
+      <HomeJoinSection
+        territoryId={state.territoryId}
+        start={interacted || location.hash === '#participar'}
+      />
     </>
   );
 }

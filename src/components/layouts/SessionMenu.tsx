@@ -1,17 +1,14 @@
 import { lazy, Suspense } from 'react';
-import { ButtonLink } from '@/components/ui/Button';
+import { JoinCta } from '@/features/registration/JoinCta';
 import { useSessionMaybePresent } from '@/lib/sessionPresence';
 
 const SessionMenuActive = lazy(() =>
   import('./SessionMenuActive').then((m) => ({ default: m.SessionMenuActive })),
 );
 
+/** On the home page it scrolls to the sign-up section (#participar); elsewhere /participar. */
 function ParticiparCta() {
-  return (
-    <ButtonLink to="/participar" size="sm">
-      Participar
-    </ButtonLink>
-  );
+  return <JoinCta size="sm">Participar</JoinCta>;
 }
 
 /**

@@ -69,7 +69,7 @@ export default function ContaSegurancaPage() {
     <PageShell
       title="Segurança da conta"
       documentTitle="Segurança da conta"
-      lead="Verificação em duas etapas com um app autenticador (Google Authenticator, Aegis, 1Password, Microsoft Authenticator…)."
+      lead="Proteção extra opcional: verificação em duas etapas com um app autenticador (Google Authenticator, Aegis, 1Password, Microsoft Authenticator…)."
     >
       <meta name="robots" content="noindex, nofollow" />
       {body}
@@ -119,8 +119,8 @@ function SecuritySettings({ userId }: { userId: string }) {
             </>
           ) : (
             <>
-              Verificação em duas etapas <strong>desativada</strong>. Recomendada para quem modera
-              ou organiza atividades; obrigatória para a moderação.
+              Verificação em duas etapas <strong>desativada</strong>. É opcional: uma proteção extra
+              recomendada para quem modera ou organiza atividades.
             </>
           )}
         </p>

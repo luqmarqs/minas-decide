@@ -54,6 +54,17 @@ export const LAYERS: Record<MapLayerCode, LayerMeta> = {
     scale: 'sequential',
     needsCandidate: false,
   },
+  blank_null: {
+    // D30: 2026 1st round, President totals (basis office of the turnout block).
+    code: 'blank_null',
+    label: 'Brancos e nulos',
+    short: 'Brancos e nulos',
+    unit: '% do comparecimento',
+    denominator: '(votos brancos + nulos para Presidente) ÷ comparecimento',
+    scale: 'sequential',
+    needsCandidate: false,
+    source: 'TSE',
+  },
   votes: {
     code: 'votes',
     label: 'Votação',
@@ -81,7 +92,7 @@ export const LAYERS: Record<MapLayerCode, LayerMeta> = {
     denominator: '% dos válidos no 1º turno de 2026 − % dos válidos no 1º turno de 2022',
     scale: 'diverging',
     needsCandidate: true,
-    source: 'TSE (dados abertos de 2022) e snapshot de 2026',
+    source: 'TSE',
   },
   president_margin: {
     code: 'president_margin',
@@ -93,7 +104,7 @@ export const LAYERS: Record<MapLayerCode, LayerMeta> = {
     scale: 'diverging',
     palette: 'partisan',
     needsCandidate: false,
-    source: 'TSE (dados abertos de 2022; extrato de 2026)',
+    source: 'TSE',
   },
   mobilization: {
     // D27: derived in the browser from abstention + margin (2026 r1); no new file.
@@ -105,7 +116,7 @@ export const LAYERS: Record<MapLayerCode, LayerMeta> = {
       'abstenções ÷ eleitorado apto, apenas em territórios onde Lula liderou no 1º turno de 2026',
     scale: 'sequential',
     needsCandidate: true,
-    source: 'TSE (extrato de 2026)',
+    source: 'TSE',
   },
   activities: {
     code: 'activities',
@@ -124,16 +135,23 @@ export const LAYERS: Record<MapLayerCode, LayerMeta> = {
     denominator: 'pontos de interesse, não dados eleitorais',
     scale: 'none',
     needsCandidate: false,
-    source: '© OpenStreetMap contributors (ODbL)',
+    source: 'OpenStreetMap',
   },
 };
 
 /** Exclusive statistical layers offered in the selector (rodada 3). */
 export type StatLayerCode =
-  'abstention' | 'turnout' | 'votes' | 'president_comparison' | 'president_margin' | 'mobilization';
+  | 'abstention'
+  | 'turnout'
+  | 'votes'
+  | 'president_comparison'
+  | 'president_margin'
+  | 'mobilization'
+  | 'blank_null';
 export const LAYER_ORDER: StatLayerCode[] = [
   'abstention',
   'turnout',
+  'blank_null',
   'votes',
   'president_margin',
   'president_comparison',
@@ -146,7 +164,8 @@ export function isFixedRoundLayer(code: MapLayerCode): boolean {
     code === 'comparison' ||
     code === 'president_comparison' ||
     code === 'president_margin' ||
-    code === 'mobilization'
+    code === 'mobilization' ||
+    code === 'blank_null'
   );
 }
 
@@ -174,6 +193,7 @@ export const LAYER_SLUG: Record<MapLayerCode, string> = {
   president_comparison: 'lula-bolsonaro',
   president_margin: 'margem',
   mobilization: 'mobilizacao',
+  blank_null: 'brancos-nulos',
   activities: 'atividades',
   pois: 'terminais',
 };
@@ -226,6 +246,8 @@ export function valueForLayer(
       return m.turnout ? m.turnout.abstention_rate : null;
     case 'turnout':
       return m.turnout ? m.turnout.turnout_rate : null;
+    case 'blank_null':
+      return blankNullRate(m);
     case 'votes': {
       if (!candidateId) return null;
       for (const list of Object.values(m.results)) {
@@ -308,4 +330,11 @@ export function marginFromComparison(
   const b = pc.entries.find((e) => e.key === 'bolsonaro')?.[field];
   if (l === null || l === undefined || b === null || b === undefined) return null;
   return Math.round((l - b) * 10000) / 100;
+}
+
+/** (blank + null) ÷ turnout of the territory (null when turnout is missing or zero). */
+export function blankNullRate(m: TerritoryMetrics | undefined | null): number | null {
+  const t = m?.turnout;
+  if (!t || t.turnout <= 0) return null;
+  return (t.blank + t.null_votes) / t.turnout;
 }

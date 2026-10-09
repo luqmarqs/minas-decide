@@ -93,14 +93,15 @@ export function GroupCard({
         revisão antes de aparecer.
       </p>
     );
+    // D28: "Participar" stays the visible primary action even without a group.
     primary = (
-      <ButtonLink to={propor} size="sm">
-        Propor um grupo
+      <ButtonLink to={participar} size="sm">
+        Participar
       </ButtonLink>
     );
     secondary = (
-      <ButtonLink to={participar} variant="secondary" size="sm">
-        Cadastrar interesse
+      <ButtonLink to={propor} variant="secondary" size="sm">
+        Propor um grupo
       </ButtonLink>
     );
   }

@@ -135,6 +135,7 @@ describe('layers and URL state (rodada 3)', () => {
     expect(LAYER_ORDER).toEqual([
       'abstention',
       'turnout',
+      'blank_null',
       'votes',
       'president_margin',
       'president_comparison',
@@ -580,10 +581,15 @@ describe('StoryIntro (D25)', () => {
     const paths = maps[1]!.querySelectorAll('path');
     expect(paths[0]!.getAttribute('style')).toContain('--map-lula');
     expect(paths[1]!.getAttribute('style')).toContain('--map-bolsonaro');
-    expect(screen.getByRole('link', { name: 'Quero participar' })).toHaveAttribute(
-      'href',
-      '/participar',
-    );
+    // D28: steps 3 and 5 point to the sign-up section of the home page.
+    const ctas = screen.getAllByRole('link', { name: 'Quero participar' });
+    expect(ctas).toHaveLength(2);
+    for (const a of ctas) expect(a).toHaveAttribute('href', '#participar');
+    // D32: short sources under the figures, no file names or release ids.
+    for (const m of maps) {
+      const desc = document.getElementById(m.getAttribute('aria-describedby')!);
+      expect(desc?.textContent).not.toMatch(/rel-1|\.zip|snapshot/);
+    }
   });
 
   it('keeps an honest state without data (skeleton maps, no invented numbers)', () => {

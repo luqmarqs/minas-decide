@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-09T19:21:41.540Z",
+  "shots": [
+    "home-infografico-desktop1440-fe7-infografico",
+    "home-participar-desktop1440-fe7",
+    "rodape-desktop1440-fe7",
+    "mapa-mariana-areas-desktop1440-fe8",
+    "mapa-mariana-centro-desktop1440-fe8",
+    "mapa-brancos-nulos-desktop1440-fe9",
+    "territorio-brancos-nulos-desktop1440-fe9",
+    "territorio-mobilizacao-desktop1440-fe9",
+    "home-infografico-mobile390-fe7-infografico",
+    "home-participar-mobile390-fe7",
+    "rodape-mobile390-fe7",
+    "mapa-mariana-areas-mobile390-fe8",
+    "mapa-mariana-centro-mobile390-fe8",
+    "mapa-brancos-nulos-mobile390-fe9",
+    "territorio-brancos-nulos-mobile390-fe9",
+    "territorio-mobilizacao-mobile390-fe9"
+  ],
+  "axe": {
+    "home-desktop1440": [],
+    "mapa-bairro-desktop1440": [
+      {
+        "id": "target-size",
+        "impact": "serious",
+        "nodes": 1,
+        "t": [
+          ".xl\\:max-w-none.mx-auto.max-w-\\(--content-max\\) > .px-4.hover\\:bg-action-hover[href$=\"#participar\"]"
+        ]
+      }
+    ],
+    "territorio-desktop1440": [],
+    "metodologia-desktop1440": [],
+    "home-mobile390": [],
+    "mapa-bairro-mobile390": [
+      {
+        "id": "target-size",
+        "impact": "serious",
+        "nodes": 1,
+        "t": [
+          ".xl\\:max-w-none.max-w-\\(--content-max\\).mx-auto > .px-4.hover\\:bg-action-hover[href$=\"#participar\"]"
+        ]
+      }
+    ],
+    "territorio-mobile390": [
+      {
+        "id": "target-size",
+        "impact": "serious",
+        "nodes": 1,
+        "t": [
+          ".sm\\:grid-cols-2.grid > li:nth-child(1) > .text-left.w-full"
+        ]
+      }
+    ],
+    "metodologia-mobile390": []
+  },
+  "checks": {
+    "tiles-desktop1440": [
+      176,
+      176,
+      176,
+      176,
+      176,
+      176
+    ],
+    "areas-mariana-desktop1440": "46",
+    "selected-desktop1440": "mg-3140001-centro",
+    "tiles-mobile390": [
+      160,
+      160,
+      160,
+      160,
+      160,
+      160
+    ],
+    "areas-mariana-mobile390": "32",
+    "selected-mobile390": "mg-3140001-centro"
+  }
+}

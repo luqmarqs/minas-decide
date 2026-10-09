@@ -1,7 +1,7 @@
 import { ApiClientError, messageForError } from '@/lib/api';
 
 export const ADMIN_FORBIDDEN_MESSAGE =
-  'Acesso negado. É preciso estar na lista de administradores e ter entrado com MFA (verificação em duas etapas). A tentativa foi registrada.';
+  'Sem permissão. É preciso estar na lista de administradores. A tentativa foi registrada.';
 
 export function isForbidden(err: unknown): boolean {
   return err instanceof ApiClientError && (err.code === 'FORBIDDEN' || err.status === 403);

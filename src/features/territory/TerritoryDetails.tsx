@@ -410,7 +410,9 @@ function PoiSection({
           </li>
         ))}
       </ul>
-      <p className="text-xs text-muted">Fonte: © OpenStreetMap contributors (ODbL).</p>
+      <p className="text-xs text-muted">
+        Fonte: OpenStreetMap (© OpenStreetMap contributors, ODbL).
+      </p>
     </Section>
   );
 }
