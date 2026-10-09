@@ -140,6 +140,8 @@ export const MapLayerCode = z.enum([
   'votes',
   'comparison',
   'president_comparison',
+  /** narrative layer: Lula share − Bolsonaro share (p.p.) per territory, for a given year/round */
+  'president_margin',
   'activities',
   'pois',
 ]);

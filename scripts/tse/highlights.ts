@@ -24,6 +24,11 @@ export interface HighlightInput {
   state2026: TerritoryMetrics;
   tse2022: President2022File;
   national2026: National2026File;
+  /** municipalities led by each candidate (president_margin layers) */
+  leaders: {
+    r1_2026: { lula: number; bolsonaro: number };
+    r2_2022: { lula: number; bolsonaro: number };
+  };
 }
 
 export function buildHighlights(i: HighlightInput): Highlights {
@@ -259,6 +264,112 @@ export function buildHighlights(i: HighlightInput): Highlights {
       source: src22,
     }),
   ];
+
+  // ---- municipalities led, and voters outside the Lula/Bolsonaro pair (DATA-4) ----
+  const N = i.municipalities;
+  const NOTE_GROUPS =
+    'Soma de grupos distintos (abstenção, brancos, nulos e votos em outras candidaturas); não indica preferência nem comportamento comum dessas pessoas.';
+  const lead = (
+    key: 'r1_2026' | 'r2_2022',
+    who: 'lula' | 'bolsonaro',
+    label: string,
+    src: string,
+  ) =>
+    item({
+      id: `mg_${key === 'r1_2026' ? '2026_r1' : '2022_r2'}_municipalities_led_${who}`,
+      label,
+      value: i.leaders[key][who],
+      unit: 'count',
+      compare_value: pct(i.leaders[key][who] / N),
+      compare_label: `% dos ${N} municípios`,
+      note: 'Liderança = mais votos válidos entre Lula e Bolsonaro no município (diferença > 0).',
+      source: src,
+    });
+  // 2026 r1: nulls derived as comparecimento − válidos − brancos (= TSE QT_TOTAL_VOTOS_NULOS, inclui nulos técnicos)
+  const others26 = valid26 - lula.votes_2026_r1 - bolso.votes_2026_r1;
+  const nulls26 = t.turnout - t.valid - t.blank;
+  const bn26 = t.blank + nulls26;
+  const neither26 = t.abstention + bn26 + others26;
+  if (neither26 !== t.eligible - lula.votes_2026_r1 - bolso.votes_2026_r1)
+    throw new Error('highlights: neither-of-the-two total inconsistent');
+  const r2 = mg22.r2;
+  const bn22 = r2.blank + r2.null_votes;
+  const extra: Item[] = [
+    lead('r1_2026', 'lula', 'Municípios onde Lula liderou (1º turno de 2026)', src26),
+    lead(
+      'r1_2026',
+      'bolsonaro',
+      'Municípios onde Flávio Bolsonaro liderou (1º turno de 2026)',
+      src26,
+    ),
+    lead('r2_2022', 'lula', 'Municípios onde Lula liderou (2º turno de 2022)', src22),
+    lead(
+      'r2_2022',
+      'bolsonaro',
+      'Municípios onde Jair Bolsonaro liderou (2º turno de 2022)',
+      src22,
+    ),
+    item({
+      id: 'mg_2026_r1_other_candidates_votes',
+      label: 'Votos em outras candidaturas a Presidente em MG (1º turno de 2026)',
+      value: others26,
+      unit: 'votes',
+      compare_value: pct(others26 / valid26),
+      compare_label: '% dos votos válidos',
+      note: 'Votos válidos menos os de Lula e de Flávio Bolsonaro.',
+      source: src26,
+    }),
+    item({
+      id: 'mg_2026_r1_blank_null_votes',
+      label: 'Brancos e nulos para Presidente em MG (1º turno de 2026)',
+      value: bn26,
+      unit: 'votes',
+      compare_value: pct(bn26 / t.turnout),
+      compare_label: '% do comparecimento',
+      note: `Brancos ${t.blank} + nulos ${nulls26} (nulos = comparecimento − válidos − brancos; inclui 561 nulos técnicos do TSE). ${NOTE_GROUPS}`,
+      source: src26,
+    }),
+    item({
+      id: 'mg_2026_r1_abstention_votes',
+      label: 'Abstenção em MG (1º turno de 2026)',
+      value: t.abstention,
+      unit: 'people',
+      compare_value: pct(t.abstention / t.eligible),
+      compare_label: '% do eleitorado apto',
+      source: src26,
+    }),
+    item({
+      id: 'mg_2026_r1_neither_of_two',
+      label:
+        'Eleitores aptos que não votaram em Lula nem em Flávio Bolsonaro em MG (1º turno de 2026)',
+      value: neither26,
+      unit: 'people',
+      compare_value: pct(neither26 / t.eligible),
+      compare_label: '% do eleitorado apto',
+      note: `Abstenção ${t.abstention} + brancos e nulos ${bn26} + outras candidaturas ${others26}. ${NOTE_GROUPS}`,
+      source: src26,
+    }),
+    item({
+      id: 'mg_2022_r2_blank_null_votes',
+      label: 'Brancos e nulos para Presidente em MG (2º turno de 2022)',
+      value: bn22,
+      unit: 'votes',
+      compare_value: pct(bn22 / r2.turnout),
+      compare_label: '% do comparecimento',
+      note: `Brancos ${r2.blank} + nulos ${r2.null_votes}. ${NOTE_GROUPS}`,
+      source: src22,
+    }),
+    item({
+      id: 'mg_2022_r2_abstention_votes',
+      label: 'Abstenção em MG (2º turno de 2022)',
+      value: r2.abstention,
+      unit: 'people',
+      compare_value: pct(r2.abstention / r2.eligible),
+      compare_label: '% do eleitorado apto',
+      source: src22,
+    }),
+  ];
+  items.push(...extra);
 
   const why: Highlights['why_minas'] = [
     {

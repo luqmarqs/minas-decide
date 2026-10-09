@@ -103,9 +103,13 @@ Gerado offline (`npm run etl:build`), sem banco em runtime. Contratos em `shared
 
 `layer: 'president_comparison'`, `unit: 'pp'`, `candidate_id: 'lula' | 'bolsonaro'`, `values` = `delta_pp_r1` por município (853), `domain` simétrico `[-m, m]` (m = maior |delta|). Camadas `comparison-<id>` não existem mais.
 
+### `<release>/layers/{2026-r1,2022-r1,2022-r2}-president_margin.json` (`MapLayerValues`)
+
+`layer: 'president_margin'`, `unit: 'pp'`, `candidate_id: null`, `values` = (votos Lula − votos Bolsonaro) ÷ válidos × 100 por município (853; positivo = Lula à frente), `domain` simétrico.
+
 ### `<release>/highlights.json` (`Highlights`)
 
-`items[]`: `id`, `label`, `value`, `unit` (`people` \| `percent` \| `pp` \| `votes` \| `count`), `compare_value`/`compare_label` (número secundário: total nacional, % ou votos), `note`, `source` (sempre preenchido). **`percent` em escala 0–100.** Ids: `mg_eligible_2026`, `mg_share_national_eligible_2026`, `mg_rank_eligible_2026` (posição; `compare_value` = nº de UFs), `mg_municipalities`, `mg_turnout_2026_r1`, `mg_abstention_2026_r1`, `mg_2026_r1_{lula,flavio}_{votes,share}`, `mg_2026_r1_margin_votes`, `mg_2022_r1_{lula,bolsonaro}_votes`, `mg_2022_r1_margin_votes`, `mg_2022_r2_{lula,bolsonaro}_votes`, `mg_2022_r2_margin_votes`, `br_2022_r2_{lula,bolsonaro}_share`, `br_2022_r2_margin_votes` (margens = Lula − Bolsonaro; negativo = Bolsonaro à frente). `why_minas[]`: `title`, `text` (frase com números calculados), `value`, `unit`, `source`.
+`items[]`: `id`, `label`, `value`, `unit` (`people` \| `percent` \| `pp` \| `votes` \| `count`), `compare_value`/`compare_label` (número secundário: total nacional, % ou votos), `note`, `source` (sempre preenchido). **`percent` em escala 0–100.** Ids: `mg_eligible_2026`, `mg_share_national_eligible_2026`, `mg_rank_eligible_2026` (posição; `compare_value` = nº de UFs), `mg_municipalities`, `mg_turnout_2026_r1`, `mg_abstention_2026_r1`, `mg_2026_r1_{lula,flavio}_{votes,share}`, `mg_2026_r1_margin_votes`, `mg_2022_r1_{lula,bolsonaro}_votes`, `mg_2022_r1_margin_votes`, `mg_2022_r2_{lula,bolsonaro}_votes`, `mg_2022_r2_margin_votes`, `br_2022_r2_{lula,bolsonaro}_share`, `br_2022_r2_margin_votes`, `mg_{2026_r1,2022_r2}_municipalities_led_{lula,bolsonaro}`, `mg_2026_r1_other_candidates_votes`, `mg_2026_r1_blank_null_votes`, `mg_2026_r1_abstention_votes`, `mg_2026_r1_neither_of_two`, `mg_2022_r2_blank_null_votes`, `mg_2022_r2_abstention_votes` (margens = Lula − Bolsonaro; negativo = Bolsonaro à frente). `why_minas[]`: `title`, `text` (frase com números calculados), `value`, `unit`, `source`.
 
 ### `pois/terminais-mg.json` (`PoiFile`, fora do release e do manifesto)
 

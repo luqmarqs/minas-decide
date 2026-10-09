@@ -45,6 +45,7 @@ import {
   matchRate,
   MIN_MATCH_RATE,
   symmetricDomain,
+  marginLayer,
   type National2026File,
   type Place2026,
   type PresVotes,
@@ -734,6 +735,52 @@ if (tse2022 && YEAR === 2026 && ROUND === 1)
       true,
     );
 
+// president_margin layers (Lula − Bolsonaro, pp of valid votes) for 2026 r1, 2022 r1 and 2022 r2
+type MarginStats = ReturnType<typeof marginLayer>;
+const margins: Record<string, MarginStats> = {};
+if (tse2022 && YEAR === 2026 && ROUND === 1) {
+  const pick = (k: 'r1_2026' | 'r1_2022' | 'r2_2022') =>
+    munIds.map((id) => {
+      const es = metricsByTerritory.get(id)!.president_comparison?.entries;
+      const l = es?.find((e) => e.key === 'lula');
+      const b = es?.find((e) => e.key === 'bolsonaro');
+      const f =
+        k === 'r1_2026'
+          ? (['votes_2026_r1', 'valid_2026_r1'] as const)
+          : k === 'r1_2022'
+            ? (['votes_2022_r1', 'valid_2022_r1'] as const)
+            : (['votes_2022_r2', 'valid_2022_r2'] as const);
+      const lv = l?.[f[0]];
+      const bv = b?.[f[0]];
+      const val = l?.[f[1]];
+      return {
+        id,
+        votes:
+          lv == null || bv == null || val == null ? null : { lula: lv, bolsonaro: bv, valid: val },
+      };
+    });
+  for (const [key, year, round] of [
+    ['r1_2026', 2026, 1],
+    ['r1_2022', 2022, 1],
+    ['r2_2022', 2022, 2],
+  ] as const) {
+    const ml = marginLayer(pick(key));
+    margins[key] = ml;
+    emit(`layers/${year}-r${round}-president_margin.json`, {
+      layer: 'president_margin',
+      year,
+      round,
+      unit: 'pp',
+      candidate_id: null,
+      values: ml.values,
+      domain: symmetricDomain(Object.values(ml.values)),
+    } satisfies MapLayerValues);
+    console.log(
+      `[build] president_margin ${year} r${round}: municipalities=${Object.keys(ml.values).length} lula_led=${ml.lula} bolsonaro_led=${ml.bolsonaro} tie=${ml.tie} min=${ml.min?.id}:${ml.min?.pp} max=${ml.max?.id}:${ml.max?.pp}`,
+    );
+  }
+}
+
 // highlights ("por que Minas decide")
 if (tse2022 && national2026 && YEAR === 2026 && ROUND === 1) {
   const st = metricsByTerritory.get('mg')!;
@@ -743,6 +790,10 @@ if (tse2022 && national2026 && YEAR === 2026 && ROUND === 1) {
     state2026: st,
     tse2022,
     national2026,
+    leaders: {
+      r1_2026: { lula: margins['r1_2026']!.lula, bolsonaro: margins['r1_2026']!.bolsonaro },
+      r2_2022: { lula: margins['r2_2022']!.lula, bolsonaro: margins['r2_2022']!.bolsonaro },
+    },
   });
   emit('highlights.json', highlights);
 } else

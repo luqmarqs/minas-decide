@@ -11,6 +11,7 @@ import {
   share,
   symmetricDomain,
   ufRank,
+  marginLayer,
   type Place2026,
 } from './president-2022.ts';
 
@@ -163,5 +164,20 @@ describe('layer domain and UF ranking', () => {
     };
     expect(ufRank(by, 'MG')).toBe(2);
     expect(ufRank(by, 'RJ')).toBe(3);
+  });
+});
+
+describe('marginLayer', () => {
+  it('computes pp margins, leader counts and extremes', () => {
+    const r = marginLayer([
+      { id: 'a', votes: { lula: 60, bolsonaro: 40, valid: 100 } },
+      { id: 'b', votes: { lula: 30, bolsonaro: 50, valid: 100 } },
+      { id: 'c', votes: { lula: 10, bolsonaro: 10, valid: 50 } },
+      { id: 'd', votes: null },
+    ]);
+    expect(r.values).toEqual({ a: 20, b: -20, c: 0 });
+    expect([r.lula, r.bolsonaro, r.tie]).toEqual([1, 1, 1]);
+    expect(r.min).toEqual({ id: 'b', pp: -20 });
+    expect(r.max).toEqual({ id: 'a', pp: 20 });
   });
 });

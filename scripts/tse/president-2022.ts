@@ -238,3 +238,31 @@ export function ufRank(byUf: Record<string, { eligible: number }>, uf: string): 
     .sort((a, b) => b[1].eligible - a[1].eligible);
   return sorted.findIndex(([k]) => k === uf) + 1;
 }
+
+/** Municipality margin (Lula − Bolsonaro, pp of valid votes, 0.01) and leader counts for one election/round. */
+export function marginLayer(rows: { id: string; votes: PresVotes | null }[]): {
+  values: Record<string, number>;
+  lula: number;
+  bolsonaro: number;
+  tie: number;
+  min: { id: string; pp: number } | null;
+  max: { id: string; pp: number } | null;
+} {
+  const values: Record<string, number> = {};
+  let lula = 0;
+  let bolsonaro = 0;
+  let tie = 0;
+  let min: { id: string; pp: number } | null = null;
+  let max: { id: string; pp: number } | null = null;
+  for (const r of rows) {
+    if (!r.votes || r.votes.valid <= 0) continue;
+    const m = margin(r.votes);
+    values[r.id] = m.pp;
+    if (m.votes > 0) lula++;
+    else if (m.votes < 0) bolsonaro++;
+    else tie++;
+    if (!min || m.pp < min.pp) min = { id: r.id, pp: m.pp };
+    if (!max || m.pp > max.pp) max = { id: r.id, pp: m.pp };
+  }
+  return { values, lula, bolsonaro, tie, min, max };
+}

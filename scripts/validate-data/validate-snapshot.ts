@@ -413,6 +413,41 @@ function crossChecks() {
     }
     crossChecked++;
   }
+  // president_margin layers = (Lula − Bolsonaro) / valid × 100 per municipality, symmetric domain, all municipalities
+  const munCount = indexEntries.filter((e) => e.type === 'municipality').length;
+  for (const { rel, layer } of layerFiles) {
+    if (layer.layer !== 'president_margin') continue;
+    if (layer.unit !== 'pp' || layer.candidate_id !== null)
+      errors.push(`${rel}: president_margin must have unit pp and candidate_id null`);
+    if (layer.domain[0] !== -layer.domain[1]) errors.push(`${rel}: domain not symmetric`);
+    if (Object.keys(layer.values).length !== munCount)
+      errors.push(`${rel}: ${Object.keys(layer.values).length} values, expected ${munCount}`);
+    const f =
+      layer.year === 2026 && layer.round === 1
+        ? (['votes_2026_r1', 'valid_2026_r1'] as const)
+        : layer.year === 2022 && layer.round === 1
+          ? (['votes_2022_r1', 'valid_2022_r1'] as const)
+          : layer.year === 2022 && layer.round === 2
+            ? (['votes_2022_r2', 'valid_2022_r2'] as const)
+            : null;
+    if (!f) {
+      errors.push(`${rel}: unexpected year/round for president_margin`);
+      continue;
+    }
+    for (const [tid, v] of Object.entries(layer.values)) {
+      const es = metricsFiles.get(tid)?.self[0]?.president_comparison?.entries;
+      const l = es?.find((x) => x.key === 'lula');
+      const b = es?.find((x) => x.key === 'bolsonaro');
+      const val = l?.[f[1]];
+      if (!l || !b || l[f[0]] == null || b[f[0]] == null || !val) {
+        errors.push(`${rel}: ${tid} has no presidential votes in metrics`);
+        continue;
+      }
+      const exp = ((l[f[0]]! - b[f[0]]!) / val) * 100;
+      if (Math.abs(exp - v) > 0.0051) errors.push(`${rel}: ${tid} value ${v} != ${exp.toFixed(4)}`);
+      if (Math.abs(v) > layer.domain[1] + 1e-9) errors.push(`${rel}: ${tid} outside domain`);
+    }
+  }
   // president_comparison layers = municipality delta_pp_r1, symmetric domain
   for (const { rel, layer } of layerFiles) {
     if (layer.layer !== 'president_comparison') continue;

@@ -1,6 +1,6 @@
 # TSE_SAMPLE_REPORT — amostragem do snapshot contra totais oficiais do TSE (P-DATA-1)
 
-Gerado por `scripts/tse/sample-check.ts` em 2026-10-09T16:50:32.419Z. Snapshot conferido: `mg-2026r1-20261008` (1º turno de 2026).
+Gerado por `scripts/tse/sample-check.ts` em 2026-10-09T17:01:47.545Z. Snapshot conferido: `mg-2026r1-20261008` (1º turno de 2026).
 
 ## Fonte oficial
 

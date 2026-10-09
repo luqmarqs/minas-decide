@@ -183,7 +183,7 @@ Release **mantido como `mg-2026r1-20261008`**, reconstruído no lugar e ativado.
 - Camadas novas: `layers/2026-r1-president_comparison-lula.json` e `-bolsonaro.json` (`unit: 'pp'`, `candidate_id: 'lula' | 'bolsonaro'`, 853 municípios, domínios simétricos [−15,83, 15,83] e [−13,2, 13,2]). Em todos os 853 municípios o delta de Lula é negativo (máx. −0,03) e o de Bolsonaro, positivo (mín. +0,59).
 - `highlights.json` (contrato `Highlights`, gerado por `scripts/tse/highlights.ts`): 20 itens e 5 frases `why_minas`, todos com `source`; percentuais em escala 0–100. Números: eleitorado MG 2026 16.372.372 = 10,31 % do eleitorado nacional com exterior (10,37 % sem), 2º de 27 UFs; 853 municípios; comparecimento 12.637.274 (77,19 %), abstenção 3.735.098 (22,81 %); 2026 r1 Lula 5.188.936 (43,33 %), Flávio Bolsonaro 5.777.548 (48,24 %), diferença −588.612 (−4,91 p.p.); margem de Lula em 2022 r1 +563.307 (+4,69 p.p.); margem de Lula em 2022 r2 **+49.650 votos (+0,40 p.p.)**; Brasil 2022 r2 50,90 % × 49,10 % (+2.139.645, +1,80 p.p.); MG teve 10,40 % dos válidos do país no 2º turno de 2022. Nenhuma afirmação histórica não verificável (ex.: "quem vence em Minas vence o Brasil") foi incluída.
 - Metodologia 1.1.0: `comparison_note` cita a fonte (arquivos e Last-Modified), diz que o bairro 2022 é aproximado e que Jair e Flávio Bolsonaro são pessoas diferentes, sem implicar transferência de votos; nova fonte TSE em `sources`; limitações atualizadas. Manifesto: `years: [2022, 2026]`, nota de cobertura com a taxa de casamento.
-- Arquivos do release: 902 → **901** (−2 `comparison-*`, −2 `votes-*` de rastreadas, +2 `president_comparison-*`, +1 `highlights.json`). Saída: `wrote 901 files (71.2 MB) … status=validated warnings=2` (grafias de bairro unificadas em Montes Claros, já existentes).
+- Arquivos do release: 902 → **901** (904 após DATA-4, §10.5.1) (−2 `comparison-*`, −2 `votes-*` de rastreadas, +2 `president_comparison-*`, +1 `highlights.json`). Saída: `wrote 901 files (71.2 MB) … status=validated warnings=2` (grafias de bairro unificadas em Montes Claros, já existentes).
 
 ### 10.4 POIs de grande circulação — `npm run pois:fetch`
 
@@ -200,6 +200,15 @@ Release **mantido como `mg-2026r1-20261008`**, reconstruído no lugar e ativado.
 - Teste de reprovação: cópia adulterada (delta +1, share 1,2, votos 2022 +5 e precisão `approximate` em BH, `source` vazio, domínio assimétrico, POI fora de MG) → 854 erros.
 - `npx tsx scripts/tse/sample-check.ts --offline` (após a refatoração para o módulo compartilhado) → 330 indicadores, 18 divergentes, **312 idênticos** (inalterado).
 - `npx vitest run scripts/` → 4 arquivos, **56 testes passando** (18 novos em `scripts/tse/president-2022.test.ts` e `scripts/pois/geo.test.ts`).
+
+### 10.5.1 DATA-4: margem presidencial por município e "nem um nem outro"
+
+- Camadas novas (`layer: 'president_margin'`, `unit: 'pp'`, `candidate_id: null`, 853 municípios, domínio simétrico): valor = (votos Lula − votos Bolsonaro) ÷ válidos × 100, arredondado a 0,01 p.p. (positivo = Lula à frente).
+  - `layers/2026-r1-president_margin.json`: Lula liderou em **452** municípios (52,99 %), Flávio Bolsonaro em **401** (47,01 %), 0 empates; extremos Monte Sião −54,89 e Guaraciama +59,79; domínio ±59,79.
+  - `layers/2022-r1-president_margin.json`: Lula 630, Bolsonaro 223; extremos Monte Sião −47,05 e Presidente Kubitschek +70,18.
+  - `layers/2022-r2-president_margin.json`: Lula **564** (66,12 %), Bolsonaro **289** (33,88 %); extremos Monte Sião −52,94 e Presidente Kubitschek +69,07.
+- `highlights.json`: 20 → 30 itens, todos com `source`. 2026 r1 MG: outras candidaturas 1.009.751 votos (8,43 % dos válidos); brancos + nulos 661.039 (5,23 % do comparecimento; nulos = comparecimento − válidos − brancos = 392.737, igual ao TSE, incluindo os 561 nulos técnicos); abstenção 3.735.098 (22,81 % dos aptos); **não votaram em nenhum dos dois: 5.405.888 (33,02 % dos aptos)** = abstenção + brancos + nulos + outras (o build confere que = aptos − Lula − Flávio). 2022 r2 MG: brancos + nulos 534.014 (4,15 % do comparecimento), abstenção 3.418.331 (20,99 % dos aptos). As `note` dizem que são somas de grupos distintos e não indicam preferência.
+- Validador: camadas `president_margin` conferidas contra os votos de `president_comparison` de cada município (±0,0051), 853 valores, domínio simétrico, `candidate_id` nulo (adulteração → 3 erros específicos + hash). Release com **904 arquivos**; `data:validate` → `errors=0`; testes de scripts 57/57; `sample-check --offline` 312/330 idênticos.
 
 ### 10.6 Pendências / mudanças desejadas (contratos não editados)
 
