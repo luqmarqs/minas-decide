@@ -73,3 +73,19 @@ export function writeDraft<T>(userId: string, data: T | null, now = Date.now()):
     // quota/unavailable: the draft just isn't kept
   }
 }
+
+/** Removes every activity draft (all users) — called on sign-out so shared devices keep nothing. */
+export function clearAllDrafts(): void {
+  const ls = storage();
+  if (!ls) return;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < ls.length; i++) {
+      const k = ls.key(i);
+      if (k?.startsWith(DRAFT_PREFIX)) keys.push(k);
+    }
+    for (const k of keys) ls.removeItem(k);
+  } catch {
+    /* storage unavailable */
+  }
+}

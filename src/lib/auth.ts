@@ -90,6 +90,9 @@ export async function authedRequest<S extends z.ZodType>(
 }
 
 export async function signOut(): Promise<void> {
+  // QA2-11: drafts may hold address/contact; never leave them behind on shared devices.
+  const { clearAllDrafts } = await import('@/features/activities/draftStore');
+  clearAllDrafts();
   const sb = await loadSupabase();
   if (!sb) return;
   await sb.auth.signOut({ scope: 'local' });

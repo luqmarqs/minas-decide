@@ -32,7 +32,9 @@ export interface QueryResult<T = Record<string, unknown>> {
 }
 
 const FORBIDDEN =
-  /\b(INSERT|UPDATE|DELETE|MERGE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|VACUUM|ANALYZE|REINDEX|CLUSTER|COPY|LOCK|REFRESH|CALL|DO|INTO|SET_CONFIG|PG_SLEEP|DBLINK\w*|PG_READ_FILE|PG_TERMINATE_BACKEND|LO_\w+)\b/i;
+  /\b(INSERT|UPDATE|DELETE|MERGE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|VACUUM|ANALYZE|REINDEX|CLUSTER|COPY|LOCK|REFRESH|CALL|DO|INTO|SET_CONFIG|PG_SLEEP|DBLINK\w*|PG_READ_FILE|PG_READ_BINARY_FILE|PG_LS_DIR|PG_STAT_FILE|PG_TERMINATE_BACKEND|PG_CANCEL_BACKEND|PG_RELOAD_CONF|QUERY_TO_XML\w*|TABLE_TO_XML\w*|LO_\w+|PG_NOTIFY|PG_ADVISORY_\w+)\b/i;
+/** Identifier escapes and quoting tricks that could hide a forbidden name from the denylist (QA2-06). */
+const OBFUSCATION = /U&|\\u[0-9a-f]{4}|"|\$[a-z_]*\$|\bE'|\bCHR\s*\(|\bCONCAT\s*\(|\|\|/i;
 
 export function resolveSource(): SourceConnection {
   const dbUrl = process.env.ELECTORAL_SOURCE_DATABASE_URL;
@@ -88,6 +90,10 @@ export function assertReadOnlySql(sql: string): void {
   if (!/^(SELECT|WITH)\b/i.test(trimmed))
     throw new Error('Only SELECT/WITH statements are allowed against SOURCE.');
   if (FORBIDDEN.test(trimmed)) throw new Error('Forbidden keyword in SOURCE query.');
+  if (OBFUSCATION.test(trimmed))
+    throw new Error(
+      'Quoted/escaped identifiers and string concatenation are not allowed in SOURCE queries.',
+    );
   if (trimmed.includes(';')) throw new Error('Multiple statements are not allowed.');
   if (/--|\/\*/.test(trimmed)) throw new Error('SQL comments are not allowed in SOURCE queries.');
 }
