@@ -10,13 +10,13 @@ Atlas eleitoral público de Minas Gerais (município e bairro) combinado com org
 
 ## Arquitetura em uma linha
 
-React + Vite (SPA) servida por **Cloudflare Workers Static Assets**; API **Hono** no Worker em `/api/*`; **Supabase operacional novo** (Auth, perfis, grupos, atividades, RSVP) com RLS; dados eleitorais como **snapshot estático versionado** em `public/data/`, gerado offline a partir do Supabase legado (somente leitura, nunca em runtime). Detalhes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), ADRs em [`docs/adr/`](docs/adr/).
+React + Vite (SPA) servida por **Cloudflare Workers Static Assets**; API **Hono** no Worker em `/api/*`; autenticação **Clerk** (código por e-mail, sem senha; ADR 0005); **Supabase operacional novo** só como banco (perfis, grupos, atividades, RSVP) acessado pelo Worker; dados eleitorais como **snapshot estático versionado** em `public/data/`, gerado offline a partir do Supabase legado (somente leitura, nunca em runtime). Detalhes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), ADRs em [`docs/adr/`](docs/adr/).
 
 ## Rodar localmente
 
 ```bash
 npm ci
-cp .env.example .env            # valores públicos do projeto Supabase operacional (TARGET)
+cp .env.example .env            # valores públicos (TARGET, Turnstile, chave publicável do Clerk)
 cp .dev.vars.example .dev.vars  # segredos do Worker (service role, Turnstile, HMAC) — nunca commitar
 npm run dev:worker              # Worker Hono em http://127.0.0.1:8787 (lê .dev.vars)
 npm run dev                     # Vite em http://127.0.0.1:5173 (proxy /api → 8787)

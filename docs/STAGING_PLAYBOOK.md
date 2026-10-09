@@ -20,7 +20,16 @@
 6. Deploy: `npx wrangler deploy --env staging`. Verifique `https://<url>/api/v1/health` e abra a home.
 7. Supabase Auth do projeto usado em staging: `site_url` e `additional_redirect_urls` com `https://<url>/autenticacao/retorno` (`supabase/config.toml` + `supabase config push`, ou painel).
 
-## 2. E-mail transacional (bloqueia cadastro real)
+## 1b. Clerk (autenticação, ADR 0005) — executado em 2026-10-09
+
+- App `minas-decide` (`app_3KTDdv0NZbv3wTVloogIbNwLqt9`), instância **dev** (`pk_test_`/`sk_test_`): chaves em `.env.local`/`.dev.vars`/`.env.staging` e como secrets `CLERK_SECRET_KEY`/`CLERK_PUBLISHABLE_KEY` do Worker de staging. Configuração aplicada pela CLI: senha desabilitada, login e verificação por código de e-mail, nome opcional, anti-bot do Clerk ligado.
+- Para produção: criar/ativar a instância **live** no painel do Clerk (domínio próprio + DNS que o Clerk pede), repetir a configuração (`clerk config pull --instance prod` / `patch --instance prod`), gerar `pk_live_`/`sk_live_` (`clerk env pull --instance prod`), colocar `VITE_CLERK_PUBLISHABLE_KEY` no build de produção e `CLERK_SECRET_KEY` como secret, e incluir o host da instância live na CSP (`public/_headers`).
+- Admin: `APP_ENV=local npx tsx scripts/db/bootstrap-admin.ts --only=<e-mail>` cria o usuário no Clerk (se não existir) e o marca admin; login por código em `/entrar`.
+
+## 2. E-mail transacional
+
+> Com o Clerk, os e-mails de código/verificação são enviados pelo próprio Clerk; o SMTP do Supabase deixa de ser necessário para autenticação. Esta seção fica para e-mails transacionais futuros (avisos de aprovação).
+
 
 - Configure SMTP próprio no projeto Supabase (Auth → SMTP): remetente em domínio seu com SPF/DKIM/DMARC. Sem isso a cota padrão (poucos e-mails/hora) esgota e ninguém confirma e-mail (achado F04).
 - Depois, teste de ponta a ponta: cadastro → e-mail real → clique → `/autenticacao/retorno` → "Confira seus dados" → criar atividade.
