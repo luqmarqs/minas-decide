@@ -60,7 +60,43 @@ npx tsx scripts/db/load-territories.ts public/data/<release>/territories-index.j
 
 ## 6. Publicar
 
-Os arquivos em `public/data/` são servidos como Static Assets pelo Worker. Rollback = restaurar o `manifest.json` anterior (os diretórios de release podem coexistir). Nunca copie `data/private/` para `public/`.
+Os arquivos em `public/data/` são servidos como Static Assets pelo Worker. Rollback = apontar `manifest.json` para o release anterior (ver §8; os diretórios de release coexistem). Nunca copie `data/private/` para `public/`.
+
+## 7. Escopo de eleição (ano/turno) — `--year`, `--round`, `--election-codes`
+
+```bash
+npm run etl:export -- --all-mg                                   # padrão: --year 2026 --round 1 (códigos 6257,6259)
+npm run etl:export -- --all-mg --year 2026 --round 1 --election-codes 6257,6259
+# 2º turno (quando o SOURCE tiver os dados; os códigos DEVEM ser confirmados no SOURCE):
+npm run etl:export -- --all-mg --year 2026 --round 2 --election-codes <cd1,cd2> --accept-unverified-totals
+```
+
+- `--year`/`--round` entram no nome padrão do release (`mg-2026r1-AAAAMMDD`, `mg-2026r2-AAAAMMDD`) e em `extract-manifest.json` (`year`, `round`, `election_codes`). `etl:build` lê ano/turno do manifesto do extrato (extratos antigos sem esses campos são tratados como 2026 r1, com aviso) e nomeia `rounds`, `metrics[].year/round`, camadas (`layers/2026-r2-…`) e textos da metodologia a partir deles.
+- O SQL filtra `candidaturas.cd_eleicao IN (<códigos>)`; as consultas de votos usam os ids dessas candidaturas.
+- **Hipótese (não verificada)**: o 2º turno entrará no SOURCE com novos `cd_eleicao` em `candidaturas`. Nenhum código é inventado: fora de 2026 r1 o `--election-codes` é obrigatório. O esquema auditado de `totais_local` **não tem coluna de eleição/turno**; por isso, para `--round > 1` o extrator só roda com `--accept-unverified-totals` (o operador confirma antes, no SOURCE, que os totais refletem aquele turno). Se `totais_local` continuar sem turno, será preciso pedir ao proprietário uma tabela/coluna nova — nunca alterar o SOURCE.
+
+## 8. Releases múltiplos e rollback
+
+- Cada `etl:build` grava `public/data/<release>/…` **e** `public/data/<release>/release-manifest.json` (cópia do manifesto daquele release). Diretórios de release coexistem; hashes são por release.
+- `public/data/manifest.json` é o **ponteiro do release atual**: é o único arquivo que o frontend lê primeiro. `etl:build` o atualiza, salvo com `--no-activate` (constrói o release novo sem trocar o atual — use para validar antes de publicar).
+- Publicar um release construído com `--no-activate`: `cp public/data/<release>/release-manifest.json public/data/manifest.json`.
+- **Rollback**: `cp public/data/<release-anterior>/release-manifest.json public/data/manifest.json` e `npm run data:validate`. Para validar um release não ativo: `npx tsx scripts/validate-data/validate-snapshot.ts --base public/data --manifest public/data/<release>/release-manifest.json`.
+- Limitação atual: `SnapshotManifest` descreve **um** release e uma eleição (`years`, `rounds`). Mostrar 1º e 2º turno no mesmo mapa exigirá `releases[]` no manifesto (mudança de contrato pendente, ver relatório da rodada 2). Enquanto isso, o 2º turno é um release próprio (`mg-2026r2-…`) que substitui o ponteiro; o 1º turno continua acessível em seu diretório.
+- Teste/ensaio: `--out data/private/snapshot-test` gera o snapshot fora de `public/` (gitignored); `PIPELINE_COMMIT=<sha>` fixa `pipeline_commit` quando não há `.git`.
+
+## 9. Modo `db-url` (usuário SELECT-only) — sem segredo em argv
+
+Com `ELECTORAL_SOURCE_DATABASE_URL` definida (somente no ambiente do shell), o extrator **não usa o CLI**: abre a conexão em-processo com o driver `postgres` (`max: 1`), dentro de `BEGIN READ ONLY` + `SET LOCAL statement_timeout/lock_timeout`, de modo que a connection string nunca aparece na lista de argumentos de nenhum processo. Os guards permanecem: `assertReadOnlySql` (SELECT/WITH, sem `;`, sem comentários, sem `INTO`/`set_config`/`pg_sleep`/`dblink`…), sonda `transaction_read_only = on` e verificação das 6 tabelas. Mensagens de erro têm URL, host e senha mascarados. Sem a variável, usa-se o CLI no workdir isolado (nenhum segredo trafega em argv nesse modo também).
+
+```bash
+export ELECTORAL_SOURCE_DATABASE_URL='postgresql://readonly_user:***@<host>:5432/postgres'
+npm run etl:export -- --dry-run
+```
+
+## 10. Conferência com o TSE e validador
+
+- `npx tsx scripts/tse/sample-check.ts` (10 municípios; cache em `data/private/tse/`; `--offline` reusa o cache) → `docs/TSE_SAMPLE_REPORT.md`. Usa os dados abertos do TSE (zips em `cdn.tse.jus.br`, lidos por HTTP Range, CRC-32 verificado; o conteúdo baixado só é lido como CSV).
+- `npm run data:validate` agora também confere Σ municípios = estado e Σ bairros = município (tolerância 0), `share_of_valid` ∈ [0,1] e igual a votos/válidos, `delta_pp`/`delta_votes` coerentes e ausência de `territory_id` órfão (índice, métricas, pais, camadas). Testes unitários: `npx vitest run --project unit scripts`.
 
 ## Segurança
 

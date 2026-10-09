@@ -28,6 +28,10 @@ function assertCode(v: string): string {
   if (!/^\d{1,7}$/.test(v)) throw new Error(`invalid code: ${v}`);
   return v;
 }
+function codesIn(codes: number[] | undefined): string {
+  if (!codes || codes.length === 0) return '';
+  return ` AND cd_eleicao IN (${codes.map(assertInt).join(',')})`;
+}
 function assertInt(v: number): number {
   if (!Number.isInteger(v) || v < 0) throw new Error(`invalid int: ${v}`);
   return v;
@@ -52,12 +56,13 @@ export const q = {
   totais: (where: string, cargo: number) =>
     `SELECT t.local_id, t.cd_cargo, t.aptos, t.comparecimento, t.validos, t.brancos, t.nulos FROM totais_local t JOIN locais l ON l.id=t.local_id WHERE ${where} AND t.cd_cargo=${assertInt(cargo)} ORDER BY t.local_id`,
 
-  candidaturas: (uf: string) =>
-    `SELECT id, cd_eleicao, cd_cargo, ds_cargo, tipo, numero, nm_urna, sg_partido, nr_partido, votos_total, situacao FROM candidaturas WHERE uf='${uf.replace(/[^A-Z]/g, '')}' ORDER BY cd_cargo, id`,
+  /** `electionCodes` filters by cd_eleicao (election/round scope, P-DATA-3). */
+  candidaturas: (uf: string, electionCodes?: number[]) =>
+    `SELECT id, cd_eleicao, cd_cargo, ds_cargo, tipo, numero, nm_urna, sg_partido, nr_partido, votos_total, situacao FROM candidaturas WHERE uf='${uf.replace(/[^A-Z]/g, '')}'${codesIn(electionCodes)} ORDER BY cd_cargo, id`,
 
   /** candidate ids for keyset batching */
-  candidateIds: (uf: string, cargo: number) =>
-    `SELECT id FROM candidaturas WHERE uf='${uf.replace(/[^A-Z]/g, '')}' AND cd_cargo=${assertInt(cargo)} ORDER BY id`,
+  candidateIds: (uf: string, cargo: number, electionCodes?: number[]) =>
+    `SELECT id FROM candidaturas WHERE uf='${uf.replace(/[^A-Z]/g, '')}' AND cd_cargo=${assertInt(cargo)}${codesIn(electionCodes)} ORDER BY id`,
 
   /** (candidate, polling place, votes) pairs for a batch of candidate ids restricted to polling places matching `where` (on alias l) */
   votes: (candidateIds: number[], where: string) =>

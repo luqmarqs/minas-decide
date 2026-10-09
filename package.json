@@ -22,6 +22,8 @@
     "test:e2e": "playwright test",
     "check:isolation": "tsx scripts/validate-data/check-source-isolation.ts",
     "data:validate": "tsx scripts/validate-data/validate-snapshot.ts",
+    "data:validate:release": "tsx scripts/validate-data/validate-snapshot.ts --manifest",
+    "tse:sample": "tsx scripts/tse/sample-check.ts",
     "etl:export": "tsx scripts/import-electoral/export.ts",
     "etl:build": "tsx scripts/import-electoral/build-snapshot.ts",
     "db:push": "tsx scripts/db/guarded-push.ts",

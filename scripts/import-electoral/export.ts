@@ -4,6 +4,8 @@
  *   npm run etl:export -- --dry-run
  *   npm run etl:export -- --municipality 3140001            # one municipality (spike)
  *   npm run etl:export -- --all-mg                          # whole state in batches
+ *   npm run etl:export -- --all-mg --year 2026 --round 1    # election scope (default 2026 r1)
+ *   npm run etl:export -- --all-mg --year 2026 --round 2 --election-codes <c1,c2> --accept-unverified-totals
  *   flags: --years 2022,2026  --output <dir>  --max-rows N  --batch-size 40  --pause-ms 400  --release <id>
  *
  * Never writes to SOURCE. Stops with an explicit error on timeout, schema mismatch,
@@ -13,6 +15,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { parseArgs } from './args.ts';
 import { assertNotTarget, resolveSource, runQuery } from './source.ts';
 import {
   ELECTORAL_TABLES,
@@ -21,40 +24,6 @@ import {
   q,
   scopeWhere,
 } from './sql.ts';
-
-interface Args {
-  dryRun: boolean;
-  municipality?: string;
-  allMg: boolean;
-  years: number[];
-  output: string;
-  maxRows: number;
-  batchSize: number;
-  pauseMs: number;
-  release: string;
-}
-
-function parseArgs(argv: string[]): Args {
-  const get = (k: string) => {
-    const i = argv.indexOf(k);
-    return i >= 0 ? argv[i + 1] : undefined;
-  };
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const municipality = get('--municipality');
-  if (municipality && !/^\d{7}$/.test(municipality))
-    throw new Error('--municipality expects a 7-digit IBGE code');
-  return {
-    dryRun: argv.includes('--dry-run'),
-    municipality,
-    allMg: argv.includes('--all-mg'),
-    years: (get('--years') ?? '2022,2026').split(',').map(Number),
-    output: get('--output') ?? '',
-    maxRows: Number(get('--max-rows') ?? 5_000_000),
-    batchSize: Number(get('--batch-size') ?? 40),
-    pauseMs: Number(get('--pause-ms') ?? 400),
-    release: get('--release') ?? (municipality ? `mg-${municipality}-${today}` : `mg-${today}`),
-  };
-}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -73,6 +42,12 @@ async function main() {
   if (!args.municipality && !args.allMg && !args.dryRun) {
     throw new Error('Specify --municipality <ibge7> or --all-mg (or --dry-run).');
   }
+  if (args.round > 1 && !args.electionCodesExplicit)
+    throw new Error('Round > 1 requires --election-codes (codes must be confirmed in SOURCE).');
+  if (args.round > 1 && !args.acceptUnverifiedTotals && !args.dryRun)
+    throw new Error(
+      'Round > 1: totais_local has no election/round column in the audited schema, so totals cannot be filtered by round. Verify the SOURCE schema, then pass --accept-unverified-totals.',
+    );
   const conn = resolveSource();
   assertNotTarget(conn);
   const scope = { uf: 'MG', ibge: args.municipality };
@@ -80,12 +55,12 @@ async function main() {
   const outDir = resolve(args.output || join('data', 'private', 'extract', args.release));
 
   console.log(
-    `[etl] source=${conn.alias} mode=${conn.mode} scope=${args.municipality ? `municipality ${args.municipality}` : 'all MG'} release=${args.release}`,
+    `[etl] source=${conn.alias} mode=${conn.mode} scope=${args.municipality ? `municipality ${args.municipality}` : 'all MG'} release=${args.release} election=${args.year}r${args.round} codes=${args.electionCodes.join(',')}`,
   );
   console.log(`[etl] output=${outDir} dryRun=${args.dryRun}`);
 
   // 1) probe: read-only, correct schema
-  const probe = runQuery<{
+  const probe = await runQuery<{
     db: string;
     read_only: string;
     statement_timeout: string;
@@ -98,7 +73,7 @@ async function main() {
       `SOURCE schema mismatch: expected ${ELECTORAL_TABLES.length} electoral tables, found ${p.electoral_tables}.`,
     );
   }
-  const healthBefore = runQuery(conn, q.health(), { statementTimeout: '5s' }).rows[0];
+  const healthBefore = (await runQuery(conn, q.health(), { statementTimeout: '5s' })).rows[0];
   console.log(
     `[etl] probe ok (read_only=on, tables=${p.electoral_tables}) health=${JSON.stringify(healthBefore)}`,
   );
@@ -133,7 +108,7 @@ async function main() {
   };
 
   // 2) static dimensions
-  let r = runQuery(
+  let r = await runQuery(
     conn,
     args.municipality ? q.municipalityByIbge(args.municipality) : q.municipalities('MG'),
   );
@@ -141,29 +116,29 @@ async function main() {
   if (r.rows.length === 0) throw new Error('No municipality matched the scope.');
   await sleep(args.pauseMs);
 
-  r = runQuery(conn, q.locais(where));
+  r = await runQuery(conn, q.locais(where));
   save('locais.json', r.rows, r.ms, 'locais');
   await sleep(args.pauseMs);
 
   for (const cargo of [...MAJORITARIAN_CARGOS, ...PROPORTIONAL_CARGOS]) {
-    r = runQuery(conn, q.totais(where, cargo));
+    r = await runQuery(conn, q.totais(where, cargo));
     save(`totais-cargo-${cargo}.json`, r.rows, r.ms, `totais cargo ${cargo}`);
     await sleep(args.pauseMs);
   }
 
-  r = runQuery(conn, q.candidaturas('MG'));
+  r = await runQuery(conn, q.candidaturas('MG', args.electionCodes));
   save('candidaturas.json', r.rows, r.ms, 'candidaturas MG');
   await sleep(args.pauseMs);
 
   // 3) votes per polling place, keyset-batched by candidate id per office
   for (const cargo of [...MAJORITARIAN_CARGOS, ...PROPORTIONAL_CARGOS]) {
-    const ids = runQuery<{ id: number }>(conn, q.candidateIds('MG', cargo)).rows.map((x) =>
-      Number(x.id),
-    );
+    const ids = (
+      await runQuery<{ id: number }>(conn, q.candidateIds('MG', cargo, args.electionCodes))
+    ).rows.map((x) => Number(x.id));
     const batchSize = MAJORITARIAN_CARGOS.includes(cargo) ? ids.length || 1 : args.batchSize;
     for (let i = 0, b = 0; i < ids.length; i += batchSize, b++) {
       const batch = ids.slice(i, i + batchSize);
-      const res = runQuery(conn, q.votes(batch, where), { statementTimeout: '60s' });
+      const res = await runQuery(conn, q.votes(batch, where), { statementTimeout: '60s' });
       save(
         `votes-cargo-${cargo}-batch-${String(b).padStart(3, '0')}.json`,
         res.rows,
@@ -176,11 +151,11 @@ async function main() {
 
   // 4) 2022 history (tracked candidates only exist in SOURCE)
   if (args.years.includes(2022)) {
-    r = runQuery(conn, q.historico(where));
+    r = await runQuery(conn, q.historico(where));
     save('historico-2022.json', r.rows, r.ms, 'historico 2022 municipio+bairro');
   }
 
-  const healthAfter = runQuery(conn, q.health(), { statementTimeout: '5s' }).rows[0];
+  const healthAfter = (await runQuery(conn, q.health(), { statementTimeout: '5s' })).rows[0];
   const extractManifest = {
     schema_version: 1,
     release_id: args.release,
@@ -188,6 +163,9 @@ async function main() {
     source_project_alias: conn.alias,
     source_mode: conn.mode,
     scope: args.municipality ? { uf: 'MG', ibge: args.municipality } : { uf: 'MG' },
+    year: args.year,
+    round: args.round,
+    election_codes: args.electionCodes,
     years_requested: args.years,
     tables: ELECTORAL_TABLES,
     health_before: healthBefore,

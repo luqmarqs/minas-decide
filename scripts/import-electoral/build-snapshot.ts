@@ -1,10 +1,11 @@
 /**
  * Build the PUBLIC electoral snapshot from a private extract.
  *
- *   npm run etl:build -- --extract data/private/extract/<release> [--release <id>] [--out public/data] [--top 10]
+ *   npm run etl:build -- --extract data/private/extract/<release> [--release <id>] [--out public/data] [--top 10] [--no-activate]
  *
  * Input: files written by export.ts (polling-place level, gitignored).
- * Output: public/data/<release>/... + public/data/manifest.json (see shared/contracts/snapshot.ts).
+ * Output: public/data/<release>/... + <release>/release-manifest.json + public/data/manifest.json (current-release pointer; skipped with --no-activate).
+ * Election year/round come from extract-manifest.json (legacy extracts without them = 2026 r1).
  * Validations (spec §4.5/§4.13) produce `warnings`; blocking errors abort the build.
  * No PII and no SOURCE identifiers are written.
  */
@@ -42,8 +43,6 @@ if (!extractDir || !existsSync(join(extractDir, 'extract-manifest.json'))) {
 }
 const outRoot = resolve(getArg('--out') ?? join('public', 'data'));
 const TOP_N = Number(getArg('--top') ?? 10);
-const YEAR = 2026;
-const ROUND = 1;
 
 // ---------- input types ----------
 interface Municipio {
@@ -101,6 +100,10 @@ const readJson = <T>(name: string): T =>
   JSON.parse(readFileSync(join(extractDir, name), 'utf8')) as T;
 const extractManifest = readJson<{
   release_id: string;
+  /** election scope written by export.ts (absent in legacy extracts = 2026, round 1) */
+  year?: number;
+  round?: number;
+  election_codes?: number[];
   scope: { uf: string; ibge?: string };
   generated_at: string;
   health_before: unknown;
@@ -109,9 +112,18 @@ const extractManifest = readJson<{
   files: { file: string }[];
 }>('extract-manifest.json');
 const releaseId = getArg('--release') ?? extractManifest.release_id;
+const LEGACY_EXTRACT = extractManifest.year === undefined || extractManifest.round === undefined;
+const YEAR = extractManifest.year ?? 2026;
+const ROUND = extractManifest.round ?? 1;
+if (!Number.isInteger(YEAR) || !Number.isInteger(ROUND) || ROUND < 1 || ROUND > 2)
+  throw new Error(`build-snapshot: invalid election scope in extract-manifest (${YEAR} r${ROUND})`);
+const ROUND_LABEL = `${ROUND}º turno de ${YEAR}`;
+const ACTIVATE = !argv.includes('--no-activate');
 const isPartial = Boolean(extractManifest.scope.ibge);
 
-console.log(`[build] extract=${extractDir} release=${releaseId} partial=${isPartial}`);
+console.log(
+  `[build] extract=${extractDir} release=${releaseId} election=${YEAR}r${ROUND}${LEGACY_EXTRACT ? ' (legacy extract without year/round: assuming 2026 r1)' : ''} partial=${isPartial}`,
+);
 
 // ---------- load dimensions ----------
 const municipios = readJson<Municipio[]>('municipios.json');
@@ -342,6 +354,14 @@ function buildMetrics(t: TerritoryAgg): TerritoryMetrics {
       if (!c || c.cd_cargo !== cargo) continue;
       sumCand += v;
       if (c.tipo !== 'nominal') continue; // legenda votes count in valid but are not candidates
+      if (isTechnicalNull(c)) {
+        // "Candidatura" sem nome de urna e sem partido: o TSE contabiliza esses votos como
+        // nulos técnicos. Não listamos como candidatura; os totais da fonte não são alterados.
+        warnings.push(
+          `${office}: ${v} voto(s) registrados no número ${c.numero} sem candidatura válida (nulo técnico no TSE); não listados como candidatura.`,
+        );
+        continue;
+      }
       if (tot.val > 0 && v > tot.val) {
         warnings.push(
           `${office}: candidatura ${c.nm_urna ?? c.numero} tem ${v} votos acima dos ${tot.val} válidos (votos possivelmente anulados sub judice na fonte).`,
@@ -500,7 +520,7 @@ for (const m of municipios) {
 // candidates index
 const candidateIndex: CandidateIndex = {
   items: candidaturas
-    .filter((c) => c.tipo === 'nominal')
+    .filter((c) => c.tipo === 'nominal' && !isTechnicalNull(c))
     .map((c) => ({
       candidate_id: String(c.id),
       ballot_name: c.nm_urna ?? `Nº ${c.numero}`,
@@ -571,8 +591,7 @@ for (const c of candidateIndex.items.filter((c) => c.has_layer)) {
 const methodology: Methodology = {
   version: '1.0.0',
   language: 'pt-BR',
-  summary:
-    'Resultados do 1º turno de 2026 agregados a partir de locais de votação de Minas Gerais. Indicadores por município somam todos os locais do município; indicadores por bairro somam os locais cujo endereço informa aquele bairro.',
+  summary: `Resultados do ${ROUND_LABEL} agregados a partir de locais de votação de Minas Gerais. Indicadores por município somam todos os locais do município; indicadores por bairro somam os locais cujo endereço informa aquele bairro.`,
   neighborhood_note:
     'O "bairro" é o bairro do endereço do local de votação, não a residência do eleitor. Eleitores de uma seção podem morar em outro bairro. Não há limites oficiais de bairro; a representação é por ponto (média das coordenadas dos locais).',
   comparison_note:
@@ -592,19 +611,22 @@ const methodology: Methodology = {
     { label: 'Malha municipal', note: 'IBGE, API de malhas v3, quando carregada no mapa.' },
   ],
   limitations: [
-    'Sem 2º turno de 2026 nesta versão.',
+    ...(ROUND === 1 ? [`Sem 2º turno de ${YEAR} nesta versão.`] : []),
     'Histórico de 2022 disponível apenas para candidaturas rastreadas; sem abstenção de 2022.',
     'Para Deputado Federal e Estadual, exibe-se as 10 candidaturas mais votadas por território além das rastreadas; votos de legenda compõem os válidos mas não aparecem como candidaturas.',
     'A fonte exclui dos votos válidos os votos de candidaturas anuladas sub judice; por isso a soma dos votos de candidaturas pode superar os válidos (em Deputado Federal, 94.114 votos em MG, 0,75 %). As divergências são mantidas e sinalizadas, nunca corrigidas.',
     `${terr.get('mg')!.approxCount} locais de votação com coordenada aproximada.`,
+    'Números votados sem candidatura válida (sem nome de urna nem partido na fonte) são contados pelo TSE como nulos técnicos; não aparecem como candidaturas e os totais da fonte não são alterados (diferença explicada entre comparecimento e válidos+brancos+nulos).',
+    'Candidaturas com registro anulado sub judice têm seus votos somados na fonte mas excluídos dos válidos pelo TSE; a fonte não traz esse status, então a participação nos válidos dessas candidaturas pode ficar superestimada (ver docs/TSE_SAMPLE_REPORT.md).',
   ],
 };
 emit('methodology.json', methodology);
 
 // manifest
-let commit = 'unknown';
+let commit = process.env.PIPELINE_COMMIT ?? 'unknown';
 try {
-  commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+  if (!process.env.PIPELINE_COMMIT)
+    commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
 } catch {
   /* no commit yet */
 }
@@ -646,20 +668,29 @@ const manifest: SnapshotManifest = {
     isPartial
       ? `Cobertura parcial: apenas o município IBGE ${extractManifest.scope.ibge}.`
       : `Cobertura: ${municipios.length} municípios de Minas Gerais, ${locais.length} locais de votação.`,
-    'Eleição 2026, 1º turno; histórico 2022 apenas para candidaturas rastreadas.',
+    `Eleição ${YEAR}, ${ROUND}º turno; histórico 2022 apenas para candidaturas rastreadas.`,
   ],
   warnings: globalWarnings
     .slice(0, 200)
     .concat(globalWarnings.length > 200 ? [`… e mais ${globalWarnings.length - 200} avisos.`] : []),
 };
 mkdirSync(outRoot, { recursive: true });
-writeFileSync(join(outRoot, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+const manifestText = JSON.stringify(manifest, null, 2);
+// Per-release copy: releases coexist under public/data/<release>/; the root manifest.json is the
+// pointer to the CURRENT release. Rollback = copy an older <release>/release-manifest.json over it.
+writeFileSync(join(outDir, 'release-manifest.json'), manifestText, 'utf8');
+if (ACTIVATE) writeFileSync(join(outRoot, 'manifest.json'), manifestText, 'utf8');
+else
+  console.log('[build] --no-activate: root manifest.json NOT updated (current release unchanged)');
 const totalBytes = files.reduce((a, f) => a + f.bytes, 0);
 console.log(
   `[build] wrote ${files.length} files (${(totalBytes / 1024 / 1024).toFixed(1)} MB) + manifest → ${outRoot} status=${manifest.status} warnings=${globalWarnings.length}`,
 );
 
 // ---------- helpers ----------
+function isTechnicalNull(c: Candidatura) {
+  return !c.nm_urna && !c.sg_partido;
+}
 function avg(a: number[]) {
   return a.reduce((x, y) => x + y, 0) / a.length;
 }

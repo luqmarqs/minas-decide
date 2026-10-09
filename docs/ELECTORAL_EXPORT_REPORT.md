@@ -92,3 +92,38 @@ npm run data:validate
 2. 2º turno 2026 após 25/10: repetir extração com `round` 2 quando o SOURCE for atualizado (o pipeline precisa de um parâmetro de eleição; hoje assume 1º turno).
 3. Criar usuário `SELECT`-only no SOURCE e migrar o extrator para `ELECTORAL_SOURCE_DATABASE_URL`.
 4. Avaliar mover `public/data` (69 MB) para R2 com cache; hoje está em Static Assets/Git.
+
+## 9. Rodada 2 (DATA-2)
+
+Esta seção acrescenta resultados; as seções anteriores não foram reescritas. Nenhuma consulta foi feita ao SOURCE (apenas o `--dry-run`, sonda de leitura: `read_only=on`, 6 tabelas); trabalhou-se com o extrato privado `mg-2026r1-20261008` e o snapshot publicado.
+
+### 9.1 Amostragem contra o TSE (P-DATA-1) — executada
+
+Detalhes e tabela completa em `docs/TSE_SAMPLE_REPORT.md` (`scripts/tse/sample-check.ts`). Fonte: Dados Abertos do TSE ("Resultados - 2026"; arquivos `detalhe_votacao_munzona_2026.zip` e `votacao_candidato_munzona_2026.zip`, gerados pelo TSE em 08/10/2026). A API `resultados.tse.jus.br/oficial/ele2026/...` respondeu 404 e não foi usada.
+
+- 10 municípios: Belo Horizonte, Mariana, Contagem, Juiz de Fora, Uberlândia, Montes Claros, Poços de Caldas, Teófilo Otoni, Governador Valadares, Serra da Saudade (menor do estado). 339 indicadores comparados: **312 idênticos, 27 divergentes**.
+- **Aptos, comparecimento, abstenção, brancos e válidos (5 cargos): 90 comparações, 0 divergências.** Conferência adicional no nível estado (todos os 853 municípios): aptos 16.372.372, comparecimento 12.637.274, abstenção 3.735.098, válidos 11.976.235, brancos 268.302 e válidos de Governador/Senador/Dep. Federal/Dep. Estadual — todos idênticos ao TSE.
+- **Divergência 1 — Presidente "Nº 28" (sem nome/partido na fonte), 561 votos em MG.** O TSE contabiliza esses votos como **nulos técnicos** (`QT_VOTOS_NULOS_TECNICOS` = 561 em MG; em cada município da amostra a diferença nos nulos é exatamente igual aos votos de "Nº 28"). Efeitos no snapshot: (a) `null_votes` de Presidente fica 561 abaixo do oficial no estado (392.176 vs 392.737) — era a diferença de 561 entre comparecimento e válidos+brancos+nulos registrada na §5; (b) o candidato anônimo "Nº 28" aparece como candidatura (e camada de mapa) para Presidente. **Não corrigido** (regra: divergências mantidas e sinalizadas); correção sugerida na §9.4.
+- **Divergência 2 — Governador 29 (Henrique Áreas, PCO): votos "Anulado sub judice" no TSE** (QT_VOTOS_NOMINAIS_VALIDOS = 0). O snapshot soma esses votos à candidatura (ex.: 238 em BH) enquanto os válidos do cargo coincidem com o oficial; portanto `share_of_valid` dessa candidatura está inflada e a soma de candidaturas supera os válidos (mesmo fenômeno já descrito para Dep. Federal na §5). Mantido e sinalizado.
+- Nenhuma divergência ficou sem explicação nos campos do TSE. Ressalva: o arquivo do TSE foi gerado em 08/10 (16:32/19:31) e o extrato do SOURCE em 09/10 01:25 UTC; sub judice pode mudar após julgamentos, então a comparação vale para esse instante.
+
+### 9.2 Parametrização por eleição/turno (P-DATA-3) — implementada
+
+`--year`, `--round`, `--election-codes` em `export.ts` (`args.ts`); o SQL filtra `candidaturas.cd_eleicao`; `extract-manifest.json` ganha `year`, `round`, `election_codes`; `build-snapshot.ts` lê ano/turno do manifesto do extrato (legado = 2026 r1), nomeia camadas/`rounds`/metodologia e grava `<release>/release-manifest.json` (+ `--no-activate`). Hipótese e limitação (totais sem coluna de turno em `totais_local`) em `docs/IMPORT_GUIDE.md` §7. **Não validado contra o SOURCE**: não há 2º turno nele nem se pode consultá-lo nesta rodada.
+
+Validação: snapshot de teste regenerado do extrato existente em `data/private/snapshot-test/` (com `PIPELINE_COMMIT=b42c921`) — 903 arquivos, **todos os SHA-256 e tamanhos idênticos** aos de `public/data/manifest.json`; o único campo diferente do manifesto é `generated_at`. (Sem `PIPELINE_COMMIT` e fora de um repositório git o campo seria `unknown`.) Ensaio com extrato clonado marcado como `round: 2`: camadas `2026-r2-*`, `rounds: [2]` e notas "2º turno" corretas (apenas teste de nomeação; os dados eram os do 1º turno e o ensaio foi descartado).
+
+### 9.3 Novas validações (`npm run data:validate`, F17 e testes)
+
+`validate-snapshot.ts` agora confere: Σ municípios = estado e Σ bairros = município (tolerância 0; aptos/comparecimento/abstenção/válidos/brancos/nulos de Presidente, válidos por cargo e votos por candidatura dos cargos majoritários — comparecimento por cargo e candidaturas proporcionais truncadas ao top-N não estão no contrato, logo não somáveis), `share_of_valid` ∈ [0,1] e = votos/válidos, `delta_pp` (±0,0051) e `delta_votes` coerentes com os votos armazenados, e ausência de `territory_id` órfão (índice ↔ métricas ↔ pais ↔ camadas).
+
+Resultado contra `public/data`: `validate: release=mg-2026r1-20261008 status=validated files=903 checked=903 territories=6931 crosschecks=854 warnings=1 errors=0` (a advertência é a sub judice de Capoeirão). Verificação de que o validador reprova: cópia adulterada (eligible+1, share 1,2, delta_pp+1, chave de camada inexistente) → 39 erros.
+
+F17: com `ELECTORAL_SOURCE_DATABASE_URL` o extrator usa o driver `postgres` em-processo (`BEGIN READ ONLY`, timeouts locais), sem segredo em argv; guards reforçados (`INTO`, `set_config`, `pg_sleep`, `dblink`, comentários). 38 testes unitários (`scripts/import-electoral/*.test.ts`) passam. **Caminho do driver não exercitado contra um banco real** (só funções puras são testadas).
+
+### 9.4 Pendências / mudanças desejadas
+
+1. Decidir tratamento do "Nº 28" (Presidente): reclassificar como nulos técnicos no build (e remover da lista de candidaturas) **ou** manter e documentar na metodologia; requer decisão do proprietário.
+2. Sub judice por candidatura: expor um indicador (ex.: `votes_annulled`) ou excluir os votos anulados da candidatura; requer mudança em `CandidateResult`.
+3. Contrato: `SnapshotManifest.releases[]` (para 1º e 2º turno no mesmo ponteiro) e `ComparisonPoint.votes_2026/valid_2026` → nomes neutros (`votes_current`) quando o 2º turno existir.
+4. `ELECTORAL_SOURCE_DATABASE_URL` com role `SELECT`-only continua dependendo do proprietário.
