@@ -1,3 +1,4 @@
+import { ActivitySuspensionResult, GroupSuspensionResult } from '@shared/contracts/admin';
 /**
  * Admin API (admins table + MFA, checked server-side on every call). Response
  * schemas for moderation/manager/security-events are not in `shared/contracts`
@@ -56,16 +57,6 @@ export const SecurityEventsPage = z.object({
 export type SecurityEventsPage = z.infer<typeof SecurityEventsPage>;
 
 /** Results of POST /admin/groups/:id/(un)suspend and /admin/activities/:id/(un)suspend. */
-export const GroupSuspensionResult = z.object({
-  id: z.string().uuid(),
-  status: z.string(),
-  updated_at: z.string(),
-});
-export const ActivitySuspensionResult = z.object({
-  id: z.string().uuid(),
-  status: z.enum(['suspended', 'pending_review']),
-  version: z.number().int(),
-});
 
 export const GROUP_STATUS_FILTERS = [
   { value: 'pending', label: 'Pendentes' },

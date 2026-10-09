@@ -2,7 +2,7 @@
 
 Atlas eleitoral público de Minas Gerais (município e bairro) combinado com organização voluntária de atividades presenciais: busca territorial, mapa com indicadores de 2026 (e comparação 2022 para candidaturas com histórico), grupos de WhatsApp aprovados por território, atividades com "Eu vou" sem login e moderação administrativa.
 
-> **Rodada 1 — corte vertical demonstrável.** Relatório auditável em [`docs/RELATORIO_PRIMEIRA_RODADA.md`](docs/RELATORIO_PRIMEIRA_RODADA.md). Sem deploy nesta rodada.
+> **Rodada 1 — corte vertical demonstrável; rodada 2 — hardening autônomo.** Relatório auditável (com adendo da rodada 2) em [`docs/RELATORIO_PRIMEIRA_RODADA.md`](docs/RELATORIO_PRIMEIRA_RODADA.md). Sem deploy. O que só o proprietário pode fazer: [`docs/STAGING_PLAYBOOK.md`](docs/STAGING_PLAYBOOK.md).
 
 ## Arquitetura em uma linha
 
@@ -36,7 +36,8 @@ npm run test            # unit (jsdom) + worker (node)
 npm run test:db         # RLS contra o TARGET dev (precisa de .dev.vars)
 npm run test:e2e        # Playwright (build + wrangler dev)
 npm run check:isolation # falha se identificador do Supabase legado aparecer em src/worker/public/config
-npm run data:validate   # valida hashes/contratos do snapshot publicado
+npm run data:validate   # valida hashes/contratos/somas cruzadas do snapshot publicado
+npm run tse:sample      # confere 10 municípios contra os dados abertos oficiais do TSE (docs/TSE_SAMPLE_REPORT.md)
 npm run ci              # tudo acima exceto e2e/db
 ```
 

@@ -87,6 +87,22 @@ export const AdminRevealContactResponse = z.object({
 });
 export type AdminRevealContactResponse = z.infer<typeof AdminRevealContactResponse>;
 
+/** POST /admin/groups/:id/suspend|unsuspend */
+export const GroupSuspensionResult = z.object({
+  id: z.string().uuid(),
+  status: GroupStatus,
+  updated_at: z.string(),
+});
+export type GroupSuspensionResult = z.infer<typeof GroupSuspensionResult>;
+
+/** POST /admin/activities/:id/suspend|unsuspend (lifting returns to review) */
+export const ActivitySuspensionResult = z.object({
+  id: z.string().uuid(),
+  status: z.enum(['suspended', 'pending_review']),
+  version: z.number().int(),
+});
+export type ActivitySuspensionResult = z.infer<typeof ActivitySuspensionResult>;
+
 export const SecurityEvent = z.object({
   id: z.string().uuid(),
   created_at: z.string(),
