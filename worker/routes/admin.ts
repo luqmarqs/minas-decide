@@ -6,15 +6,17 @@ import {
   AdminQueueQuery,
   GroupManagerInput,
   ModerationDecision,
+  type AdminRevealContactResponse,
 } from '../../shared/contracts/admin.ts';
 import { isWhatsAppInviteUrl } from '../../shared/contracts/groups.ts';
 import { normalizeBrazilPhone } from '../../shared/schemas/phone.ts';
 import { sanitizePlainText } from '../../shared/schemas/sanitize.ts';
 import type { AppBindings } from '../env.ts';
 import { fail } from '../errors.ts';
-import { ok, parse, parseBody, readJson, uuidParam } from '../http.ts';
+import { clientIp, ok, parse, parseBody, readJson, uuidParam } from '../http.ts';
 import { requireAdmin } from '../middleware/auth.ts';
-import { noStore } from '../middleware/cache.ts';
+import { activityPaths, groupPaths, noStore, purgePublic } from '../middleware/cache.ts';
+import { subjectHash } from '../middleware/rate-limit.ts';
 import { decodeCursor, encodeCursor } from '../services/crypto.ts';
 import { toAdminActivity, toAdminProposal } from '../services/projections.ts';
 import type { Cursor, GroupPatch } from '../repositories/types.ts';
@@ -88,6 +90,7 @@ admin.post('/admin/activities/:id/approve', async (c) => {
   const version = await c
     .get('deps')
     .repo.approveActivity(id, c.get('user')!.id, reason ?? null, c.get('requestId'));
+  await purgePublic(c, activityPaths(id));
   return ok(c, { id, status: 'published' as const, version });
 });
 
@@ -97,6 +100,7 @@ admin.post('/admin/activities/:id/reject', async (c) => {
   const version = await c
     .get('deps')
     .repo.rejectActivity(id, c.get('user')!.id, reason, c.get('requestId'));
+  await purgePublic(c, activityPaths(id));
   return ok(c, { id, status: 'rejected' as const, version });
 });
 
@@ -119,6 +123,7 @@ admin.patch('/admin/groups/:id', async (c) => {
   const { repo } = c.get('deps');
   const updated = await repo.patchGroup(id, patch);
   if (!updated) throw fail('NOT_FOUND');
+  await purgePublic(c, groupPaths(updated.territory_id));
   await repo.recordAudit({
     actor: c.get('user')!.id,
     action: 'group.update',
@@ -157,6 +162,86 @@ admin.post('/admin/groups/:id/managers', async (c) => {
     c.get('requestId'),
   );
   return ok(c, { id: managerId, group_id: id }, 201);
+});
+
+// ---------------------------------------------------------------- suspension
+// NOTE: here :id is the GROUP id (whatsapp_groups.id), not the proposal id.
+admin.post('/admin/groups/:id/suspend', async (c) => {
+  const id = uuidParam(c);
+  const { reason } = await parseBody(c, ModerationDecision);
+  const row = await c
+    .get('deps')
+    .repo.setGroupSuspension(id, c.get('user')!.id, reason, c.get('requestId'), true);
+  await purgePublic(c, groupPaths(row.territory_id));
+  return ok(c, { id: row.id, status: row.status, updated_at: row.updated_at });
+});
+
+/** Lifts a suspension: the group goes back to `active` (it had been approved before). */
+admin.post('/admin/groups/:id/unsuspend', async (c) => {
+  const id = uuidParam(c);
+  const { reason } = await parseBody(c, ModerationDecision);
+  const row = await c
+    .get('deps')
+    .repo.setGroupSuspension(id, c.get('user')!.id, reason, c.get('requestId'), false);
+  await purgePublic(c, groupPaths(row.territory_id));
+  return ok(c, { id: row.id, status: row.status, updated_at: row.updated_at });
+});
+
+admin.post('/admin/activities/:id/suspend', async (c) => {
+  const id = uuidParam(c);
+  const { reason } = await parseBody(c, ModerationDecision);
+  const version = await c
+    .get('deps')
+    .repo.setActivitySuspension(id, c.get('user')!.id, reason, c.get('requestId'), true);
+  await purgePublic(c, activityPaths(id));
+  return ok(c, { id, status: 'suspended' as const, version });
+});
+
+/** Lifts a suspension: the activity returns to `pending_review` and must be approved again. */
+admin.post('/admin/activities/:id/unsuspend', async (c) => {
+  const id = uuidParam(c);
+  const { reason } = await parseBody(c, ModerationDecision);
+  const version = await c
+    .get('deps')
+    .repo.setActivitySuspension(id, c.get('user')!.id, reason, c.get('requestId'), false);
+  return ok(c, { id, status: 'pending_review' as const, version });
+});
+
+// ---------------------------------------------------------------- audited contact reveal
+const RevealInput = z.object({ reason: z.string().trim().min(3).max(500).optional() });
+
+/**
+ * Full proposer e-mail/phone. Requires a REAL aal2 session even with APP_ENV=local (the
+ * local MFA bypass of requireAdmin does not apply here). The read and the audit row
+ * (`proposal.reveal_contact`, retention `security`) commit in the same transaction.
+ */
+admin.post('/admin/group-proposals/:id/reveal-contact', async (c) => {
+  const user = c.get('user')!;
+  if (user.aal !== 'aal2') {
+    try {
+      await c.get('deps').repo.recordAbuse({
+        subject_hash: await subjectHash(c.env.RSVP_DEVICE_SECRET, clientIp(c)),
+        route: 'admin',
+        event_type: 'reveal_denied_aal',
+        block_code: 'FORBIDDEN',
+      });
+    } catch {
+      // best effort
+    }
+    throw fail('FORBIDDEN', 'Confirme o segundo fator (MFA) para ver o contato.');
+  }
+  const id = uuidParam(c);
+  const { reason } = RevealInput.parse(await readJson(c, true));
+  const r = await c
+    .get('deps')
+    .repo.revealProposalContact(id, user.id, c.get('requestId'), reason ?? null);
+  const body: AdminRevealContactResponse = {
+    proposal_id: r.proposal_id,
+    proposer_email: r.proposer_email,
+    proposer_phone: r.proposer_phone,
+    revealed_at: r.revealed_at,
+  };
+  return ok(c, body);
 });
 
 const SecurityEventsQuery = z.object({

@@ -55,7 +55,7 @@ async function withProfile(s: Setup, userId: string, email: string): Promise<voi
   });
 }
 
-describe('QA-1 findings (it.fails = vulnerable today)', () => {
+describe('QA-1 findings (it.fails = vulnerable today; it = fixed, kept as regression)', () => {
   it('F01: verified user WITHOUT profile (direct Supabase Auth signup) must not organize', async () => {
     const s = setup();
     const { token, user } = s.users.verified(); // permanent, email confirmed
@@ -111,7 +111,7 @@ describe('QA-1 findings (it.fails = vulnerable today)', () => {
     expect(res.status).not.toBe(202);
   });
 
-  it.fails('F05: activity coordinates far outside Minas Gerais must be rejected', async () => {
+  it('F05: activity coordinates far outside Minas Gerais must be rejected', async () => {
     const s = setup();
     const { token, user } = s.users.verified();
     await withProfile(s, user.id, user.email!);
@@ -144,7 +144,7 @@ describe('QA-1 findings (it.fails = vulnerable today)', () => {
     },
   );
 
-  it.fails('F07: starts_at absurdly far in the future must be rejected', async () => {
+  it('F07: starts_at absurdly far in the future must be rejected', async () => {
     const s = setup();
     const { token, user } = s.users.verified();
     await withProfile(s, user.id, user.email!);

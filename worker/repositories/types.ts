@@ -39,7 +39,7 @@ export interface GroupRow {
   display_name: string;
   territory_id: string;
   join_url: string;
-  status: 'pending' | 'active' | 'inactive' | 'rejected';
+  status: 'pending' | 'active' | 'inactive' | 'rejected' | 'suspended';
   updated_at: string;
 }
 
@@ -122,6 +122,8 @@ export interface ProfileRow {
   consent_version: string;
   contact_opt_in_at: string | null;
   account_state: 'active' | 'suspended';
+  /** P-SEC-1: set when promoted by magic link; null once the person reviewed their data */
+  review_required_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -142,6 +144,10 @@ export interface ProfilePatch {
   selected_territory_id?: string;
   contact_opt_in?: boolean;
   email_state?: ProfileRow['email_verification_state'];
+  /** E.164, already normalized */
+  phone?: string;
+  /** true -> review_required_at = now(); false -> cleared */
+  review_required?: boolean;
 }
 
 export interface NewGroupProposal {
@@ -154,11 +160,14 @@ export interface NewGroupProposal {
   proposer_user_id: string | null;
   consent_version: string;
   idempotency_hash: string;
+  /** how long the idempotency key dedupes a PENDING proposal (QA-1 F11) */
+  idempotency_ttl_seconds: number;
   fingerprint_hash: string | null;
 }
 
 export interface GroupProposalRow {
   id: string;
+  group_id: string | null;
   territory_id: string;
   name_proposed: string;
   join_url_proposed: string;
@@ -169,6 +178,20 @@ export interface GroupProposalRow {
   created_at: string;
   reviewed_at: string | null;
   review_reason: string | null;
+}
+
+export interface RevealedContact {
+  proposal_id: string;
+  proposer_email: string;
+  proposer_phone: string;
+  revealed_at: string;
+}
+
+export interface GroupStatusRow {
+  id: string;
+  territory_id: string;
+  status: GroupRow['status'];
+  updated_at: string;
 }
 
 export interface SecurityEventRow {
@@ -278,6 +301,29 @@ export interface Repo {
   ): Promise<number>;
   rejectActivity(id: string, adminId: string, reason: string, requestId: string): Promise<number>;
   addGroupManager(m: NewGroupManager, adminId: string, requestId: string): Promise<string>;
+  /** suspend=true: active|inactive -> suspended; false: suspended -> active. Audited in SQL. */
+  setGroupSuspension(
+    id: string,
+    adminId: string,
+    reason: string,
+    requestId: string,
+    suspend: boolean,
+  ): Promise<GroupStatusRow>;
+  /** suspend=true: draft|pending_review|published|cancelled -> suspended; false: -> pending_review. Returns version. */
+  setActivitySuspension(
+    id: string,
+    adminId: string,
+    reason: string,
+    requestId: string,
+    suspend: boolean,
+  ): Promise<number>;
+  /** Full proposer contact; the audit row is written in the same transaction. */
+  revealProposalContact(
+    id: string,
+    adminId: string,
+    requestId: string,
+    reason: string | null,
+  ): Promise<RevealedContact>;
   // audit / abuse / turnstile
   recordAudit(e: {
     actor: string | null;

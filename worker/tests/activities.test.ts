@@ -361,12 +361,43 @@ describe('RSVP (T09, T10, T11)', () => {
     ).toBe(401);
   });
 
-  it('rsvp rate limit: 31st request in 10 min -> 429', async () => {
+  it('F05: 40 identities behind one IP on the same activity are not blocked', async () => {
     const { request, repo } = setup();
     const a = repo.seedActivity(repo.uuid());
+    const headers = { 'CF-Connecting-IP': '203.0.113.50' };
+    for (let i = 0; i < 40; i++) {
+      const r = await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST', headers });
+      expect(r.status).toBe(200);
+    }
+    expect(repo.rsvps.filter((r) => r.activity_id === a.id)).toHaveLength(40);
+  });
+
+  it('F05: the same identity repeated beyond 10/10 min -> 429; other identities keep working', async () => {
+    const { request, repo } = setup();
+    const a = repo.seedActivity(repo.uuid());
+    const headers = { 'CF-Connecting-IP': '203.0.113.51' };
+    const first = await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST', headers });
+    const cookie = deviceCookie(first);
+    const statuses: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      const method = i % 2 === 0 ? 'DELETE' : 'POST';
+      statuses.push(
+        (await request(`/api/v1/activities/${a.id}/rsvp`, { method, headers, cookie })).status,
+      );
+    }
+    expect(statuses.slice(0, 9).every((st) => st === 200)).toBe(true);
+    expect(statuses[9]).toBe(429);
+    const other = await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST', headers });
+    expect(other.status).toBe(200);
+  });
+
+  it('F05: per-IP ceiling (120/10 min) still applies to fresh identities', async () => {
+    const { request, repo } = setup();
+    const a = repo.seedActivity(repo.uuid());
+    const headers = { 'CF-Connecting-IP': '203.0.113.52' };
     let last = 0;
-    for (let i = 0; i < 31; i++)
-      last = (await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST' })).status;
+    for (let i = 0; i < 121; i++)
+      last = (await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST', headers })).status;
     expect(last).toBe(429);
   });
 });

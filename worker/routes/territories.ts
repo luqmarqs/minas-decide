@@ -6,7 +6,7 @@ import { normalizeText } from '../../shared/schemas/normalize.ts';
 import type { AppBindings } from '../env.ts';
 import { fail } from '../errors.ts';
 import { ok, parse } from '../http.ts';
-import { cachePublic } from '../middleware/cache.ts';
+import { edgeCached } from '../middleware/cache.ts';
 import { toSearchItem, toTerritorySummary } from '../services/projections.ts';
 
 export const territories = new Hono<AppBindings>();
@@ -18,7 +18,7 @@ const SearchQuery = z.object({
 
 const TYPE_ORDER = { state: 0, municipality: 1, neighborhood: 2 } as const;
 
-territories.get('/territories/search', cachePublic(60), async (c) => {
+territories.get('/territories/search', edgeCached(60), async (c) => {
   const { q, limit } = parse(SearchQuery, c.req.query());
   const needle = normalizeText(q)
     .replace(/[^a-z0-9 ]/g, '')
@@ -47,7 +47,7 @@ function territoryIdParam(raw: string | undefined): string {
   return r.data;
 }
 
-territories.get('/territories/:id', cachePublic(60), async (c) => {
+territories.get('/territories/:id', edgeCached(60), async (c) => {
   const id = territoryIdParam(c.req.param('id'));
   const { repo } = c.get('deps');
   const lineage = [

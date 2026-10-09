@@ -53,31 +53,45 @@ const EMAIL_PROOF_METHODS = new Set(['otp', 'magiclink', 'email/signup', 'email_
  * The client must call supabase.auth.refreshSession() afterwards to get a JWT with
  * is_anonymous=false.
  */
-authRoutes.post('/auth/confirm-email', noStore, requireSession, async (c) => {
-  const user = c.get('user')!;
-  const token = c.get('token')!;
-  const { auth, repo } = c.get('deps');
-  if (!user.email || !user.email_confirmed) throw fail('EMAIL_NOT_VERIFIED');
-  if (!user.amr_methods.some((m) => EMAIL_PROOF_METHODS.has(m))) {
-    throw fail(
-      'EMAIL_NOT_VERIFIED',
-      'Abra o link enviado ao seu e-mail neste dispositivo para confirmar.',
-    );
-  }
-  if (user.is_anonymous) {
-    if (!(await auth.promoteVerified(user.id, user.email))) throw fail('INTERNAL_ERROR');
-    await auth.signOutOthers(token);
-    await repo.recordAudit({
-      actor: user.id,
-      action: 'auth.promote_verified',
-      entity_type: 'user',
-      entity_id: user.id,
-      request_id: c.get('requestId'),
-    });
-  }
-  const profile = (await repo.getProfile(user.id))
-    ? await repo.updateProfile(user.id, { email_state: 'verified' })
-    : null;
-  const me = await buildMe(c, { ...user, is_anonymous: false, jwt_is_anonymous: false }, profile);
-  return ok(c, { ...me, requires_session_refresh: true });
-});
+authRoutes.post(
+  '/auth/confirm-email',
+  noStore,
+  rateLimit('confirm_email'),
+  requireSession,
+  async (c) => {
+    const user = c.get('user')!;
+    const token = c.get('token')!;
+    const { auth, repo } = c.get('deps');
+    if (!user.email || !user.email_confirmed) throw fail('EMAIL_NOT_VERIFIED');
+    if (!user.amr_methods.some((m) => EMAIL_PROOF_METHODS.has(m))) {
+      throw fail(
+        'EMAIL_NOT_VERIFIED',
+        'Abra o link enviado ao seu e-mail neste dispositivo para confirmar.',
+      );
+    }
+    let promoted = false;
+    if (user.is_anonymous) {
+      if (!(await auth.promoteVerified(user.id, user.email))) throw fail('INTERNAL_ERROR');
+      promoted = true;
+      await auth.signOutOthers(token);
+      await repo.recordAudit({
+        actor: user.id,
+        action: 'auth.promote_verified',
+        entity_type: 'user',
+        entity_id: user.id,
+        request_id: c.get('requestId'),
+      });
+    }
+    // P-SEC-1: whoever created the provisional profile may not be the inbox owner. On the
+    // promotion, flag the profile for review: the person must confirm/edit name, phone and
+    // territory (PATCH /me {profile_reviewed:true}) — the client shows that step.
+    const profile = (await repo.getProfile(user.id))
+      ? await repo.updateProfile(user.id, {
+          email_state: 'verified',
+          ...(promoted ? { review_required: true } : {}),
+        })
+      : null;
+    const me = await buildMe(c, { ...user, is_anonymous: false, jwt_is_anonymous: false }, profile);
+    return ok(c, { ...me, requires_session_refresh: true });
+  },
+);

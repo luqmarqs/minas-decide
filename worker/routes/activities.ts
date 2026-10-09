@@ -14,7 +14,7 @@ import {
   requireOrganizer,
   requireSession,
 } from '../middleware/auth.ts';
-import { cachePublic, noStore } from '../middleware/cache.ts';
+import { activityPaths, edgeCached, noStore, purgePublic } from '../middleware/cache.ts';
 import { rateLimit } from '../middleware/rate-limit.ts';
 import { requireTurnstile } from '../middleware/turnstile.ts';
 import { buildActivityPatch, buildActivityWrite } from '../services/activities.ts';
@@ -55,7 +55,7 @@ function cursorOrThrow(raw: string | undefined): Cursor | null {
   return { at: c.at!, id: c.id! };
 }
 
-activities.get('/activities', cachePublic(60), async (c) => {
+activities.get('/activities', edgeCached(60), async (c) => {
   const q = parse(PublicActivitiesQuery, c.req.query());
   const now = c.get('deps').now();
   const from = q.from ?? new Date(now - 6 * 3600_000).toISOString();
@@ -79,7 +79,7 @@ activities.get('/activities', cachePublic(60), async (c) => {
   });
 });
 
-activities.get('/activities/:id', cachePublic(60), async (c) => {
+activities.get('/activities/:id', edgeCached(60), async (c) => {
   const row = await c.get('deps').repo.getPublicActivity(uuidParam(c));
   if (!row) throw fail('NOT_FOUND');
   return ok(c, toPublicActivity(row));
@@ -183,6 +183,7 @@ activities.patch(
 
     const updated = await repo.updateActivity(id, row.version, update);
     if (!updated) throw fail('CONFLICT', 'A atividade foi alterada. Recarregue e tente de novo.');
+    await purgePublic(c, activityPaths(id));
     await repo.recordAudit({
       actor: user.id,
       action: sensitive ? 'activity.update_sensitive' : 'activity.update',
@@ -218,6 +219,7 @@ activities.post(
       cancelled_at: new Date(now()).toISOString(),
     });
     if (!updated) throw fail('CONFLICT');
+    await purgePublic(c, activityPaths(id));
     await repo.recordAudit({
       actor: user.id,
       action: 'activity.cancel',

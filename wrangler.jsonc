@@ -22,6 +22,7 @@
     "APP_ENV": "production",
     "WRITES_ENABLED": "false",
     "PUBLIC_ORIGIN": "https://REPLACE-WITH-PRODUCTION-ORIGIN",
+    "ALLOWED_ORIGINS": "",
     "TURNSTILE_EXPECTED_HOSTNAMES": "",
   },
   "env": {
@@ -30,6 +31,7 @@
         "APP_ENV": "local",
         "WRITES_ENABLED": "true",
         "PUBLIC_ORIGIN": "http://127.0.0.1:5173",
+        "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:8787",
         "TURNSTILE_EXPECTED_HOSTNAMES": "localhost,127.0.0.1",
       },
     },
@@ -38,6 +40,7 @@
         "APP_ENV": "staging",
         "WRITES_ENABLED": "true",
         "PUBLIC_ORIGIN": "https://REPLACE-WITH-STAGING-ORIGIN",
+        "ALLOWED_ORIGINS": "",
         "TURNSTILE_EXPECTED_HOSTNAMES": "REPLACE-WITH-STAGING-HOST",
       },
     },

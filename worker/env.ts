@@ -13,6 +13,8 @@ export interface Env {
   APP_ENV: string;
   WRITES_ENABLED: string;
   PUBLIC_ORIGIN: string;
+  /** optional extra origins allowed to send mutations, comma-separated (QA-1 F14) */
+  ALLOWED_ORIGINS?: string;
   TURNSTILE_EXPECTED_HOSTNAMES: string;
   SUPABASE_TARGET_URL: string;
   SUPABASE_TARGET_ANON_KEY: string;
@@ -22,6 +24,13 @@ export interface Env {
   ADMIN_EMAILS?: string;
 }
 
+/** Subset of the Workers Cache API used for public GETs (QA-1 F16). */
+export interface EdgeCache {
+  match(request: Request): Promise<Response | undefined>;
+  put(request: Request, response: Response): Promise<void>;
+  delete(request: Request): Promise<boolean>;
+}
+
 /** Collaborators injected per app instance (real Supabase in prod, fakes in tests). */
 export interface Deps {
   repo: Repo;
@@ -29,6 +38,8 @@ export interface Deps {
   turnstile: TurnstileVerifier;
   limiter: SlidingWindowLimiter;
   now: () => number;
+  /** `caches.default` on Workers; null where the Cache API does not exist (Node tests). */
+  edgeCache: EdgeCache | null;
 }
 
 export interface AuthUser {

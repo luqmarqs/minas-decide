@@ -140,19 +140,44 @@ describe('registrations (T03, T04, T05, T18)', () => {
     expect(res.status).toBe(409);
   });
 
-  it('registration rate limit: 6th attempt in 10 min -> 429', async () => {
+  it('registration rate limit (F05): per IP + provisional subject, with a looser per-IP ceiling', async () => {
     const { request, users } = setup();
+    // same provisional session: 6th attempt in 10 min -> 429
+    const one = users.anonymous();
     let status = 0;
     for (let i = 0; i < 6; i++) {
       status = (
         await request('/api/v1/registrations', {
           method: 'POST',
-          token: users.anonymous().token,
+          token: one.token,
           json: registration(),
         })
       ).status;
     }
     expect(status).toBe(429);
+    // many people behind the same IP (CGNAT) are not blocked by one another
+    for (let i = 0; i < 20; i++) {
+      const r = await request('/api/v1/registrations', {
+        method: 'POST',
+        token: users.anonymous().token,
+        json: registration({ email: `pessoa${i}@example.org` }),
+      });
+      expect(r.status).toBe(201);
+    }
+    // ...up to the per-IP ceiling (30/10 min)
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      statuses.push(
+        (
+          await request('/api/v1/registrations', {
+            method: 'POST',
+            token: users.anonymous().token,
+            json: registration({ email: `extra${i}@example.org` }),
+          })
+        ).status,
+      );
+    }
+    expect(statuses).toContain(429);
   });
 });
 

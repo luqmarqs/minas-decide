@@ -1,4 +1,4 @@
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import type { AppBindings } from '../env.ts';
 import { clientIp } from '../http.ts';
 import { hmacSha256Hex } from '../services/crypto.ts';
@@ -50,12 +50,26 @@ export class SlidingWindowLimiter {
 
 const TEN_MIN = 10 * 60 * 1000;
 
+/**
+ * Buckets. Keys are `bucket:<subject>`; the subject is the client IP unless noted.
+ * QA-1 F05 (CGNAT / event Wi-Fi): RSVP and registration are keyed by IP + identity with a
+ * looser per-IP ceiling, so many people behind one public IP are not blocked together.
+ */
 export const RATE_LIMITS = {
+  /** per IP — runs before the session is resolved (protects Auth from token spraying) */
+  registrations_ip: { limit: 30, windowMs: TEN_MIN },
+  /** per IP + provisional (anonymous) user id */
   registrations: { limit: 5, windowMs: TEN_MIN },
   proposals: { limit: 5, windowMs: TEN_MIN },
-  rsvp: { limit: 30, windowMs: TEN_MIN },
+  /** per IP — ceiling for every RSVP from one network */
+  rsvp_ip: { limit: 120, windowMs: TEN_MIN },
+  /** per IP + activity + identity (user id or device HMAC) */
+  rsvp_identity: { limit: 10, windowMs: TEN_MIN },
   send_link: { limit: 3, windowMs: TEN_MIN },
   activities_write: { limit: 20, windowMs: TEN_MIN },
+  /** QA-1 F16: light limits on account endpoints */
+  me_write: { limit: 60, windowMs: TEN_MIN },
+  confirm_email: { limit: 60, windowMs: TEN_MIN },
 } as const;
 
 export type RateBucket = keyof typeof RATE_LIMITS;
@@ -65,27 +79,51 @@ export function subjectHash(secret: string, ip: string): Promise<string> {
   return hmacSha256Hex(secret, `ip:${ip}`);
 }
 
-export function rateLimit(bucket: RateBucket): MiddlewareHandler<AppBindings> {
+/**
+ * Counts one hit for `bucket` and `subject` (defaults to the client IP). Returns a 429
+ * response when over the limit (and logs a minimised abuse event), or null when allowed.
+ */
+export async function hitLimit(
+  c: Context<AppBindings>,
+  bucket: RateBucket,
+  subject?: string,
+): Promise<Response | null> {
   const cfg = RATE_LIMITS[bucket];
+  const deps = c.get('deps');
+  const ip = clientIp(c);
+  const key = `${bucket}:${subject ?? ip}`;
+  const res = deps.limiter.check(key, cfg.limit, cfg.windowMs, deps.now());
+  if (res.allowed) return null;
+  c.set('rateLimited', true);
+  try {
+    await deps.repo.recordAbuse({
+      subject_hash: await subjectHash(c.env.RSVP_DEVICE_SECRET, ip),
+      route: bucket,
+      event_type: 'rate_limited',
+      block_code: 'RATE_LIMITED',
+    });
+  } catch {
+    // best effort: never fail the 429 because logging failed
+  }
+  c.header('Retry-After', String(res.retryAfterSec));
+  return respondError(c, 'RATE_LIMITED');
+}
+
+/** Middleware form keyed by client IP. */
+export function rateLimit(bucket: RateBucket): MiddlewareHandler<AppBindings> {
   return async (c, next) => {
-    const deps = c.get('deps');
-    const ip = clientIp(c);
-    const res = deps.limiter.check(`${bucket}:${ip}`, cfg.limit, cfg.windowMs, deps.now());
-    if (!res.allowed) {
-      c.set('rateLimited', true);
-      try {
-        await deps.repo.recordAbuse({
-          subject_hash: await subjectHash(c.env.RSVP_DEVICE_SECRET, ip),
-          route: bucket,
-          event_type: 'rate_limited',
-          block_code: 'RATE_LIMITED',
-        });
-      } catch {
-        // best effort: never fail the 429 because logging failed
-      }
-      c.header('Retry-After', String(res.retryAfterSec));
-      return respondError(c, 'RATE_LIMITED');
-    }
+    const blocked = await hitLimit(c, bucket);
+    if (blocked) return blocked;
+    await next();
+  };
+}
+
+/** Middleware keyed by client IP + the authenticated user id (run after requireSession). */
+export function rateLimitPerUser(bucket: RateBucket): MiddlewareHandler<AppBindings> {
+  return async (c, next) => {
+    const user = c.get('user');
+    const blocked = await hitLimit(c, bucket, `${clientIp(c)}|${user?.id ?? 'none'}`);
+    if (blocked) return blocked;
     await next();
   };
 }

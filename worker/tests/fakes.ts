@@ -5,7 +5,7 @@
  * real RLS tests in supabase/tests (which run against the TARGET dev project).
  */
 import { createApp } from '../app.ts';
-import type { AuthUser, Deps, Env } from '../env.ts';
+import type { AuthUser, Deps, EdgeCache, Env } from '../env.ts';
 import { fail } from '../errors.ts';
 import { SlidingWindowLimiter } from '../middleware/rate-limit.ts';
 import type {
@@ -17,6 +17,7 @@ import type {
   GroupPatch,
   GroupProposalRow,
   GroupRow,
+  GroupStatusRow,
   LinkEmailResult,
   NewGroupManager,
   NewGroupProposal,
@@ -27,6 +28,7 @@ import type {
   PublicActivityRow,
   PublicGroupRow,
   Repo,
+  RevealedContact,
   RsvpIdentity,
   SecurityEventRow,
   TerritoryRow,
@@ -65,9 +67,9 @@ interface Rsvp {
 }
 
 interface StoredProposal extends GroupProposalRow {
-  idempotency_hash: string;
+  idempotency_hash: string | null;
+  idempotency_expires_at: number | null;
   fingerprint_hash: string | null;
-  group_id: string | null;
 }
 
 export class FakeRepo implements Repo {
@@ -86,7 +88,12 @@ export class FakeRepo implements Repo {
   admins = new Set<string>();
   verified = new Set<string>();
   authEmails = new Map<string, string>(); // email -> user id (mirror of auth.users)
-  audit: { actor: string | null; action: string; entity_id: string | null }[] = [];
+  audit: {
+    actor: string | null;
+    action: string;
+    entity_id: string | null;
+    reason?: string | null;
+  }[] = [];
   abuse: SecurityEventRow[] = [];
   usedTokens = new Set<string>();
   private seq = 0;
@@ -138,9 +145,16 @@ export class FakeRepo implements Repo {
     this.groups.push(g);
     return g;
   }
+  /** Mirrors svc_create_group_proposal (0010): only a pending, non-expired holder dedupes. */
   async createGroupProposal(p: NewGroupProposal) {
+    const now = this.clock();
     const existing = this.proposals.find((x) => x.idempotency_hash === p.idempotency_hash);
-    if (existing) return { id: existing.id, status: existing.status, created: false };
+    if (existing && existing.status === 'pending' && (existing.idempotency_expires_at ?? 0) > now)
+      return { id: existing.id, status: 'pending', created: false };
+    if (existing) {
+      existing.idempotency_hash = null;
+      existing.idempotency_expires_at = null;
+    }
     const row: StoredProposal = {
       id: this.uuid(),
       territory_id: p.territory_id,
@@ -154,6 +168,7 @@ export class FakeRepo implements Repo {
       reviewed_at: null,
       review_reason: null,
       idempotency_hash: p.idempotency_hash,
+      idempotency_expires_at: now + p.idempotency_ttl_seconds * 1000,
       fingerprint_hash: p.fingerprint_hash,
       group_id: null,
     };
@@ -162,7 +177,7 @@ export class FakeRepo implements Repo {
   }
   async patchGroup(id: string, patch: GroupPatch) {
     const g = this.groups.find((x) => x.id === id);
-    if (!g) return null;
+    if (!g || g.status === 'suspended') return null; // PATCH never revives a suspended group
     Object.assign(g, patch, { updated_at: iso(this.clock()) });
     return g;
   }
@@ -305,6 +320,7 @@ export class FakeRepo implements Repo {
       consent_version: p.consent_version,
       contact_opt_in_at: p.contact_opt_in ? now : null,
       account_state: 'active',
+      review_required_at: null,
       created_at: now,
       updated_at: now,
     };
@@ -323,6 +339,9 @@ export class FakeRepo implements Repo {
     if (patch.email_state !== undefined) p.email_verification_state = patch.email_state;
     if (patch.contact_opt_in !== undefined)
       p.contact_opt_in_at = patch.contact_opt_in ? iso(this.clock()) : null;
+    if (patch.phone !== undefined) p.phone_e164 = patch.phone;
+    if (patch.review_required !== undefined)
+      p.review_required_at = patch.review_required ? iso(this.clock()) : null;
     return p;
   }
   async emailInUse(email: string, exclude: string) {
@@ -393,9 +412,82 @@ export class FakeRepo implements Repo {
     return this.uuid();
   }
 
+  async setGroupSuspension(
+    id: string,
+    adminId: string,
+    reason: string,
+    _requestId: string,
+    suspend: boolean,
+  ): Promise<GroupStatusRow> {
+    if (!this.admins.has(adminId)) throw fail('FORBIDDEN');
+    const g = this.groups.find((x) => x.id === id);
+    if (!g) throw fail('NOT_FOUND');
+    const allowed = suspend ? ['active', 'inactive'] : ['suspended'];
+    if (!allowed.includes(g.status)) throw fail('CONFLICT');
+    g.status = suspend ? 'suspended' : 'active';
+    g.updated_at = iso(this.clock());
+    this.audit.push({
+      actor: adminId,
+      action: suspend ? 'group.suspend' : 'group.unsuspend',
+      entity_id: id,
+      reason,
+    });
+    return { id: g.id, territory_id: g.territory_id, status: g.status, updated_at: g.updated_at };
+  }
+  async setActivitySuspension(
+    id: string,
+    adminId: string,
+    reason: string,
+    _requestId: string,
+    suspend: boolean,
+  ): Promise<number> {
+    if (!this.admins.has(adminId)) throw fail('FORBIDDEN');
+    const a = this.activities.find((x) => x.id === id);
+    if (!a) throw fail('NOT_FOUND');
+    const allowed = suspend ? ['draft', 'pending_review', 'published', 'cancelled'] : ['suspended'];
+    if (!allowed.includes(a.status)) throw fail('CONFLICT');
+    a.status = suspend ? 'suspended' : 'pending_review';
+    a.review_reason = reason;
+    a.version += 1;
+    this.audit.push({
+      actor: adminId,
+      action: suspend ? 'activity.suspend' : 'activity.unsuspend',
+      entity_id: id,
+      reason,
+    });
+    return a.version;
+  }
+  async revealProposalContact(
+    id: string,
+    adminId: string,
+    _requestId: string,
+    reason: string | null,
+  ): Promise<RevealedContact> {
+    if (!this.admins.has(adminId)) throw fail('FORBIDDEN');
+    const p = this.proposals.find((x) => x.id === id);
+    if (!p) throw fail('NOT_FOUND');
+    this.audit.push({ actor: adminId, action: 'proposal.reveal_contact', entity_id: id, reason });
+    return {
+      proposal_id: p.id,
+      proposer_email: p.proposer_email,
+      proposer_phone: p.proposer_phone,
+      revealed_at: iso(this.clock()),
+    };
+  }
+
   // ---------------------------------------------------------------- audit / abuse / turnstile
-  async recordAudit(e: { actor: string | null; action: string; entity_id: string | null }) {
-    this.audit.push({ actor: e.actor, action: e.action, entity_id: e.entity_id });
+  async recordAudit(e: {
+    actor: string | null;
+    action: string;
+    entity_id: string | null;
+    reason?: string | null;
+  }) {
+    this.audit.push({
+      actor: e.actor,
+      action: e.action,
+      entity_id: e.entity_id,
+      reason: e.reason ?? null,
+    });
   }
   async recordAbuse(e: {
     subject_hash: string | null;
@@ -550,14 +642,34 @@ export function testEnv(over: Partial<Env> = {}): Env {
   };
 }
 
-export function setup(envOver: Partial<Env> = {}) {
+/** In-memory Cache API stand-in (keyed by URL) for edge-cache tests. */
+export class FakeEdgeCache implements EdgeCache {
+  store = new Map<string, Response>();
+  puts = 0;
+  deletes: string[] = [];
+  async match(req: Request) {
+    const r = this.store.get(req.url);
+    return r ? r.clone() : undefined;
+  }
+  async put(req: Request, res: Response) {
+    this.puts += 1;
+    this.store.set(req.url, res);
+  }
+  async delete(req: Request) {
+    this.deletes.push(req.url);
+    return this.store.delete(req.url);
+  }
+}
+
+export function setup(envOver: Partial<Env> = {}, opts: { edgeCache?: boolean } = {}) {
   let now = Date.parse('2026-10-08T12:00:00Z');
   const clock = () => now;
   const repo = new FakeRepo(clock);
   const auth = new FakeAuth(repo);
   const turnstile = new FakeTurnstile();
   const limiter = new SlidingWindowLimiter();
-  const deps: Deps = { repo, auth, turnstile, limiter, now: clock };
+  const edgeCache = opts.edgeCache ? new FakeEdgeCache() : null;
+  const deps: Deps = { repo, auth, turnstile, limiter, now: clock, edgeCache };
   const app = createApp({ deps: () => deps });
   const env = testEnv(envOver);
   let tokenSeq = 0;
@@ -635,6 +747,7 @@ export function setup(envOver: Partial<Env> = {}) {
     auth,
     turnstile,
     env,
+    edgeCache,
     request,
     users,
     advance: (ms: number) => {

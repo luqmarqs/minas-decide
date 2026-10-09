@@ -41,20 +41,56 @@ export function normalizeContact(
   };
 }
 
+/** QA-1 F12: scheduling horizon and maximum duration. */
+export const MAX_START_AHEAD_MS = 366 * 86_400_000;
+export const MAX_DURATION_MS = 24 * 3_600_000;
+
+/** QA-1 F09: Minas Gerais bounding box [lon, lat] (also enforced by the contract and a DB CHECK). */
+export const MG_BBOX = { minLon: -51.1, maxLon: -39.8, minLat: -23.0, maxLat: -14.2 } as const;
+
+export function assertInMinasGerais(lon: number, lat: number): void {
+  const inside =
+    Number.isFinite(lon) &&
+    Number.isFinite(lat) &&
+    lon >= MG_BBOX.minLon &&
+    lon <= MG_BBOX.maxLon &&
+    lat >= MG_BBOX.minLat &&
+    lat <= MG_BBOX.maxLat;
+  if (!inside)
+    throw fail('VALIDATION_ERROR', undefined, {
+      coordinates: 'O local precisa estar em Minas Gerais.',
+    });
+}
+
 function checkTimes(startsAt: string, endsAt: string | null, now: number): void {
   const s = Date.parse(startsAt);
   if (!(s > now))
     throw fail('VALIDATION_ERROR', undefined, {
       starts_at: 'A atividade precisa começar no futuro.',
     });
-  if (endsAt !== null && !(Date.parse(endsAt) > s)) {
-    throw fail('VALIDATION_ERROR', undefined, { ends_at: 'O término deve ser depois do início.' });
+  if (s > now + MAX_START_AHEAD_MS)
+    throw fail('VALIDATION_ERROR', undefined, {
+      starts_at: 'A atividade pode ser marcada com até 366 dias de antecedência.',
+    });
+  if (endsAt !== null) {
+    const e = Date.parse(endsAt);
+    if (!(e > s)) {
+      throw fail('VALIDATION_ERROR', undefined, {
+        ends_at: 'O término deve ser depois do início.',
+      });
+    }
+    if (e - s > MAX_DURATION_MS) {
+      throw fail('VALIDATION_ERROR', undefined, {
+        ends_at: 'A atividade pode durar no máximo 24 horas.',
+      });
+    }
   }
 }
 
 export function buildActivityWrite(input: ActivityInput, now: number): ActivityWrite {
   const endsAt = input.ends_at ?? null;
   checkTimes(input.starts_at, endsAt, now);
+  assertInMinasGerais(input.coordinates[0], input.coordinates[1]);
   const title = sanitizePlainText(input.title, 120);
   if (title.length < 5) throw fail('VALIDATION_ERROR', undefined, { title: 'Título muito curto.' });
   return {
@@ -118,6 +154,7 @@ export function buildActivityPatch(
   if (patch.public_address !== undefined)
     update.public_address = sanitizePlainText(patch.public_address, 240);
   if (patch.coordinates !== undefined) {
+    assertInMinasGerais(patch.coordinates[0], patch.coordinates[1]);
     update.location_lon = patch.coordinates[0];
     update.location_lat = patch.coordinates[1];
   }

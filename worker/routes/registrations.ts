@@ -6,7 +6,7 @@ import { fail } from '../errors.ts';
 import { ok, parseBody } from '../http.ts';
 import { requireSession } from '../middleware/auth.ts';
 import { noStore } from '../middleware/cache.ts';
-import { rateLimit } from '../middleware/rate-limit.ts';
+import { rateLimit, rateLimitPerUser } from '../middleware/rate-limit.ts';
 import { requireTurnstile } from '../middleware/turnstile.ts';
 
 export const registrations = new Hono<AppBindings>();
@@ -33,8 +33,9 @@ export function returnUrl(origin: string): string {
 registrations.post(
   '/registrations',
   noStore,
-  rateLimit('registrations'),
+  rateLimit('registrations_ip'),
   requireSession,
+  rateLimitPerUser('registrations'),
   async (c) => {
     const user = c.get('user')!;
     const input = await parseBody(c, RegistrationInput);

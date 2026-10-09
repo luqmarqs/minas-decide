@@ -9,7 +9,7 @@ import type { AppBindings } from '../env.ts';
 import { fail } from '../errors.ts';
 import { clientIp, ok, parse, parseBody } from '../http.ts';
 import { optionalSession } from '../middleware/auth.ts';
-import { cachePublic, noStore } from '../middleware/cache.ts';
+import { edgeCached, noStore } from '../middleware/cache.ts';
 import { rateLimit, subjectHash } from '../middleware/rate-limit.ts';
 import { requireTurnstile } from '../middleware/turnstile.ts';
 import { sha256Hex } from '../services/crypto.ts';
@@ -17,10 +17,12 @@ import { toPublicGroup } from '../services/projections.ts';
 
 export const groups = new Hono<AppBindings>();
 
+const IDEMPOTENCY_TTL_SECONDS = 86_400;
+
 const GroupsQuery = z.object({ territory_id: TerritoryId });
 
 /** Approved groups only (view whatsapp_groups_public). Falls back to the municipality. */
-groups.get('/groups', cachePublic(60), async (c) => {
+groups.get('/groups', edgeCached(60), async (c) => {
   const { territory_id } = parse(GroupsQuery, c.req.query());
   const { repo } = c.get('deps');
   let body: PublicGroupsResponse = { items: [], fallback: 'none' };
@@ -52,10 +54,13 @@ groups.post('/groups/proposals', noStore, rateLimit('proposals'), optionalSessio
   if (!territory)
     throw fail('VALIDATION_ERROR', undefined, { territory_id: 'Território inexistente.' });
 
-  // Idempotency: explicit key, or a content key so a re-submit after timeout doesn't duplicate.
+  // Idempotency (QA-1 F11): an explicit key dedupes for 24 h; without one, a CONTENT key
+  // scoped to the current UTC day dedupes accidental re-submits. Either key only matches a
+  // proposal that is still PENDING (decided/expired ones release it -> a new proposal).
+  const day = new Date(c.get('deps').now()).toISOString().slice(0, 10);
   const idemSource = input.idempotency_key
     ? `key:${input.idempotency_key}`
-    : `content:${input.territory_id}|${input.join_url_proposed}|${input.proposer_email}`;
+    : `content:${day}|${input.territory_id}|${input.join_url_proposed}|${input.proposer_email}`;
   const user = c.get('user');
   const result = await repo.createGroupProposal({
     territory_id: input.territory_id,
@@ -67,6 +72,7 @@ groups.post('/groups/proposals', noStore, rateLimit('proposals'), optionalSessio
     proposer_user_id: user && !user.is_anonymous ? user.id : null,
     consent_version: input.consent_version,
     idempotency_hash: await sha256Hex(idemSource),
+    idempotency_ttl_seconds: IDEMPOTENCY_TTL_SECONDS,
     fingerprint_hash: await subjectHash(c.env.RSVP_DEVICE_SECRET, clientIp(c)),
   });
   // Never reveal moderation state of someone else's proposal: always "pending" to the public.

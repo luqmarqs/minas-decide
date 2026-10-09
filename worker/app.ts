@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import type { AppBindings, Deps, Env } from './env.ts';
+import type { AppBindings, Deps, EdgeCache, Env } from './env.ts';
+import { configCheck } from './middleware/config-check.ts';
 import { onError, onNotFound, respondError } from './middleware/errors.ts';
+import { originGuard } from './middleware/origin.ts';
 import { SlidingWindowLimiter } from './middleware/rate-limit.ts';
 import { requestContext } from './middleware/request-id.ts';
 import { writesEnabled } from './middleware/writes-enabled.ts';
@@ -22,6 +24,12 @@ export interface CreateAppOptions {
   deps?: (env: Env) => Deps;
 }
 
+/** `caches.default` when running on Workers (or wrangler dev); null elsewhere. */
+function defaultEdgeCache(): EdgeCache | null {
+  const g = globalThis as { caches?: { default?: EdgeCache } };
+  return g.caches?.default ?? null;
+}
+
 export function createApp(opts: CreateAppOptions = {}) {
   const limiter = new SlidingWindowLimiter();
   const turnstile = createSiteverifyClient();
@@ -33,10 +41,12 @@ export function createApp(opts: CreateAppOptions = {}) {
       turnstile,
       limiter,
       now: Date.now,
+      edgeCache: defaultEdgeCache(),
     }));
 
   const app = new Hono<AppBindings>();
   app.use('*', requestContext(getDeps));
+  app.use('/api/*', configCheck());
   app.use(
     '/api/*',
     bodyLimit({
@@ -44,6 +54,7 @@ export function createApp(opts: CreateAppOptions = {}) {
       onError: (c) => respondError(c, 'VALIDATION_ERROR', 'Corpo da requisição grande demais.'),
     }),
   );
+  app.use('/api/*', originGuard);
   app.use('/api/*', writesEnabled);
 
   const v1 = new Hono<AppBindings>();

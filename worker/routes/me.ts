@@ -1,13 +1,14 @@
 import { Hono, type Context } from 'hono';
 import { MePatch, type MeResponse } from '../../shared/contracts/registration.ts';
-import { maskEmail } from '../../shared/schemas/phone.ts';
+import { maskEmail, maskPhone } from '../../shared/schemas/phone.ts';
 import { sanitizePlainText } from '../../shared/schemas/sanitize.ts';
 import type { AppBindings, AuthUser } from '../env.ts';
 import { fail } from '../errors.ts';
 import { ok, parseBody } from '../http.ts';
 import { requireSession } from '../middleware/auth.ts';
 import { noStore } from '../middleware/cache.ts';
-import type { ProfileRow } from '../repositories/types.ts';
+import { rateLimit } from '../middleware/rate-limit.ts';
+import type { ProfilePatch, ProfileRow } from '../repositories/types.ts';
 
 export const me = new Hono<AppBindings>();
 
@@ -29,6 +30,8 @@ export async function buildMe(
     selected_territory_id: profile?.selected_territory_id ?? null,
     is_admin: user.is_anonymous ? false : await repo.isAdmin(user.id),
     account_state: profile?.account_state ?? 'active',
+    phone_masked: profile?.phone_e164 ? maskPhone(profile.phone_e164) : null,
+    profile_review_required: Boolean(profile?.review_required_at),
   };
 }
 
@@ -38,11 +41,19 @@ me.get('/me', noStore, requireSession, async (c) => {
   return ok(c, await buildMe(c, user, profile));
 });
 
-me.patch('/me', noStore, requireSession, async (c) => {
+/**
+ * Only the session owner edits their own profile (no admin route changes phone/name).
+ * P-SEC-1: `phone` is editable and `profile_reviewed: true` clears the review flag set at
+ * promotion; both are audited without PII (only the user id and which kind of change).
+ */
+me.patch('/me', noStore, rateLimit('me_write'), requireSession, async (c) => {
   const user = c.get('user')!;
   const patch = await parseBody(c, MePatch);
   const { repo } = c.get('deps');
-  if (!(await repo.getProfile(user.id))) throw fail('NOT_FOUND', 'Cadastro não encontrado.');
+  const current = await repo.getProfile(user.id);
+  if (!current) throw fail('NOT_FOUND', 'Cadastro não encontrado.');
+  const phoneBefore = current.phone_e164;
+  const reviewPending = Boolean(current.review_required_at);
   if (patch.selected_territory_id) {
     const [t] = await repo.getTerritories([patch.selected_territory_id]);
     if (!t)
@@ -50,7 +61,7 @@ me.patch('/me', noStore, requireSession, async (c) => {
         selected_territory_id: 'Território inexistente.',
       });
   }
-  const updated = await repo.updateProfile(user.id, {
+  const update: ProfilePatch = {
     ...(patch.display_name !== undefined
       ? { display_name: sanitizePlainText(patch.display_name, 120) }
       : {}),
@@ -58,6 +69,29 @@ me.patch('/me', noStore, requireSession, async (c) => {
       ? { selected_territory_id: patch.selected_territory_id }
       : {}),
     ...(patch.contact_opt_in !== undefined ? { contact_opt_in: patch.contact_opt_in } : {}),
-  });
+    ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+    ...(patch.profile_reviewed === true ? { review_required: false } : {}),
+  };
+  const updated = await repo.updateProfile(user.id, update);
+  if (!updated) throw fail('NOT_FOUND', 'Cadastro não encontrado.');
+  const requestId = c.get('requestId');
+  if (patch.phone !== undefined && patch.phone !== phoneBefore) {
+    await repo.recordAudit({
+      actor: user.id,
+      action: 'profile.phone_change',
+      entity_type: 'profile',
+      entity_id: user.id,
+      request_id: requestId,
+    });
+  }
+  if (patch.profile_reviewed === true && reviewPending) {
+    await repo.recordAudit({
+      actor: user.id,
+      action: 'profile.review',
+      entity_type: 'profile',
+      entity_id: user.id,
+      request_id: requestId,
+    });
+  }
   return ok(c, await buildMe(c, user, updated));
 });

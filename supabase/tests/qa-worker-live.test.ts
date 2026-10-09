@@ -211,8 +211,15 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
       method: 'POST',
       json: { ...input, idempotency_key: `qa-key2-${tag}`, turnstile_token: t1 },
     });
-    expect(reuse.res.status).toBe(400);
-    expect(reuse.json.error?.code).toBe('TURNSTILE_FAILED');
+    // With the Cloudflare TEST secret on a loopback (APP_ENV=local) Worker, single use is
+    // skipped on purpose (SECURITY.md); the reuse check only applies to real secrets.
+    const localTestSecret =
+      /^https?:\/\/(127\.0\.0\.1|localhost)/.test(process.env.QA_WORKER_URL ?? '') &&
+      (process.env.TURNSTILE_SECRET_KEY ?? '').startsWith('1x0000');
+    if (!localTestSecret) {
+      expect(reuse.res.status).toBe(400);
+      expect(reuse.json.error?.code).toBe('TURNSTILE_FAILED');
+    }
     const evil = await api('/groups/proposals', {
       method: 'POST',
       json: {
@@ -224,7 +231,7 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
     expect(evil.res.status).toBe(400);
   });
 
-  it('L05 FINDING F01 live: verified Auth user WITHOUT profile creates an activity (201)', async () => {
+  it('L05 F01 (fixed): verified Auth user WITHOUT profile cannot create an activity', async () => {
     const r = await api('/activities', {
       method: 'POST',
       token: org1Tok,
@@ -240,8 +247,8 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
         timezone: 'America/Sao_Paulo',
       },
     });
-    // documents current behaviour (finding F01 + F05: no profile, coordinates in Paris)
-    expect(r.res.status).toBe(201);
+    // F01 fixed in round 1 (organizer needs a profile) and F09 in round 2 (coordinates in MG)
+    expect([400, 403]).toContain(r.res.status);
     expect(r.text).not.toContain(org1Id);
   });
 

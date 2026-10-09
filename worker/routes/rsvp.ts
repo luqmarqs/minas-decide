@@ -4,10 +4,10 @@ import { RsvpInput, type RsvpState } from '../../shared/contracts/activities.ts'
 import type { AppBindings } from '../env.ts';
 import { isLocal } from '../env.ts';
 import { fail } from '../errors.ts';
-import { readJson, ok, uuidParam } from '../http.ts';
+import { clientIp, readJson, ok, uuidParam } from '../http.ts';
 import { optionalSession } from '../middleware/auth.ts';
 import { noStore } from '../middleware/cache.ts';
-import { rateLimit } from '../middleware/rate-limit.ts';
+import { hitLimit, rateLimit } from '../middleware/rate-limit.ts';
 import { hmacSha256Hex, randomToken, sha256Hex } from '../services/crypto.ts';
 import type { RsvpIdentity } from '../repositories/types.ts';
 
@@ -43,11 +43,23 @@ async function identity(c: Context<AppBindings>, create: boolean): Promise<RsvpI
   return { subject_hash: await hmacSha256Hex(c.env.RSVP_DEVICE_SECRET, `device:${device}`) };
 }
 
-rsvp.post('/activities/:id/rsvp', noStore, rateLimit('rsvp'), optionalSession, async (c) => {
+/**
+ * QA-1 F05: two-level limit so a whole event behind one CGNAT/Wi-Fi IP is not blocked:
+ *   - `rsvp_ip` (120/10 min) per IP, before anything else;
+ *   - `rsvp_identity` (10/10 min) per IP + activity + identity (user id or device HMAC).
+ */
+function identityLimit(c: Context<AppBindings>, activityId: string, who: RsvpIdentity) {
+  const id = 'user_id' in who ? `u:${who.user_id}` : `d:${who.subject_hash}`;
+  return hitLimit(c, 'rsvp_identity', `${clientIp(c)}|${activityId}|${id}`);
+}
+
+rsvp.post('/activities/:id/rsvp', noStore, rateLimit('rsvp_ip'), optionalSession, async (c) => {
   const activityId = uuidParam(c);
   const input = RsvpInput.parse(await readJson(c, true));
   const who = await identity(c, true);
   if (!who) throw fail('FORBIDDEN');
+  const blocked = await identityLimit(c, activityId, who);
+  if (blocked) return blocked;
   const idem = input.idempotency_key ? await sha256Hex(`rsvp:${input.idempotency_key}`) : null;
   const res = await c.get('deps').repo.upsertRsvp(activityId, who, true, idem);
   const body: RsvpState = {
@@ -58,11 +70,13 @@ rsvp.post('/activities/:id/rsvp', noStore, rateLimit('rsvp'), optionalSession, a
   return ok(c, body);
 });
 
-rsvp.delete('/activities/:id/rsvp', noStore, rateLimit('rsvp'), optionalSession, async (c) => {
+rsvp.delete('/activities/:id/rsvp', noStore, rateLimit('rsvp_ip'), optionalSession, async (c) => {
   const activityId = uuidParam(c);
   const who = await identity(c, false);
   // No session and no device cookie: nothing this caller could own (T11).
   if (!who) throw fail('FORBIDDEN');
+  const blocked = await identityLimit(c, activityId, who);
+  if (blocked) return blocked;
   const res = await c.get('deps').repo.upsertRsvp(activityId, who, false, null);
   const body: RsvpState = {
     activity_id: activityId,

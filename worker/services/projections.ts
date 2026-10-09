@@ -93,10 +93,11 @@ export function toAdminActivity(a: ActivityRow): AdminActivity {
   };
 }
 
-/** Admin queue still masks proposer contact (full contact only via a future audited endpoint). */
+/** Admin queue masks proposer contact (full contact only via the audited reveal-contact route). */
 export function toAdminProposal(p: GroupProposalRow): AdminGroupProposal {
   return {
     id: p.id,
+    group_id: p.group_id ?? null,
     territory_id: p.territory_id,
     name_proposed: p.name_proposed,
     join_url_proposed: p.join_url_proposed,

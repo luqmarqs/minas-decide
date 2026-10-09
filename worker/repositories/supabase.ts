@@ -21,6 +21,7 @@ import type {
   GroupPatch,
   GroupProposalRow,
   GroupRow,
+  GroupStatusRow,
   LinkEmailResult,
   NewGroupManager,
   NewGroupProposal,
@@ -31,6 +32,7 @@ import type {
   PublicActivityRow,
   PublicGroupRow,
   Repo,
+  RevealedContact,
   RsvpIdentity,
   SecurityEventRow,
   TerritoryRow,
@@ -181,14 +183,18 @@ export class SupabaseRepo implements Repo {
       p_consent_version: p.consent_version,
       p_idempotency_hash: p.idempotency_hash,
       p_fingerprint_hash: p.fingerprint_hash,
+      p_idempotency_ttl_seconds: p.idempotency_ttl_seconds,
     });
   }
 
   async patchGroup(id: string, patch: GroupPatch): Promise<GroupRow | null> {
+    // A suspended group can only be reactivated through /admin/groups/:id/unsuspend
+    // (audited with its own action); a plain PATCH must not revive it.
     const res = await this.db
       .from('whatsapp_groups')
       .update(patch)
       .eq('id', safeUuid(id))
+      .neq('status', 'suspended')
       .select(PUBLIC_GROUP_COLS)
       .maybeSingle();
     return check(res, 'patchGroup') as GroupRow | null;
@@ -369,6 +375,8 @@ export class SupabaseRepo implements Repo {
       p_territory_id: patch.selected_territory_id ?? null,
       p_contact_opt_in: patch.contact_opt_in ?? null,
       p_email_state: patch.email_state ?? null,
+      p_phone: patch.phone ?? null,
+      p_review_required: patch.review_required ?? null,
     });
   }
 
@@ -458,6 +466,50 @@ export class SupabaseRepo implements Repo {
       p_role_label: m.role_label,
       p_admin: adminId,
       p_request_id: requestId,
+    });
+  }
+
+  setGroupSuspension(
+    id: string,
+    adminId: string,
+    reason: string,
+    requestId: string,
+    suspend: boolean,
+  ): Promise<GroupStatusRow> {
+    return this.rpc(suspend ? 'svc_suspend_group' : 'svc_unsuspend_group', {
+      p_id: id,
+      p_admin: adminId,
+      p_reason: reason,
+      p_request_id: requestId,
+    });
+  }
+
+  setActivitySuspension(
+    id: string,
+    adminId: string,
+    reason: string,
+    requestId: string,
+    suspend: boolean,
+  ): Promise<number> {
+    return this.rpc(suspend ? 'svc_suspend_activity' : 'svc_unsuspend_activity', {
+      p_id: id,
+      p_admin: adminId,
+      p_reason: reason,
+      p_request_id: requestId,
+    });
+  }
+
+  revealProposalContact(
+    id: string,
+    adminId: string,
+    requestId: string,
+    reason: string | null,
+  ): Promise<RevealedContact> {
+    return this.rpc('svc_reveal_proposal_contact', {
+      p_id: id,
+      p_admin: adminId,
+      p_request_id: requestId,
+      p_reason: reason,
     });
   }
 

@@ -175,6 +175,7 @@ export type Database = {
           fingerprint_hash: string | null;
           group_id: string | null;
           id: string;
+          idempotency_expires_at: string | null;
           idempotency_key_hash: string | null;
           join_url_proposed: string;
           name_proposed: string;
@@ -196,6 +197,7 @@ export type Database = {
           fingerprint_hash?: string | null;
           group_id?: string | null;
           id?: string;
+          idempotency_expires_at?: string | null;
           idempotency_key_hash?: string | null;
           join_url_proposed: string;
           name_proposed: string;
@@ -217,6 +219,7 @@ export type Database = {
           fingerprint_hash?: string | null;
           group_id?: string | null;
           id?: string;
+          idempotency_expires_at?: string | null;
           idempotency_key_hash?: string | null;
           join_url_proposed?: string;
           name_proposed?: string;
@@ -243,6 +246,7 @@ export type Database = {
           email_contact: string;
           email_verification_state: string;
           phone_e164: string | null;
+          review_required_at: string | null;
           selected_territory_id: string | null;
           updated_at: string;
           user_id: string;
@@ -256,6 +260,7 @@ export type Database = {
           email_contact: string;
           email_verification_state?: string;
           phone_e164?: string | null;
+          review_required_at?: string | null;
           selected_territory_id?: string | null;
           updated_at?: string;
           user_id: string;
@@ -269,6 +274,7 @@ export type Database = {
           email_contact?: string;
           email_verification_state?: string;
           phone_e164?: string | null;
+          review_required_at?: string | null;
           selected_territory_id?: string | null;
           updated_at?: string;
           user_id?: string;
@@ -344,6 +350,26 @@ export type Database = {
           p_request_id?: string;
         };
         Returns: undefined;
+      };
+      set_activity_suspension: {
+        Args: {
+          p_admin: string;
+          p_id: string;
+          p_reason: string;
+          p_request_id: string;
+          p_suspend: boolean;
+        };
+        Returns: number;
+      };
+      set_group_suspension: {
+        Args: {
+          p_admin: string;
+          p_id: string;
+          p_reason: string;
+          p_request_id: string;
+          p_suspend: boolean;
+        };
+        Returns: Json;
       };
       upsert_rsvp: {
         Args: {
@@ -719,6 +745,7 @@ export type Database = {
           p_consent_version: string;
           p_fingerprint_hash: string;
           p_idempotency_hash: string;
+          p_idempotency_ttl_seconds?: number;
           p_join_url: string;
           p_name: string;
           p_proposer_email: string;
@@ -746,6 +773,10 @@ export type Database = {
       svc_email_in_use: {
         Args: { p_email: string; p_exclude: string };
         Returns: boolean;
+      };
+      svc_erase_group_proposals: {
+        Args: { p_admin?: string; p_ids: string[]; p_request_id?: string };
+        Returns: number;
       };
       svc_get_profile: { Args: { p_user: string }; Returns: Json };
       svc_grant_admin: {
@@ -810,11 +841,58 @@ export type Database = {
         };
         Returns: undefined;
       };
+      svc_reveal_proposal_contact: {
+        Args: {
+          p_admin: string;
+          p_id: string;
+          p_reason?: string;
+          p_request_id?: string;
+        };
+        Returns: Json;
+      };
+      svc_suspend_activity: {
+        Args: {
+          p_admin: string;
+          p_id: string;
+          p_reason: string;
+          p_request_id?: string;
+        };
+        Returns: number;
+      };
+      svc_suspend_group: {
+        Args: {
+          p_admin: string;
+          p_id: string;
+          p_reason: string;
+          p_request_id?: string;
+        };
+        Returns: Json;
+      };
+      svc_unsuspend_activity: {
+        Args: {
+          p_admin: string;
+          p_id: string;
+          p_reason: string;
+          p_request_id?: string;
+        };
+        Returns: number;
+      };
+      svc_unsuspend_group: {
+        Args: {
+          p_admin: string;
+          p_id: string;
+          p_reason: string;
+          p_request_id?: string;
+        };
+        Returns: Json;
+      };
       svc_update_profile: {
         Args: {
           p_contact_opt_in?: boolean;
           p_display_name?: string;
           p_email_state?: string;
+          p_phone?: string;
+          p_review_required?: boolean;
           p_territory_id?: string;
           p_user: string;
         };
