@@ -304,3 +304,28 @@ Deep link `?t=` no mobile abre o sheet no estado meio sem rolar ao mapa; fila do
 
 **Limitações desta publicação:** banco de staging é o mesmo projeto TARGET dev (dados de teste vão para lá; criar projeto Supabase de staging antes de uso real); sem domínio próprio (workers.dev); HSTS gerido pela Cloudflare no `workers.dev`; admin em staging exige fator TOTP verificado (o admin dev ainda não tem — enrolar em `/conta/seguranca` após entrar por magic link, que por sua vez depende da cota de e-mail); token de API transitou pelo chat — **rotacionar**.
 
+---
+
+# ADENDO — RODADA 3: IDENTIDADE OFICIAL, CAMPANHA E NARRATIVA (2026-10-09 15:21)
+
+**Commits:** `19cee85` (identidade Minas Decide como padrão), `4b79e9f`/`c55beca` (dados 2022 do TSE, margem, highlights, POIs), `a9739c7` (produto). **Staging:** https://minas-em-movimento-staging.luq-marqs.workers.dev (redeploy após cada etapa). **Decisões:** D21–D27 em `docs/DECISIONS.md`.
+
+| Pedido do proprietário | Entrega | Evidência |
+|---|---|---|
+| Arte oficial "MINAS DECIDE" | auditoria (`docs/IDENTITY_AUDIT.md`), tema padrão com paleta medida (céu #067fa8, sol #e8ba1f, creme #ebd6ca, oliva #262824), Anton/Bungee Outline (OFL, self-hosted, só hero/selos/lockup), sol vetorial como marca e favicon, hero com a chave visual; rollback `?brand=0` | `docs/screenshots/brand/final/`, contraste 100 % na meta, axe 0 |
+| Nome "Minas Decide" | interface, título, metadados, README, CLAUDE.md, agentes | `index.html`, `AppHeader`, `AppFooter` |
+| Sem destaque para Duda/Iza | seção e camada de candidaturas rastreadas removidas; `comparison_2022: []` | snapshot reconstruído (904 arquivos) |
+| Lula × Bolsonaro 2022→2026 | 2022 (1º e 2º turnos) dos **dados abertos do TSE**, município exato (853/853 batem com o oficial) e bairro aproximado (99,39 % dos votos casados; 20 bairros de 5 municípios `unavailable`); bloco no painel e camada `president_comparison`; MG: Lula 48,29 % → 43,33 % (−4,96 p.p.), Jair → Flávio Bolsonaro 43,60 % → 48,24 % (+4,64 p.p.) | `docs/ELECTORAL_EXPORT_REPORT.md` §10 |
+| Cards "por que Minas" | `highlights.json` com 30 itens com fonte (MG = 16.372.372 aptos, 10,31 % do eleitorado nacional, 2º maior; 2022 r2: Lula venceu em MG por 49.650 votos, 0,40 p.p.; etc.) e `WhyMinasStrip` | `public/data/mg-2026r1-20261008/highlights.json` |
+| Busca com zoom | hero → mapa rola, dá zoom e abre painel/sheet (e2e desktop e mobile) | `e2e/rodada3.smoke.spec.ts` |
+| Atividades no mapa com "Eu vou" | marcadores sempre visíveis sobre qualquer camada, popover com RSVP e compartilhar; 3 atividades `[EXEMPLO]` publicadas (BH, Contagem, Juiz de Fora; coordenadas via Nominatim) | `scripts/db/seed-example-activities.ts`; staging devolve 3 |
+| Terminais de grande circulação | camada `pois` com 380 terminais/estações do OpenStreetMap (ODbL) via Overpass; lista no território | `public/data/pois/terminais-mg.json` |
+| Tema Lula | "Minas decide. Minas decide Lula." no hero; textos de mobilização; rodapé com responsável **[a definir]** (pendência legal) | capturas `docs/screenshots/rodada3/` |
+| Conceito "o mapa sólido assusta" | `StoryIntro` em 5 passos com mapas SVG próprios de MG (margem 2026 r1 e 2022 r2 por município): Lula liderou em **452** municípios em 2026 r1 e em **564** em 2022 r2; **5.405.888 pessoas (33,02 % dos aptos) não votaram em nenhum dos dois** em 2026 r1 (abstenção 3.735.098 + brancos/nulos 661.039 + outras candidaturas 1.009.751, grupos distintos) | highlights + `src/features/story/` |
+| Compartilhar via WhatsApp | `wa.me` com título, data/hora (America/Sao_Paulo), local e link em atividades; território e hero | `src/lib/share.ts`, testes |
+| Abstenção alta onde Lula liderou | camada `mobilization` (abstenção só nos territórios liderados por Lula; escala neutra) + ranking "Onde a abstenção pesa mais" no estado e nos municípios, com abstenções absolutas e margem | `src/features/electoral-map/mobilization.ts`, `MobilizationBlock` |
+
+**Validação:** `npm run ci` verde (377 testes unit/worker + 1 expected-fail), isolamento OK em 2.133 arquivos, `data:validate` 904/904 sem erros, amostragem TSE 312/330 (inalterada), E2E **30/30**, axe 0 violações em 10 telas (FE-6) e 18 execuções (FE-5), staging respondendo com as 3 atividades.
+
+**Ressalvas honestas:** cores partidárias existem apenas na camada de margem e na narrativa (D25); a camada de mobilização é priorização territorial agregada, rotulada como não-inferência; o `BottomSheet` (vaul) esconde a página de leitores de tela no mobile — contornado, mas precisa de correção definitiva; o agente enviou uma vez o e-mail do proprietário no `User-Agent` de uma consulta ao Nominatim (sem outros dados; não se repete); as atividades `[EXEMPLO]` ficam publicadas até serem arquivadas; **responsável legal pelo conteúdo de campanha continua pendente e bloqueia divulgação**; cadastro real com Turnstile em navegador humano ainda não testado pelo proprietário; SMTP próprio pendente (P-SEC-3).
+
