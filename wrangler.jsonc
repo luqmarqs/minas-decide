@@ -2,6 +2,10 @@
   // Cloudflare Workers + Static Assets. The Worker only handles /api/*; everything
   // else is served from ./dist as static assets with SPA fallback.
   // NOTE: no SOURCE (legacy electoral Supabase) variable may ever appear here.
+  //
+  // SAFE-BY-DEFAULT: top-level vars are the PRODUCTION posture (writes suspended,
+  // MFA required, real Turnstile required). Local development must use
+  // `wrangler dev --env local` (npm run dev:worker). Staging uses `--env staging`.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "minas-em-movimento",
   "main": "./worker/index.ts",
@@ -15,12 +19,30 @@
   },
   "observability": { "enabled": true },
   "vars": {
-    "APP_ENV": "local",
-    "WRITES_ENABLED": "true",
-    "PUBLIC_ORIGIN": "http://127.0.0.1:8787",
-    "TURNSTILE_EXPECTED_HOSTNAMES": "localhost,127.0.0.1",
+    "APP_ENV": "production",
+    "WRITES_ENABLED": "false",
+    "PUBLIC_ORIGIN": "https://REPLACE-WITH-PRODUCTION-ORIGIN",
+    "TURNSTILE_EXPECTED_HOSTNAMES": "",
   },
-  // Secrets (set with `wrangler secret put` or in .dev.vars for local):
+  "env": {
+    "local": {
+      "vars": {
+        "APP_ENV": "local",
+        "WRITES_ENABLED": "true",
+        "PUBLIC_ORIGIN": "http://127.0.0.1:5173",
+        "TURNSTILE_EXPECTED_HOSTNAMES": "localhost,127.0.0.1",
+      },
+    },
+    "staging": {
+      "vars": {
+        "APP_ENV": "staging",
+        "WRITES_ENABLED": "true",
+        "PUBLIC_ORIGIN": "https://REPLACE-WITH-STAGING-ORIGIN",
+        "TURNSTILE_EXPECTED_HOSTNAMES": "REPLACE-WITH-STAGING-HOST",
+      },
+    },
+  },
+  // Secrets (set with `wrangler secret put --env <env>` or in .dev.vars / .dev.vars.local):
   //   SUPABASE_TARGET_URL, SUPABASE_TARGET_ANON_KEY, SUPABASE_TARGET_SERVICE_ROLE_KEY,
   //   TURNSTILE_SECRET_KEY, RSVP_DEVICE_SECRET, ADMIN_EMAILS
 }

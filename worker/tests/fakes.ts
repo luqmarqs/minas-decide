@@ -506,10 +506,18 @@ export class FakeAuth implements AuthGateway {
   }
 }
 
-/** Fake Siteverify: tokens starting with "bad" fail; "wronghost" returns another hostname. */
+/** Fake Siteverify: tokens starting with "bad" fail; "wronghost" returns another hostname;
+ *  "tok-no-action" returns action=null; otherwise the expected action is echoed (as a real
+ *  widget rendered with `data-action` would). */
 export class FakeTurnstile implements TurnstileVerifier {
   calls = 0;
-  async verify({ token }: { token: string }): Promise<SiteverifyResult> {
+  async verify({
+    token,
+    expectedAction,
+  }: {
+    token: string;
+    expectedAction?: string | null;
+  }): Promise<SiteverifyResult> {
     this.calls += 1;
     if (token.startsWith('bad'))
       return {
@@ -521,7 +529,7 @@ export class FakeTurnstile implements TurnstileVerifier {
     return {
       success: true,
       hostname: token.startsWith('wronghost') ? 'evil.example' : 'localhost',
-      action: null,
+      action: token.startsWith('tok-no-action') ? null : (expectedAction ?? null),
       errorCodes: [],
     };
   }
@@ -587,6 +595,19 @@ export function setup(envOver: Partial<Env> = {}) {
     verified(id = repo.uuid(), email = `org${tokenSeq + 1}@example.org`) {
       const token = `tok-verified-${++tokenSeq}-padding-padding`;
       repo.verified.add(id);
+      // Real flow: profile created at registration, promoted by /auth/confirm-email.
+      if (!repo.profiles.has(id)) {
+        void repo.createProfile({
+          user_id: id,
+          display_name: 'Organizador Teste',
+          email,
+          email_state: 'verified',
+          phone: '+5531999990000',
+          territory_id: 'mg-3140001',
+          consent_version: 'v1',
+          contact_opt_in: false,
+        });
+      }
       return {
         token,
         user: auth.add(token, { id, email, email_confirmed: true, amr_methods: ['otp'] }),

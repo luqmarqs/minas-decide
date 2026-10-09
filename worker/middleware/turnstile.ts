@@ -44,7 +44,7 @@ export async function requireTurnstile(
   }
   const secret = c.env.TURNSTILE_SECRET_KEY;
   const isTestSecret = TURNSTILE_TEST_SECRETS.has(secret);
-  if (!secret || (isTestSecret && c.env.APP_ENV === 'production')) {
+  if (!secret || (isTestSecret && !['local', 'test'].includes(c.env.APP_ENV))) {
     console.error(
       JSON.stringify({
         level: 'error',
@@ -66,7 +66,12 @@ export async function requireTurnstile(
   }
 
   const ip = clientIp(c);
-  const result = await turnstile.verify({ secret, token, remoteIp: ip === 'local' ? null : ip });
+  const result = await turnstile.verify({
+    secret,
+    token,
+    remoteIp: ip === 'local' ? null : ip,
+    expectedAction: expectedAction ?? null,
+  });
   if (!result.success) {
     await logFailure(c, route, 'turnstile_rejected');
     throw fail('TURNSTILE_FAILED');
@@ -79,7 +84,7 @@ export async function requireTurnstile(
       await logFailure(c, route, 'turnstile_hostname');
       throw fail('TURNSTILE_FAILED');
     }
-    if (expectedAction && result.action && result.action !== expectedAction) {
+    if (expectedAction && result.action !== expectedAction) {
       await logFailure(c, route, 'turnstile_action');
       throw fail('TURNSTILE_FAILED');
     }

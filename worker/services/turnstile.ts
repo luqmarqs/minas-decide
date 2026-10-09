@@ -7,7 +7,7 @@ export const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/si
 /**
  * Official Cloudflare TEST secrets. They do not validate a real challenge and always answer
  * with a fixed hostname ("example.com"), so hostname/action checks are skipped for them —
- * and they are refused outright when APP_ENV=production.
+ * and they are refused outright unless APP_ENV is local or test.
  */
 export const TURNSTILE_TEST_SECRETS = new Set([
   '1x0000000000000000000000000000000AA', // always passes
@@ -27,6 +27,8 @@ export interface TurnstileVerifier {
     secret: string;
     token: string;
     remoteIp: string | null;
+    /** action the route expects (widget `data-action`); real Siteverify ignores it */
+    expectedAction?: string | null;
   }): Promise<SiteverifyResult>;
 }
 

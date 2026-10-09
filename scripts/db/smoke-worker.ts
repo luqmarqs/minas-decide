@@ -3,7 +3,7 @@
  * project. Exercises the real Supabase repository + Auth gateway, then deletes everything
  * it created (users cascade profiles/admins/activities/rsvps).
  *
- *   npx wrangler dev --port 8799           # in another terminal (reads .dev.vars)
+ *   npx wrangler dev --env local --port 8799           # in another terminal (reads .dev.vars)
  *   npx tsx scripts/db/smoke-worker.ts http://127.0.0.1:8799
  *
  * Uses the Cloudflare TEST Turnstile secret from .dev.vars (always passes) and +tag@example.org

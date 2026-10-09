@@ -45,8 +45,13 @@ export async function assertOrganizer(c: Context<AppBindings>, user: AuthUser): 
   }
   const { repo } = c.get('deps');
   if (!(await repo.isEmailVerified(user.id))) throw fail('EMAIL_NOT_VERIFIED');
+  // QA-1 F01: an organizer must have a profile created through the guarded
+  // registration flow (Turnstile + consent), be active and have its e-mail state
+  // promoted by /auth/confirm-email. Auth-only accounts (direct GoTrue signup) are refused.
   const profile = await repo.getProfile(user.id);
-  if (profile?.account_state === 'suspended') throw fail('FORBIDDEN');
+  if (!profile) throw fail('FORBIDDEN');
+  if (profile.account_state !== 'active') throw fail('FORBIDDEN');
+  if (profile.email_verification_state !== 'verified') throw fail('EMAIL_NOT_VERIFIED');
 }
 
 export const requireOrganizer: MiddlewareHandler<AppBindings> = async (c, next) => {

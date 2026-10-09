@@ -86,6 +86,7 @@ export const SENSITIVE_FIELDS = [
   'location_lon',
   'location_lat',
   'territory_id',
+  'type',
 ] as const;
 
 /**
@@ -150,9 +151,16 @@ export function buildActivityPatch(
     );
   }
 
-  const sensitive = SENSITIVE_FIELDS.some((f) => {
+  const fieldSensitive = SENSITIVE_FIELDS.some((f) => {
     const next = update[f];
     return next !== undefined && next !== current[f];
   });
+  // QA-1 F02: publishing or changing a public contact is sensitive (re-moderation);
+  // switching the contact OFF is never sensitive and takes effect immediately (T27).
+  const contactChanged = (
+    ['public_contact_opt_in', 'public_contact_type', 'public_contact_value'] as const
+  ).some((f) => update[f] !== undefined && update[f] !== current[f]);
+  const contactOn = (update.public_contact_opt_in ?? current.public_contact_opt_in) === true;
+  const sensitive = fieldSensitive || (contactChanged && contactOn);
   return { update, sensitive };
 }

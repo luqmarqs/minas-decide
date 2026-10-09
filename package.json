@@ -9,9 +9,9 @@
   },
   "scripts": {
     "dev": "vite",
-    "dev:worker": "wrangler dev",
+    "dev:worker": "wrangler dev --env local",
     "build": "vite build",
-    "preview": "wrangler dev --local",
+    "preview": "wrangler dev --env local",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",

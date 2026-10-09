@@ -1,0 +1,19 @@
+# Security headers for the static SPA (Cloudflare Workers Static Assets `_headers`).
+# /api/* headers are set by the Worker itself. Review the CSP allowlist whenever a
+# new external origin (tiles, fonts, auth) is introduced. HSTS only on real HTTPS domains.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://*.supabase.co https://tiles.openfreemap.org https://challenges.cloudflare.com; img-src 'self' data: blob: https://tiles.openfreemap.org; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=(), usb=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+
+/data/*
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+
+/geo/*
+  Cache-Control: public, max-age=86400
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
