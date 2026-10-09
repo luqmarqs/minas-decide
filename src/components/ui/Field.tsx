@@ -77,7 +77,7 @@ export function FormErrorSummary({
       <ul className="mt-2 list-disc pl-5 text-sm">
         {errors.map((e) => (
           <li key={e.fieldId}>
-            <a href={`#${e.fieldId}`} className="underline">
+            <a href={`#${e.fieldId}`} className="inline-block min-h-6 py-1 underline">
               {e.message}
             </a>
           </li>

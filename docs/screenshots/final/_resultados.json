@@ -1,0 +1,311 @@
+{
+  "shots": [
+    "docs/screenshots/final/home-desktop1440-abstencao-20261009-aefb63a.png",
+    "docs/screenshots/final/home-desktop1440-foco-combobox-20261009-aefb63a.png",
+    "docs/screenshots/final/home-desktop1440-combobox-lista-20261009-aefb63a.png",
+    "docs/screenshots/final/home-desktop1440-municipio-selecionado-20261009-aefb63a.png",
+    "docs/screenshots/final/participar-desktop1440-foco-botao-20261009-aefb63a.png",
+    "docs/screenshots/final/404-desktop1440-padrao-20261009-aefb63a.png",
+    "docs/screenshots/final/territorio-desktop1440-mariana-20261009-aefb63a.png",
+    "docs/screenshots/final/territorio-desktop1440-bairro-centro-20261009-aefb63a.png",
+    "docs/screenshots/final/atividade-desktop1440-cancelada-20261009-aefb63a.png",
+    "docs/screenshots/final/participar-desktop1440-padrao-20261009-aefb63a.png",
+    "docs/screenshots/final/participar-desktop1440-erros-validacao-20261009-aefb63a.png",
+    "docs/screenshots/final/obrigado-desktop1440-sem-grupo-20261009-aefb63a.png",
+    "docs/screenshots/final/propor-grupo-desktop1440-padrao-20261009-aefb63a.png",
+    "docs/screenshots/final/criar-atividade-desktop1440-sem-sessao-20261009-aefb63a.png",
+    "docs/screenshots/final/metodologia-desktop1440-padrao-20261009-aefb63a.png",
+    "docs/screenshots/final/atividade-desktop1440-nao-encontrada-20261009-aefb63a.png",
+    "docs/screenshots/final/home-mobile390-abstencao-20261009-aefb63a.png",
+    "docs/screenshots/final/home-mobile390-foco-combobox-20261009-aefb63a.png",
+    "docs/screenshots/final/home-mobile390-combobox-lista-20261009-aefb63a.png",
+    "docs/screenshots/final/home-mobile390-municipio-selecionado-20261009-aefb63a.png",
+    "docs/screenshots/final/participar-mobile390-foco-botao-20261009-aefb63a.png",
+    "docs/screenshots/final/404-mobile390-padrao-20261009-aefb63a.png",
+    "docs/screenshots/final/territorio-mobile390-mariana-20261009-aefb63a.png",
+    "docs/screenshots/final/territorio-mobile390-bairro-centro-20261009-aefb63a.png",
+    "docs/screenshots/final/atividade-mobile390-cancelada-20261009-aefb63a.png",
+    "docs/screenshots/final/participar-mobile390-padrao-20261009-aefb63a.png",
+    "docs/screenshots/final/participar-mobile390-erros-validacao-20261009-aefb63a.png",
+    "docs/screenshots/final/obrigado-mobile390-sem-grupo-20261009-aefb63a.png",
+    "docs/screenshots/final/propor-grupo-mobile390-padrao-20261009-aefb63a.png",
+    "docs/screenshots/final/criar-atividade-mobile390-sem-sessao-20261009-aefb63a.png",
+    "docs/screenshots/final/metodologia-mobile390-padrao-20261009-aefb63a.png",
+    "docs/screenshots/final/atividade-mobile390-nao-encontrada-20261009-aefb63a.png",
+    "docs/screenshots/final/home-desktop1440-escuro-reduced-motion-20261009-aefb63a.png",
+    "docs/screenshots/final/territorio-desktop1440-escuro-mariana-20261009-aefb63a.png",
+    "docs/screenshots/final/home-mobile390-escuro-reduced-motion-20261009-aefb63a.png",
+    "docs/screenshots/final/home-desktop1440-demo-20261009-aefb63a.png",
+    "docs/screenshots/final/home-mobile390-demo-20261009-aefb63a.png"
+  ],
+  "axe": {
+    "home": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "count": 5,
+        "nodes": [
+          ".mt-2:nth-child(2) > .bg-success-soft.text-success.border-success\\/40",
+          ".flex-wrap.gap-2.items-center > .bg-success-soft.text-success.border-success\\/40",
+          ".w-14 > .uppercase.text-xs.font-semibold",
+          "section[aria-labelledby=\"ft-sobre\"] > .mt-2.text-xs",
+          "section[aria-labelledby=\"ft-fonte\"] > .mt-2.text-xs"
+        ]
+      }
+    ],
+    "territorio": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "count": 5,
+        "nodes": [
+          ".flex-wrap.items-center.gap-2 > .bg-success-soft.text-success.border-success\\/40",
+          ".w-14 > .uppercase.text-xs.font-semibold",
+          ".gap-x-2 > .bg-success-soft.text-success.border-success\\/40",
+          "section[aria-labelledby=\"ft-sobre\"] > .mt-2.text-xs",
+          "section[aria-labelledby=\"ft-fonte\"] > .mt-2.text-xs"
+        ]
+      },
+      {
+        "id": "heading-order",
+        "impact": "moderate",
+        "help": "Heading levels should only increase by one",
+        "count": 1,
+        "nodes": ["section:nth-child(2) > h3"]
+      }
+    ],
+    "atividade": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "count": 3,
+        "nodes": [
+          ".bg-success-soft",
+          "section[aria-labelledby=\"ft-sobre\"] > .text-xs.text-muted.mt-2",
+          "section[aria-labelledby=\"ft-fonte\"] > .text-xs.text-muted.mt-2"
+        ]
+      }
+    ],
+    "participar": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "count": 2,
+        "nodes": [
+          "section[aria-labelledby=\"ft-sobre\"] > .text-xs.mt-2",
+          "section[aria-labelledby=\"ft-fonte\"] > .text-xs.mt-2"
+        ]
+      }
+    ],
+    "participar-erros": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "count": 2,
+        "nodes": [
+          "section[aria-labelledby=\"ft-sobre\"] > .text-xs.mt-2.text-muted",
+          "section[aria-labelledby=\"ft-fonte\"] > .text-xs.mt-2.text-muted"
+        ]
+      },
+      {
+        "id": "target-size",
+        "impact": "serious",
+        "help": "All touch targets must be 24px large, or leave sufficient space",
+        "count": 4,
+        "nodes": [
+          "a[href$=\"#reg-name\"]",
+          "a[href$=\"#reg-email\"]",
+          "a[href$=\"#reg-phone\"]",
+          "a[href$=\"#reg-territory\"]"
+        ]
+      }
+    ],
+    "home-escuro": [],
+    "territorio-escuro": [
+      {
+        "id": "heading-order",
+        "impact": "moderate",
+        "help": "Heading levels should only increase by one",
+        "count": 1,
+        "nodes": ["section:nth-child(2) > h3"]
+      }
+    ]
+  },
+  "overflow": {
+    "home-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "home-selecionado-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "404-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "territorio-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "bairro-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "atividade-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "participar-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "participar-erros-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "obrigado-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "propor-grupo-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "criar-atividade-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "metodologia-desktop1440": {
+      "sw": 1440,
+      "iw": 1440,
+      "over": false
+    },
+    "home-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "home-selecionado-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "404-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "territorio-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "bairro-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "atividade-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "participar-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "participar-erros-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "obrigado-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "propor-grupo-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "criar-atividade-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    },
+    "metodologia-mobile390": {
+      "sw": 390,
+      "iw": 390,
+      "over": false
+    }
+  },
+  "notes": [
+    {
+      "combobox": "desktop1440",
+      "options": 8,
+      "afterDown": "busca-territorio-opt-0",
+      "afterDown2": "busca-territorio-opt-1",
+      "afterUp": "busca-territorio-opt-0",
+      "expanded": "true",
+      "expandedAfterEsc": "false",
+      "valueAfterEsc": "Mariana",
+      "urlAfterEnter": "http://127.0.0.1:8791/?t=mg-3140001"
+    },
+    {
+      "consoleErrors": "desktop1440",
+      "list": ["Failed to load resource: the server responded with a status of 404 (Not Found)"]
+    },
+    {
+      "combobox": "mobile390",
+      "options": 8,
+      "afterDown": "busca-territorio-opt-0",
+      "afterDown2": "busca-territorio-opt-1",
+      "afterUp": "busca-territorio-opt-0",
+      "expanded": "true",
+      "expandedAfterEsc": "false",
+      "valueAfterEsc": "Mariana",
+      "urlAfterEnter": "http://127.0.0.1:8791/?t=mg-3140001"
+    },
+    {
+      "consoleErrors": "mobile390",
+      "list": ["Failed to load resource: the server responded with a status of 404 (Not Found)"]
+    },
+    {
+      "reducedMotion": "desktop1440",
+      "mq": true,
+      "anims": 0
+    },
+    {
+      "reducedMotion": "mobile390",
+      "mq": true,
+      "anims": 0
+    },
+    {
+      "demo": "desktop1440",
+      "badge": "DADOS DEMONSTRATIVOS"
+    },
+    {
+      "demo": "mobile390",
+      "badge": "DADOS DEMONSTRATIVOS"
+    }
+  ]
+}

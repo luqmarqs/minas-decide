@@ -102,3 +102,30 @@ Isolates e colos não compartilham estado, então o limite global efetivo pode s
 - **Sanitização:** título, descrição, endereço e nomes passam por `sanitizePlainText`; o front nunca renderiza HTML de usuário.
 - **Sem CORS:** a SPA é servida pelo mesmo Worker.
 - **Corpo:** máx. 32 KB.
+
+## Status dos achados da auditoria independente QA-1 (2026-10-09)
+
+Auditoria adversarial executada por agente independente (`qa-security`, Opus) sobre Worker, migrations, RLS ao vivo no TARGET dev e isolamento. Nenhum achado crítico ou alto. Testes de regressão em `worker/tests/qa-security.test.ts` e testes ao vivo em `supabase/tests/qa-worker-live.test.ts` (rodam com `QA_WORKER_URL`).
+
+| ID | Sev. | Achado | Status |
+|---|---|---|---|
+| F01 | médio | Usuário verificado sem perfil (signup direto no GoTrue) virava organizador | **CORRIGIDO** — `assertOrganizer` exige perfil ativo com `email_verification_state='verified'` (teste F01 agora passa) |
+| F02 | médio | PATCH do contato público em atividade publicada sem remoderação | **CORRIGIDO** — contato ligado/alterado e `type` são sensíveis; desligar continua imediato (T27) |
+| F03 | médio | `wrangler.jsonc` publicava `APP_ENV=local` (bypass de MFA) | **CORRIGIDO** — top-level = produção (escritas suspensas), `env.local`/`env.staging` explícitos; `npm run dev:worker` usa `--env local` |
+| F04 | médio | Cota global de e-mail do Auth esgotável via `send-link`/cadastro | **PENDENTE** (P-SEC-3): SMTP próprio + throttle por e-mail + captcha nativo do Auth |
+| F05 | médio | Rate limit só por IP penaliza CGNAT/Wi-Fi de evento | **PENDENTE** (P-SEC-4): chavear RSVP por IP+atividade+identidade; documentado aqui |
+| F06 | médio | CLI provisiona "login role" temporário no SOURCE ao consultar | **CONFIRMADO e DOCUMENTADO** (`DATA_SOURCE_AUDIT.md` §7); próxima extração com usuário SELECT-only (P-DATA-2) |
+| F07 | baixo | Secret de teste do Turnstile aceito em staging | **CORRIGIDO** — recusado fora de `local`/`test` |
+| F08 | baixo | `action` do Siteverify não exigida quando ausente | **CORRIGIDO** — exigida sempre que a rota define action (chave real) |
+| F09 | baixo | Coordenadas fora de MG aceitas | PENDENTE (teste `it.fails` F05) |
+| F10 | baixo | Enumeração de e-mail no cadastro (409 vs 201) | PENDENTE / decisão do proprietário (teste `it.fails` F06; ADR 0003) |
+| F11 | baixo | Idempotência por conteúdo em propostas vira oráculo | PENDENTE |
+| F12 | baixo | `starts_at` sem teto | PENDENTE (teste `it.fails` F07) |
+| F13 | baixo | SPA sem CSP/headers | **CORRIGIDO** — `public/_headers` (CSP allowlist, `frame-ancestors 'none'`, Permissions-Policy); verificado no navegador sem violações |
+| F14 | baixo | Sem validação de `Origin` nas mutações | PENDENTE |
+| F15 | baixo | Default privileges concedem ALL a anon/authenticated em objetos novos | **CORRIGIDO** — migration `0009_default_privileges.sql` aplicada |
+| F16 | baixo | GETs públicos sem cache de CDN/limite | PENDENTE |
+| F17 | baixo | Connection string em argumento de processo no modo `db-url` | PENDENTE |
+| I01–I06 | info | Pré-sequestro de perfil via e-mail alheio (I01); validação de `RSVP_DEVICE_SECRET` (I03); PKCE vs implícito (I06) | I06 resolvido no retorno do magic link (aceita hash, `token_hash` e `code`); I01/I03 pendentes |
+
+Ajuste adicional após QA-1: com a **secret de teste** do Turnstile e `APP_ENV=local`, o controle de uso único do token é pulado (o widget de teste devolve sempre o mesmo token e bloqueava todos os formulários por 5 min em desenvolvimento). Com secret real o uso único continua obrigatório (T17).

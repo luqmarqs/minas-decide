@@ -15,7 +15,7 @@
   --color-surface-overlay: rgb(20 19 15 / 0.55);
   --color-text-primary: #1b1a16;
   --color-text-secondary: #43413a;
-  --color-text-muted: #6e6b61;
+  --color-text-muted: #605d53; /* 4,9:1 sobre surface-alt (axe VR-1) */
   --color-text-on-action: #f6f3ee;
   --color-border: #d8d2c6;
   --color-border-strong: #b9b1a1;
@@ -27,9 +27,9 @@
   --color-action-soft: #dfe9e3;
   --color-accent: #c2771a;
   --color-accent-soft: #f4e3cb;
-  --color-success: #2f7a4f;
+  --color-success: #256841; /* ≥ 4,5:1 sobre success-soft (axe VR-1) */
   --color-success-soft: #dcefe3;
-  --color-warning: #a8651a;
+  --color-warning: #8a4f10; /* ≥ 4,5:1 sobre warning-soft (VR-1) */
   --color-warning-soft: #f7e7d0;
   --color-error: #a83a2e;
   --color-error-soft: #f6dcd8;

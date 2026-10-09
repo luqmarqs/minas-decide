@@ -45,9 +45,9 @@ function Section({
 }) {
   return (
     <section className={cn('flex flex-col gap-2', className)}>
-      <h3 className="font-body text-sm font-semibold tracking-wide text-muted uppercase">
+      <h2 className="font-body text-sm font-semibold tracking-wide text-muted uppercase">
         {title}
-      </h3>
+      </h2>
       {children}
     </section>
   );
