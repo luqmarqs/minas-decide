@@ -28,3 +28,6 @@ Thumbs.db
 # official artwork / brand assets (licensed; never publish)
 brand/
 *.zip
+
+# brand derivatives: committed only after owner acceptance (see docs/IDENTITY_AUDIT.md)
+public/brand/
