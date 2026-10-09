@@ -26,6 +26,22 @@
 - Para produção: criar/ativar a instância **live** no painel do Clerk (domínio próprio + DNS que o Clerk pede), repetir a configuração (`clerk config pull --instance prod` / `patch --instance prod`), gerar `pk_live_`/`sk_live_` (`clerk env pull --instance prod`), colocar `VITE_CLERK_PUBLISHABLE_KEY` no build de produção e `CLERK_SECRET_KEY` como secret, e incluir o host da instância live na CSP (`public/_headers`).
 - Admin: `APP_ENV=local npx tsx scripts/db/bootstrap-admin.ts --only=<e-mail>` cria o usuário no Clerk (se não existir) e o marca admin; login por código em `/entrar`.
 
+## 1c. Clerk — emissor e webhook `user.deleted` (QA3-02/QA3-04) — PENDENTE
+
+1. **Emissor (`iss`).** O Worker só aceita tokens cujo `iss` seja a Frontend API da instância. Em staging isso vem de `CLERK_ISSUER` em `wrangler.jsonc` → `env.staging.vars` (`https://funky-cheetah-9841.clerk.accounts.dev`, público) — ou, na falta dele, do secret `CLERK_PUBLISHABLE_KEY`. Em produção, defina `CLERK_ISSUER` com o host da instância **live** (ex.: `https://clerk.<domínio>`) antes do deploy; sem emissor conhecido, toda rota `/api/*` responde 500 com log `misconfigured: CLERK_ISSUER`.
+2. **Webhook.** Painel do Clerk → instância usada pelo ambiente → **Webhooks** → *Add Endpoint*:
+   - URL: `https://<host>/api/v1/webhooks/clerk` (staging: `https://minas-em-movimento-staging.luq-marqs.workers.dev/api/v1/webhooks/clerk`);
+   - eventos: marque **só** `user.deleted` (outros eventos são aceitos e ignorados, mas não precisam ser enviados);
+   - salve e copie o **Signing Secret** (`whsec_…`).
+3. Coloque o secret no Worker (nunca em arquivo versionado):
+   ```bash
+   npx wrangler secret put CLERK_WEBHOOK_SIGNING_SECRET --env staging
+   ```
+   Sem esse secret a rota responde 404 (webhook desativado). Não é preciso redeploy para secrets, mas o Worker precisa já conter a rota (deploy desta versão).
+4. Teste: no painel do webhook, *Testing* → envie um `user.deleted` de exemplo (id fictício) → esperado **200** `{"data":{"handled":true}}`; um evento de outro tipo → 200 `{"handled":false}`. Assinatura errada (ex.: `curl` sem headers Svix) → 401. A exclusão real aparece em `audit_events` com ator `system:clerk-webhook`.
+5. Local: `CLERK_WEBHOOK_SIGNING_SECRET=whsec_…` em `.dev.vars` (opcional) e um túnel público para o `wrangler dev`, se quiser receber eventos reais do Clerk.
+6. Banco: aplicar a migration `0013_dev_wipe_guard.sql` com `npm run db:push` (remove `svc_dev_wipe_identities`; QA3-09) quando o proprietário autorizar.
+
 ## 2. E-mail transacional
 
 > Com o Clerk, os e-mails de código/verificação são enviados pelo próprio Clerk; o SMTP do Supabase deixa de ser necessário para autenticação. Esta seção fica para e-mails transacionais futuros (avisos de aprovação).

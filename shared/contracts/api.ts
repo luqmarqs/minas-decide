@@ -14,6 +14,8 @@ export const ApiErrorCode = z.enum([
   'RATE_LIMITED',
   'TURNSTILE_FAILED',
   'WRITES_SUSPENDED',
+  /** an upstream dependency (Clerk) is unavailable or throttling us; retry later (QA3-05) */
+  'SERVICE_UNAVAILABLE',
   'INTERNAL_ERROR',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCode>;
@@ -53,5 +55,6 @@ export const HTTP_STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   RATE_LIMITED: 429,
   TURNSTILE_FAILED: 400,
   WRITES_SUSPENDED: 503,
+  SERVICE_UNAVAILABLE: 503,
   INTERNAL_ERROR: 500,
 };

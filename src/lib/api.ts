@@ -53,6 +53,7 @@ export const GENERIC_ERROR_MESSAGES: Record<ClientErrorCode, string> = {
   RATE_LIMITED: 'Muitas tentativas. Aguarde um pouco e tente de novo.',
   TURNSTILE_FAILED: 'Não foi possível verificar que você é uma pessoa. Tente de novo.',
   WRITES_SUSPENDED: 'Envios estão temporariamente suspensos. Tente mais tarde.',
+  SERVICE_UNAVAILABLE: 'Serviço de autenticação indisponível, tente de novo.',
   INTERNAL_ERROR: 'Erro no servidor. Tente de novo em instantes.',
   NETWORK_ERROR: 'Sem conexão com o servidor. Verifique sua internet e tente de novo.',
   INVALID_RESPONSE: 'Resposta inesperada do servidor.',

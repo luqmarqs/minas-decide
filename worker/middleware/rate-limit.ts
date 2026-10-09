@@ -68,6 +68,13 @@ export const RATE_LIMITS = {
   activities_write: { limit: 20, windowMs: TEN_MIN },
   /** QA-1 F16: light limits on account endpoints */
   me_write: { limit: 60, windowMs: TEN_MIN },
+  /**
+   * QA3-01: per IP + Clerk user id on authenticated reads (GET /me, GET /my-activities and
+   * every /admin/* route) — generous for people, bounds a token looping on the API.
+   */
+  account_read: { limit: 120, windowMs: 60 * 1000 },
+  /** per IP — Clerk webhook deliveries (Svix); signature is checked after this */
+  webhook_ip: { limit: 300, windowMs: TEN_MIN },
 } as const;
 
 export type RateBucket = keyof typeof RATE_LIMITS;

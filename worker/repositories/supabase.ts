@@ -17,6 +17,7 @@ import type {
   ActivityUpdate,
   ActivityWrite,
   Cursor,
+  EraseUserResult,
   GroupPatch,
   GroupProposalRow,
   GroupRow,
@@ -370,6 +371,13 @@ export class SupabaseRepo implements Repo {
 
   async deleteProfile(userId: string): Promise<void> {
     await this.rpc('svc_delete_profile', { p_user: userId });
+  }
+
+  async eraseUserData(userId: string, requestId: string): Promise<EraseUserResult> {
+    return this.rpc('svc_erase_user_data', {
+      p_user: safeUserId(userId),
+      p_request_id: requestId,
+    });
   }
 
   async updateProfile(userId: string, patch: ProfilePatch): Promise<ProfileRow | null> {

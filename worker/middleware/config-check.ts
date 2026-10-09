@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
 import type { AppBindings, Env } from '../env.ts';
+import { expectedIssuer } from '../repositories/clerk.ts';
 import { respondError } from './errors.ts';
 
 /** Placeholder shipped in `.dev.vars.example`; must never be used as the real secret. */
@@ -19,6 +20,12 @@ export function configProblems(env: Env): string[] {
   else if (env.APP_ENV === 'production' && !clerk.startsWith('sk_live_')) {
     problems.push('CLERK_SECRET_KEY');
   }
+  // QA3-04: outside local/test the token issuer must be known (CLERK_ISSUER or a decodable
+  // CLERK_PUBLISHABLE_KEY); otherwise every session would be refused.
+  if (env.APP_ENV !== 'local' && env.APP_ENV !== 'test') {
+    const issuer = expectedIssuer(env);
+    if (!issuer || !issuer.startsWith('https://')) problems.push('CLERK_ISSUER');
+  }
   return problems;
 }
 
@@ -36,6 +43,8 @@ export function configCheck(): MiddlewareHandler<AppBindings> {
     const fingerprint = [
       c.env.RSVP_DEVICE_SECRET ?? '',
       c.env.CLERK_SECRET_KEY ?? '',
+      c.env.CLERK_ISSUER ?? '',
+      c.env.CLERK_PUBLISHABLE_KEY ?? '',
       c.env.APP_ENV,
     ].join('|');
     if (checkedFor !== fingerprint) {

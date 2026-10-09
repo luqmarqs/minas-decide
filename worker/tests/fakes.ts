@@ -8,6 +8,7 @@ import { createApp } from '../app.ts';
 import type { AuthUser, Deps, EdgeCache, Env } from '../env.ts';
 import { fail } from '../errors.ts';
 import { SlidingWindowLimiter } from '../middleware/rate-limit.ts';
+import { UserInfoCache } from '../services/user-cache.ts';
 import type {
   ActivityRow,
   ActivityUpdate,
@@ -91,6 +92,8 @@ export class FakeRepo implements Repo {
   rsvps: Rsvp[] = [];
   profiles = new Map<string, ProfileRow>();
   admins = new Set<string>();
+  /** user ids passed to eraseUserData (webhook tests) */
+  erased: string[] = [];
   verified = new Set<string>();
   audit: {
     actor: string | null;
@@ -337,6 +340,25 @@ export class FakeRepo implements Repo {
   async deleteProfile(id: string) {
     this.profiles.delete(id);
   }
+  /** Mirrors svc_erase_user_data (0012). */
+  async eraseUserData(id: string, _requestId: string) {
+    if (!/^user_[A-Za-z0-9]{1,64}$/.test(id)) throw fail('VALIDATION_ERROR');
+    const own = new Set(this.activities.filter((a) => a.creator_user_id === id).map((a) => a.id));
+    const rsvpsBefore = this.rsvps.length;
+    this.rsvps = this.rsvps.filter((r) => r.user_id !== id && !own.has(r.activity_id));
+    const activitiesBefore = this.activities.length;
+    this.activities = this.activities.filter((a) => a.creator_user_id !== id);
+    const profiles = this.profiles.delete(id) ? 1 : 0;
+    const admins = this.admins.delete(id) ? 1 : 0;
+    this.verified.delete(id);
+    this.erased.push(id);
+    return {
+      rsvps: rsvpsBefore - this.rsvps.length,
+      activities: activitiesBefore - this.activities.length,
+      profiles,
+      admins,
+    };
+  }
   async updateProfile(id: string, patch: ProfilePatch) {
     const p = this.profiles.get(id);
     if (!p) return null;
@@ -580,6 +602,8 @@ export class FakeAuth implements AuthGateway {
   getUserCalls = 0;
   /** simulate a Clerk Backend API outage */
   outage = false;
+  /** simulate a JWKS/network failure while verifying the token */
+  verifyOutage = false;
 
   add(
     token: string,
@@ -603,11 +627,12 @@ export class FakeAuth implements AuthGateway {
   }
   async verify(token: string) {
     this.verifyCalls += 1;
+    if (this.verifyOutage) throw fail('SERVICE_UNAVAILABLE'); // JWKS/network failure (QA3-05)
     return this.sessions.get(token) ?? null;
   }
   async getUser(id: string) {
     this.getUserCalls += 1;
-    if (this.outage) throw fail('INTERNAL_ERROR');
+    if (this.outage) throw fail('SERVICE_UNAVAILABLE'); // ClerkAuthGateway maps 429/5xx/network
     return this.people.get(id) ?? null;
   }
   async findUserByEmail(email: string) {
@@ -658,6 +683,7 @@ export function testEnv(over: Partial<Env> = {}): Env {
     SUPABASE_TARGET_SERVICE_ROLE_KEY: 'service-placeholder',
     TURNSTILE_SECRET_KEY: 'non-test-secret-placeholder',
     RSVP_DEVICE_SECRET: 'device-secret-placeholder-0123456789',
+    CLERK_ISSUER: 'https://test-instance.clerk.accounts.dev',
     ...over,
   };
 }
@@ -689,7 +715,8 @@ export function setup(envOver: Partial<Env> = {}, opts: { edgeCache?: boolean } 
   const turnstile = new FakeTurnstile();
   const limiter = new SlidingWindowLimiter();
   const edgeCache = opts.edgeCache ? new FakeEdgeCache() : null;
-  const deps: Deps = { repo, auth, turnstile, limiter, now: clock, edgeCache };
+  const userCache = new UserInfoCache();
+  const deps: Deps = { repo, auth, turnstile, limiter, userCache, now: clock, edgeCache };
   const app = createApp({ deps: () => deps });
   const env = testEnv(envOver);
   let tokenSeq = 0;
@@ -769,6 +796,7 @@ export function setup(envOver: Partial<Env> = {}, opts: { edgeCache?: boolean } 
     repo,
     auth,
     turnstile,
+    userCache,
     env,
     edgeCache,
     request,

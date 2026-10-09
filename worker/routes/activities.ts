@@ -21,7 +21,7 @@ import {
   noStore,
   purgePublic,
 } from '../middleware/cache.ts';
-import { rateLimit } from '../middleware/rate-limit.ts';
+import { rateLimit, rateLimitPerUser } from '../middleware/rate-limit.ts';
 import { requireTurnstile } from '../middleware/turnstile.ts';
 import { buildActivityPatch, buildActivityWrite } from '../services/activities.ts';
 import { decodeCursor, encodeCursor } from '../services/crypto.ts';
@@ -96,22 +96,30 @@ const MyActivitiesQuery = z.object({
   cursor: z.string().max(400).optional(),
 });
 
-activities.get('/my-activities', noStore, requireOrganizer, async (c) => {
-  const q = parse(MyActivitiesQuery, c.req.query());
-  const user = c.get('user')!;
-  const { repo } = c.get('deps');
-  const rows = await repo.listMyActivities(user.id, q.limit, cursorOrThrow(q.cursor));
-  const page = rows.slice(0, q.limit);
-  const counts = await repo.rsvpCounts(
-    page.filter((r) => r.status === 'published' || r.status === 'cancelled').map((r) => r.id),
-  );
-  const last = page[page.length - 1];
-  return ok(c, {
-    items: page.map((r) => toMyActivity(r, counts[r.id] ?? 0)),
-    next_cursor:
-      rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
-  });
-});
+// QA3-01: the session is resolved first so the per-user limit runs before the organizer checks.
+activities.get(
+  '/my-activities',
+  noStore,
+  requireSession,
+  rateLimitPerUser('account_read'),
+  requireOrganizer,
+  async (c) => {
+    const q = parse(MyActivitiesQuery, c.req.query());
+    const user = c.get('user')!;
+    const { repo } = c.get('deps');
+    const rows = await repo.listMyActivities(user.id, q.limit, cursorOrThrow(q.cursor));
+    const page = rows.slice(0, q.limit);
+    const counts = await repo.rsvpCounts(
+      page.filter((r) => r.status === 'published' || r.status === 'cancelled').map((r) => r.id),
+    );
+    const last = page[page.length - 1];
+    return ok(c, {
+      items: page.map((r) => toMyActivity(r, counts[r.id] ?? 0)),
+      next_cursor:
+        rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
+    });
+  },
+);
 
 activities.post(
   '/activities',

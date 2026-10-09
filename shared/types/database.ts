@@ -776,10 +776,6 @@ export type Database = {
         Returns: Json;
       };
       svc_delete_profile: { Args: { p_user: string }; Returns: undefined };
-      svc_dev_wipe_identities: {
-        Args: { p_request_id?: string };
-        Returns: Json;
-      };
       svc_email_in_use: {
         Args: { p_email: string; p_exclude: string };
         Returns: boolean;

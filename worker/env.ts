@@ -6,6 +6,7 @@
 import type { AuthGateway, Repo } from './repositories/types.ts';
 import type { TurnstileVerifier } from './services/turnstile.ts';
 import type { SlidingWindowLimiter } from './middleware/rate-limit.ts';
+import type { UserInfoCache } from './services/user-cache.ts';
 
 export type AppEnvName = 'local' | 'test' | 'staging' | 'production';
 
@@ -27,6 +28,19 @@ export interface Env {
   CLERK_SECRET_KEY: string;
   /** optional PEM public key of the Clerk instance: networkless token verification (no JWKS fetch) */
   CLERK_JWT_KEY?: string;
+  /**
+   * Clerk publishable key (public, `pk_test_…`/`pk_live_…`). The Worker only uses it to derive
+   * the expected `iss` of session tokens (the Frontend API host is base64 in the key suffix).
+   * Required in staging/production unless CLERK_ISSUER is set (QA3-04).
+   */
+  CLERK_PUBLISHABLE_KEY?: string;
+  /** optional explicit issuer (`https://<frontend-api-host>`); overrides the derived one */
+  CLERK_ISSUER?: string;
+  /**
+   * Svix signing secret (`whsec_…`) of the Clerk webhook endpoint (QA3-02). Optional: without
+   * it `POST /api/v1/webhooks/clerk` answers 404 NOT_FOUND (webhook disabled).
+   */
+  CLERK_WEBHOOK_SIGNING_SECRET?: string;
 }
 
 /** Subset of the Workers Cache API used for public GETs (QA-1 F16). */
@@ -42,6 +56,8 @@ export interface Deps {
   auth: AuthGateway;
   turnstile: TurnstileVerifier;
   limiter: SlidingWindowLimiter;
+  /** per-isolate cache of Clerk `users.getUser` results (QA3-01) */
+  userCache: UserInfoCache;
   now: () => number;
   /** `caches.default` on Workers; null where the Cache API does not exist (Node tests). */
   edgeCache: EdgeCache | null;

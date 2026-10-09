@@ -17,7 +17,9 @@ import { me } from './routes/me.ts';
 import { registrations } from './routes/registrations.ts';
 import { rsvp } from './routes/rsvp.ts';
 import { territories } from './routes/territories.ts';
+import { webhooks } from './routes/webhooks.ts';
 import { createSiteverifyClient } from './services/turnstile.ts';
+import { UserInfoCache } from './services/user-cache.ts';
 
 export interface CreateAppOptions {
   /** Inject collaborators (tests pass in-memory fakes). Defaults to Supabase TARGET + Siteverify. */
@@ -33,6 +35,8 @@ function defaultEdgeCache(): EdgeCache | null {
 export function createApp(opts: CreateAppOptions = {}) {
   const limiter = new SlidingWindowLimiter();
   const turnstile = createSiteverifyClient();
+  // QA3-01: one cache per isolate (createApp runs once per isolate in worker/index.ts).
+  const userCache = new UserInfoCache();
   const getDeps =
     opts.deps ??
     ((env: Env): Deps => ({
@@ -40,6 +44,7 @@ export function createApp(opts: CreateAppOptions = {}) {
       auth: new ClerkAuthGateway(env),
       turnstile,
       limiter,
+      userCache,
       now: Date.now,
       edgeCache: defaultEdgeCache(),
     }));
@@ -66,6 +71,7 @@ export function createApp(opts: CreateAppOptions = {}) {
   v1.route('/', registrations);
   v1.route('/', me);
   v1.route('/', admin);
+  v1.route('/', webhooks);
   app.route('/api/v1', v1);
 
   app.onError(onError);

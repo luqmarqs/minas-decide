@@ -146,7 +146,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
     expect(repo.profiles.has(s.user.id)).toBe(false);
   });
 
-  it('Clerk Backend API outage while resolving the e-mail -> 500 generic, nothing stored', async () => {
+  it('Clerk Backend API outage while resolving the e-mail -> 503 generic, nothing stored (QA3-05)', async () => {
     const { request, users, repo, auth } = setup();
     const s = users.signedUp();
     auth.outage = true;
@@ -155,26 +155,56 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
       token: s.token,
       json: registration({ email: s.user.email }),
     });
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(503);
+    expect(res.headers.get('Retry-After')).toBe('5');
     expect(repo.profiles.size).toBe(0);
-    expect(await res.text()).not.toMatch(/stack|Error:|clerk/i);
+    const text = await res.text();
+    expect(text).toContain('SERVICE_UNAVAILABLE');
+    expect(text).not.toMatch(/stack|Error:|clerk/i);
   });
 
-  it('session claims email/email_verified are used when present (no Backend API call)', async () => {
-    const { request, auth, repo } = setup();
+  it('session claims email/email_verified are used when present on cached routes (no Backend API call)', async () => {
+    const { request, auth } = setup();
     auth.add(
       'tok-claims-padding-padding-padding',
       { id: 'user_claims000001', email: 'x@example.org', email_confirmed: false },
       { claims: { email: 'claims@example.org', email_verified: true } },
     );
-    const res = await request('/api/v1/registrations', {
+    const res = await request('/api/v1/me', { token: 'tok-claims-padding-padding-padding' });
+    expect(res.status).toBe(200);
+    expect(auth.getUserCalls).toBe(0);
+    expect((await body(res)).data?.email_verified).toBe(true);
+  });
+
+  it('registration ignores the claims shortcut and reads Clerk fresh (QA3-01/03)', async () => {
+    const { request, auth, repo } = setup();
+    auth.add(
+      'tok-claims-padding-padding-padding',
+      { id: 'user_claims000001', email: 'claims@example.org', email_confirmed: true },
+      { claims: { email: 'claims@example.org', email_verified: true } },
+    );
+    const ok = await request('/api/v1/registrations', {
       method: 'POST',
       token: 'tok-claims-padding-padding-padding',
       json: registration({ email: 'claims@example.org' }),
     });
-    expect(res.status).toBe(201);
-    expect(auth.getUserCalls).toBe(0);
+    expect(ok.status).toBe(201);
+    expect(auth.getUserCalls).toBe(1);
     expect(repo.profiles.get('user_claims000001')?.email_contact).toBe('claims@example.org');
+
+    // banned in Clerk while the token (with claims) is still valid -> refused on registration
+    auth.add(
+      'tok-claims-banned-padding-padding',
+      { id: 'user_claims000002', email: 'banned@example.org', email_confirmed: true },
+      { claims: { email: 'banned@example.org', email_verified: true }, banned: true },
+    );
+    const banned = await request('/api/v1/registrations', {
+      method: 'POST',
+      token: 'tok-claims-banned-padding-padding',
+      json: registration({ email: 'banned@example.org' }),
+    });
+    expect(banned.status).toBe(401);
+    expect(repo.profiles.has('user_claims000002')).toBe(false);
   });
 
   it('the Clerk user is resolved once per request (verify + getUser memoised)', async () => {

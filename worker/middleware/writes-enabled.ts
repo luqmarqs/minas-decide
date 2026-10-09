@@ -4,9 +4,15 @@ import { respondError } from './errors.ts';
 
 const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+/**
+ * Paths that keep working while writes are suspended: the Clerk webhook only ERASES data of a
+ * deleted account (LGPD) and Svix would otherwise retry for days (QA3-02).
+ */
+const EXEMPT = new Set(['/api/v1/webhooks/clerk']);
+
 /** Incident switch (spec §9.13): WRITES_ENABLED !== 'true' suspends every mutation; reads continue. */
 export const writesEnabled: MiddlewareHandler<AppBindings> = async (c, next) => {
-  if (!SAFE.has(c.req.method) && c.env.WRITES_ENABLED !== 'true') {
+  if (!SAFE.has(c.req.method) && c.env.WRITES_ENABLED !== 'true' && !EXEMPT.has(c.req.path)) {
     return respondError(c, 'WRITES_SUSPENDED');
   }
   await next();

@@ -42,6 +42,8 @@
         "PUBLIC_ORIGIN": "https://minas-em-movimento-staging.luq-marqs.workers.dev",
         "ALLOWED_ORIGINS": "",
         "TURNSTILE_EXPECTED_HOSTNAMES": "minas-em-movimento-staging.luq-marqs.workers.dev",
+        // QA3-04: expected `iss` of Clerk session tokens (Frontend API of the dev instance; public).
+        "CLERK_ISSUER": "https://funky-cheetah-9841.clerk.accounts.dev",
       },
     },
   },
@@ -49,5 +51,9 @@
   //   SUPABASE_TARGET_URL, SUPABASE_TARGET_SERVICE_ROLE_KEY, CLERK_SECRET_KEY (ADR 0005; Worker only,
   //   sk_live_ required with APP_ENV=production), CLERK_JWT_KEY (optional, public PEM key),
   //   SUPABASE_TARGET_ANON_KEY (legacy, unused by the Worker since ADR 0005),
-  //   TURNSTILE_SECRET_KEY, RSVP_DEVICE_SECRET, ADMIN_EMAILS
+  //   TURNSTILE_SECRET_KEY, RSVP_DEVICE_SECRET, ADMIN_EMAILS,
+  //   CLERK_WEBHOOK_SIGNING_SECRET (optional, `whsec_…`; enables POST /api/v1/webhooks/clerk).
+  // Non-secret Clerk settings: CLERK_ISSUER (`https://<frontend-api-host>`) or
+  //   CLERK_PUBLISHABLE_KEY (issuer derived from it) — REQUIRED outside local/test (QA3-04);
+  //   production must set the live instance issuer (e.g. https://clerk.<domain>) before deploy.
 }

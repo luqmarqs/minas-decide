@@ -9,4 +9,10 @@ RSVP_DEVICE_SECRET=change-me-to-a-random-32-byte-string
 ADMIN_EMAILS=
 # Clerk (ADR 0005): server-side key used by the Worker to verify session tokens. NEVER in VITE_*.
 CLERK_SECRET_KEY=<clerk-secret-key>
+# Public; the Worker derives the expected token issuer (`iss`) from it (QA3-04). Alternatively
+# set CLERK_ISSUER=https://<frontend-api-host>. Required outside local/test.
 CLERK_PUBLISHABLE_KEY=<clerk-publishable-key>
+# CLERK_ISSUER=https://<instance>.clerk.accounts.dev
+# Optional: Svix signing secret of the Clerk webhook endpoint (user.deleted -> erasure, QA3-02).
+# Without it POST /api/v1/webhooks/clerk answers 404 (disabled).
+# CLERK_WEBHOOK_SIGNING_SECRET=whsec_<from-clerk-dashboard>

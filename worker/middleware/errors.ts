@@ -25,6 +25,8 @@ export function respondError(
   fields?: Record<string, string>,
 ) {
   const status = HTTP_STATUS_BY_CODE[code] as ContentfulStatusCode;
+  // QA3-05: an upstream outage asks the client to retry shortly.
+  if (code === 'SERVICE_UNAVAILABLE') c.header('Retry-After', '5');
   return c.json(errorBody(c, code, message ?? DEFAULT_MESSAGES[code], fields), status);
 }
 

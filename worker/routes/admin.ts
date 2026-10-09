@@ -14,7 +14,8 @@ import { sanitizePlainText } from '../../shared/schemas/sanitize.ts';
 import type { AppBindings } from '../env.ts';
 import { fail } from '../errors.ts';
 import { ok, parse, parseBody, readJson, uuidParam } from '../http.ts';
-import { requireAdmin } from '../middleware/auth.ts';
+import { requireAdmin, requireFreshAdmin, requireSession } from '../middleware/auth.ts';
+import { rateLimitPerUser } from '../middleware/rate-limit.ts';
 import { activityPaths, noStore, purgeGroups, purgePublic } from '../middleware/cache.ts';
 import { decodeCursor, encodeCursor } from '../services/crypto.ts';
 import { toAdminActivity, toAdminProposal } from '../services/projections.ts';
@@ -23,7 +24,9 @@ import type { Cursor, GroupPatch } from '../repositories/types.ts';
 export const admin = new Hono<AppBindings>();
 
 // Every admin route: no-store + admins table (MFA not required — D35). Denials are logged (T22).
-admin.use('/admin/*', noStore, requireAdmin);
+// QA3-01: the session is resolved and rate limited per IP + user BEFORE the admin check, so a
+// token looping on /admin/* is bounded (and does not write one abuse row per request).
+admin.use('/admin/*', noStore, requireSession, rateLimitPerUser('account_read'), requireAdmin);
 
 function cursorOrThrow(raw: string | undefined): Cursor | null {
   if (!raw) return null;
@@ -222,7 +225,8 @@ const RevealInput = z.object({ reason: z.string().trim().min(3).max(500).optiona
  * Full proposer e-mail/phone. Admin only (MFA not required — D35). The read and the audit
  * row (`proposal.reveal_contact`, retention `security`) commit in the same transaction.
  */
-admin.post('/admin/group-proposals/:id/reveal-contact', async (c) => {
+// QA3-01/03: re-checked against the CURRENT Clerk state (no cache, no claims shortcut).
+admin.post('/admin/group-proposals/:id/reveal-contact', requireFreshAdmin, async (c) => {
   const user = c.get('user')!; // D35: no MFA requirement; the read stays audited
   const id = uuidParam(c);
   const { reason } = RevealInput.parse(await readJson(c, true));

@@ -262,7 +262,6 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
         ['svc_grant_admin', { p_user: noProfileId }],
         ['svc_get_profile', { p_user: organizerId }],
         ['svc_erase_user_data', { p_user: organizerId }],
-        ['svc_dev_wipe_identities', {}],
         [
           'svc_upsert_rsvp',
           {
@@ -286,6 +285,18 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
       expect(isAdmin.data).toBe(false);
       const profileGone = await svc.rpc('svc_get_profile', { p_user: organizerId });
       expect(profileGone.data).not.toBeNull(); // the anon erase attempt changed nothing
+    });
+
+    it('QA3-09 (0013): svc_dev_wipe_identities no longer exists, not even for service_role', async () => {
+      const call = svc.rpc as unknown as (
+        f: string,
+        a: Record<string, unknown>,
+      ) => PromiseLike<{ error: { code?: string } | null; status: number }>;
+      const r = await call.call(svc, 'svc_dev_wipe_identities', { p_request_id: 'rls-0013' });
+      expect(r.error).not.toBeNull();
+      expect(r.error?.code).toBe('PGRST202'); // function not found in the schema cache
+      const still = await svc.rpc('svc_get_profile', { p_user: organizerId });
+      expect(still.data).not.toBeNull();
     });
   });
 

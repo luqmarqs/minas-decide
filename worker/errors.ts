@@ -24,6 +24,7 @@ export const DEFAULT_MESSAGES: Record<ApiErrorCode, string> = {
   RATE_LIMITED: 'Muitas tentativas. Aguarde alguns minutos.',
   TURNSTILE_FAILED: 'Não foi possível validar a verificação de segurança. Tente novamente.',
   WRITES_SUSPENDED: 'Envios temporariamente suspensos. O mapa continua disponível.',
+  SERVICE_UNAVAILABLE: 'Serviço de autenticação indisponível, tente de novo',
   INTERNAL_ERROR: 'Erro inesperado. Tente novamente.',
 };
 

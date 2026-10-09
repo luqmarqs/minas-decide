@@ -52,6 +52,12 @@ export const MeResponse = z.object({
   phone_masked: z.string().nullable(),
   /** @deprecated always false since Clerk (ADR 0005) */
   profile_review_required: z.boolean().optional().default(false),
+  /**
+   * QA3-02: present (true) when the verified primary e-mail in Clerk could not be copied to the
+   * profile because another profile already holds it. The profile keeps its previous contact;
+   * `email_masked` shows the Clerk address. Absent otherwise.
+   */
+  email_sync_conflict: z.boolean().optional(),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 

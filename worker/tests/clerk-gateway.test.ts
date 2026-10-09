@@ -5,7 +5,14 @@
  * The Backend API (`getUser`) is covered by the live test supabase/tests/clerk-live.test.ts.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ClerkAuthGateway, allowedParties, azpAllowed } from '../repositories/clerk.ts';
+import {
+  ClerkAuthGateway,
+  allowedParties,
+  azpAllowed,
+  expectedIssuer,
+  issuerFromPublishableKey,
+  toUserInfo,
+} from '../repositories/clerk.ts';
 import { configProblems } from '../middleware/config-check.ts';
 import { testEnv } from './fakes.ts';
 
@@ -135,6 +142,123 @@ describe('ClerkAuthGateway.verify (real verifyToken, networkless)', () => {
   });
 });
 
+describe('QA3-04: issuer and subject format', () => {
+  it('iss must be the instance Frontend API', async () => {
+    const g = gateway();
+    expect((await g.verify(await sign(claims())))?.sub).toBe('user_2abcDEF123');
+    for (const iss of [
+      'https://evil.clerk.accounts.dev',
+      'https://test-instance.clerk.accounts.dev.evil.com',
+      'http://test-instance.clerk.accounts.dev',
+      '',
+      undefined,
+      42,
+    ]) {
+      expect([iss, await g.verify(await sign(claims({ iss })))]).toEqual([iss, null]);
+    }
+  });
+
+  it('issuer derived from the publishable key when CLERK_ISSUER is not set', async () => {
+    const pk = `pk_test_${btoa('test-instance.clerk.accounts.dev$')}`;
+    const g = new ClerkAuthGateway(
+      testEnv({ CLERK_JWT_KEY: publicPem, CLERK_ISSUER: '', CLERK_PUBLISHABLE_KEY: pk }),
+    );
+    expect((await g.verify(await sign(claims())))?.sub).toBe('user_2abcDEF123');
+    expect(await g.verify(await sign(claims({ iss: 'https://other.clerk.accounts.dev' })))).toBe(
+      null,
+    );
+  });
+
+  it('staging/production without a known issuer refuse every token (fail closed)', async () => {
+    for (const APP_ENV of ['staging', 'production']) {
+      const g = new ClerkAuthGateway(
+        testEnv({
+          APP_ENV,
+          CLERK_JWT_KEY: publicPem,
+          CLERK_ISSUER: '',
+          PUBLIC_ORIGIN: 'https://app.example',
+        }),
+      );
+      const t = await sign(claims({ azp: 'https://app.example' }));
+      expect([APP_ENV, await g.verify(t)]).toEqual([APP_ENV, null]);
+    }
+  });
+
+  it('sub must match the ClerkUserId contract', async () => {
+    const g = gateway();
+    for (const sub of [
+      "user_' or 1=1--",
+      'user_',
+      'user_abc-def',
+      `user_${'a'.repeat(65)}`,
+      'USER_abc',
+    ]) {
+      expect([sub, await g.verify(await sign(claims({ sub })))]).toEqual([sub, null]);
+    }
+  });
+
+  it('publishable key decoding', () => {
+    expect(issuerFromPublishableKey(`pk_test_${btoa('funky-x-1.clerk.accounts.dev$')}`)).toBe(
+      'https://funky-x-1.clerk.accounts.dev',
+    );
+    expect(
+      issuerFromPublishableKey(`pk_live_${btoa('clerk.example.com$').replace(/=+$/, '')}`),
+    ).toBe('https://clerk.example.com');
+    for (const bad of [
+      undefined,
+      '',
+      'pk_test_',
+      'sk_test_abc',
+      `pk_test_${btoa('no-dollar.example.com')}`,
+      `pk_test_${btoa('bad host/x$')}`,
+      'pk_test_!!!',
+    ]) {
+      expect([bad, issuerFromPublishableKey(bad)]).toEqual([bad, null]);
+    }
+    expect(
+      expectedIssuer(testEnv({ CLERK_ISSUER: 'https://a.example/', CLERK_PUBLISHABLE_KEY: 'x' })),
+    ).toBe('https://a.example');
+  });
+});
+
+describe('QA3-11: only the primary e-mail counts', () => {
+  type U = Parameters<typeof toUserInfo>[0];
+  const user = (over: Record<string, unknown>) =>
+    ({
+      id: 'user_x1',
+      banned: false,
+      locked: false,
+      primaryEmailAddressId: null,
+      emailAddresses: [
+        { id: 'idn_1', emailAddress: 'First@Example.org', verification: { status: 'verified' } },
+        { id: 'idn_2', emailAddress: 'second@example.org', verification: { status: 'unverified' } },
+      ],
+      ...over,
+    }) as unknown as U;
+
+  it('no primary -> e-mail null and not verified (never the first address)', () => {
+    expect(toUserInfo(user({}))).toEqual({
+      id: 'user_x1',
+      email: null,
+      email_verified: false,
+      banned: false,
+    });
+    expect(toUserInfo(user({ primaryEmailAddressId: 'idn_missing' })).email).toBeNull();
+  });
+
+  it('primary -> that address, lower-cased, with its own verification state', () => {
+    expect(toUserInfo(user({ primaryEmailAddressId: 'idn_2' }))).toMatchObject({
+      email: 'second@example.org',
+      email_verified: false,
+    });
+    expect(toUserInfo(user({ primaryEmailAddressId: 'idn_1', locked: true }))).toMatchObject({
+      email: 'first@example.org',
+      email_verified: true,
+      banned: true,
+    });
+  });
+});
+
 describe('CLERK_SECRET_KEY config check', () => {
   it('missing/malformed key, or a test key in production -> misconfigured (name only)', () => {
     expect(configProblems(testEnv({ CLERK_SECRET_KEY: '' }))).toContain('CLERK_SECRET_KEY');
@@ -148,5 +272,24 @@ describe('CLERK_SECRET_KEY config check', () => {
     ).toContain('CLERK_SECRET_KEY');
     expect(configProblems(testEnv())).toEqual([]);
     expect(configProblems(testEnv({ APP_ENV: 'production' }))).toEqual([]);
+  });
+
+  it('QA3-04: staging/production need a derivable issuer (name only)', () => {
+    for (const APP_ENV of ['staging', 'production']) {
+      expect(configProblems(testEnv({ APP_ENV, CLERK_ISSUER: '' }))).toContain('CLERK_ISSUER');
+      expect(
+        configProblems(testEnv({ APP_ENV, CLERK_ISSUER: '', CLERK_PUBLISHABLE_KEY: 'pk_test_x' })),
+      ).toContain('CLERK_ISSUER');
+      expect(
+        configProblems(
+          testEnv({
+            APP_ENV,
+            CLERK_ISSUER: '',
+            CLERK_PUBLISHABLE_KEY: `pk_test_${btoa('i.clerk.accounts.dev$')}`,
+          }),
+        ),
+      ).toEqual([]);
+    }
+    expect(configProblems(testEnv({ APP_ENV: 'local', CLERK_ISSUER: '' }))).toEqual([]);
   });
 });

@@ -149,6 +149,13 @@ export interface ProfilePatch {
   email_contact?: string;
 }
 
+export interface EraseUserResult {
+  rsvps: number;
+  activities: number;
+  profiles: number;
+  admins: number;
+}
+
 export interface NewGroupProposal {
   territory_id: string;
   name: string;
@@ -272,6 +279,11 @@ export interface Repo {
   getProfile(userId: string): Promise<ProfileRow | null>;
   createProfile(p: NewProfile): Promise<{ created: boolean; profile: ProfileRow }>;
   deleteProfile(userId: string): Promise<void>;
+  /**
+   * LGPD erasure of one person (svc_erase_user_data): RSVPs, activities created by them,
+   * profile and admin row; audited in SQL without PII. Idempotent.
+   */
+  eraseUserData(userId: string, requestId: string): Promise<EraseUserResult>;
   updateProfile(userId: string, patch: ProfilePatch): Promise<ProfileRow | null>;
   emailInUse(email: string, excludeUserId: string): Promise<boolean>;
   isAdmin(userId: string): Promise<boolean>;

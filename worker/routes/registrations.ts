@@ -4,7 +4,7 @@ import { sanitizePlainText } from '../../shared/schemas/sanitize.ts';
 import type { AppBindings } from '../env.ts';
 import { fail } from '../errors.ts';
 import { ok, parseBody } from '../http.ts';
-import { requireSession, sameEmail } from '../middleware/auth.ts';
+import { requireFreshSession, sameEmail } from '../middleware/auth.ts';
 import { noStore } from '../middleware/cache.ts';
 import { rateLimit, rateLimitPerUser } from '../middleware/rate-limit.ts';
 import { requireTurnstile } from '../middleware/turnstile.ts';
@@ -24,12 +24,14 @@ const NEUTRAL_CONFLICT =
  *  3. Turnstile (single use) + validation;
  *  4. profile row created already `verified`. Re-submitting from the same account is
  *     idempotent (200 with the existing profile).
+ * The Clerk user is read fresh (no per-isolate cache, no claims shortcut — QA3-01/03); the
+ * fresh lookup also replaces the cached one.
  */
 registrations.post(
   '/registrations',
   noStore,
   rateLimit('registrations_ip'),
-  requireSession,
+  requireFreshSession,
   rateLimitPerUser('registrations'),
   async (c) => {
     const user = c.get('user')!;
