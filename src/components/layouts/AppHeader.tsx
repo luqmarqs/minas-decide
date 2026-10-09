@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router';
-import { ButtonLink } from '@/components/ui/Button';
+import { SessionMenu } from '@/components/layouts/SessionMenu';
 import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
 
@@ -62,9 +62,7 @@ export function AppHeader() {
         >
           <Icon name="search" />
         </Link>
-        <ButtonLink to="/participar" size="sm">
-          Participar
-        </ButtonLink>
+        <SessionMenu />
       </div>
     </header>
   );

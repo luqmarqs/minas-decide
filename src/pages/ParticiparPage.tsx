@@ -1,30 +1,51 @@
 import { useSearchParams } from 'react-router';
+import { TerritoryId } from '@shared/contracts/territory.ts';
 import { PageShell } from '@/components/layouts/PageShell';
 import { ButtonLink } from '@/components/ui/Button';
+import { LoadingBlock } from '@/components/ui/Skeleton';
 import { Note } from '@/components/ui/States';
+import { useSession } from '@/lib/auth';
+import { RegistrationForm } from '@/features/registration/RegistrationForm';
 
-/** Placeholder — o formulário/fluxo desta rota será implementado em outra tarefa. */
 export default function ParticiparPage() {
   const [sp] = useSearchParams();
-  const territorio = sp.get('territorio');
+  const raw = sp.get('territorio');
+  const territory = raw && TerritoryId.safeParse(raw).success && raw !== 'mg' ? raw : null;
+  const session = useSession();
+  const verified = session.status === 'active' && !session.session.user.is_anonymous;
+
   return (
     <PageShell
       title="Participar"
-      lead="Cadastro rápido com nome, e-mail, WhatsApp e território. O território escolhido no mapa fica guardado."
+      lead="Cadastro rápido com nome, e-mail, WhatsApp e território. Depois mostramos o grupo aprovado da sua região."
     >
-      <Note>
-        Em construção nesta rodada.{' '}
-        {territorio ? (
-          <>
-            Território recebido: <span className="font-mono">{territorio}</span>.
-          </>
-        ) : null}
-      </Note>
-      <div className="mt-6">
-        <ButtonLink to="/" variant="secondary">
-          Voltar ao mapa
-        </ButtonLink>
-      </div>
+      {session.status === 'loading' ? (
+        <LoadingBlock label="Verificando sua sessão…" lines={2} />
+      ) : session.status === 'unconfigured' ? (
+        <Note tone="warning">
+          O cadastro está indisponível neste ambiente (login não configurado). O mapa continua
+          funcionando.
+        </Note>
+      ) : verified ? (
+        <div className="flex flex-col gap-4">
+          <Note>
+            Você já tem cadastro com e-mail verificado neste navegador. Não é preciso se cadastrar
+            de novo.
+          </Note>
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink
+              to={territory ? `/obrigado?territorio=${encodeURIComponent(territory)}` : '/'}
+            >
+              {territory ? 'Ver grupo deste território' : 'Voltar ao mapa'}
+            </ButtonLink>
+            <ButtonLink to="/criar-atividade" variant="secondary">
+              Organizar uma atividade
+            </ButtonLink>
+          </div>
+        </div>
+      ) : (
+        <RegistrationForm initialTerritoryId={territory} />
+      )}
     </PageShell>
   );
 }

@@ -56,10 +56,13 @@ export async function requireTurnstile(
   }
 
   const { repo, turnstile } = c.get('deps');
-  const firstUse = await repo.consumeTurnstileToken(
-    await sha256Hex(token),
-    TURNSTILE_TOKEN_TTL_SECONDS,
-  );
+  // Single-use enforcement (T17). With Cloudflare's TEST secret the widget always
+  // yields the same dummy token, which would lock every protected form for 5 min
+  // in local development; the check is therefore skipped ONLY for test secret + local.
+  const skipSingleUse = isTestSecret && c.env.APP_ENV === 'local';
+  const firstUse =
+    skipSingleUse ||
+    (await repo.consumeTurnstileToken(await sha256Hex(token), TURNSTILE_TOKEN_TTL_SECONDS));
   if (!firstUse) {
     await logFailure(c, route, 'turnstile_reused');
     throw fail('TURNSTILE_FAILED');

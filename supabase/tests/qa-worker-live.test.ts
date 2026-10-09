@@ -99,40 +99,36 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
 
   beforeAll(async () => {
     svc = createClient(URL_, SERVICE, opts);
-    const t = await svc
-      .from('territories')
-      .insert([
-        {
-          id: muni,
-          type: 'municipality',
-          name: `QA ${tag}`,
-          normalized_name: `qa ${tag}`,
-          parent_id: 'mg',
-          ibge_code: muni.slice(3),
-          slug: tag,
-          municipality_name: `QA ${tag}`,
-          centroid_lon: -43.9,
-          centroid_lat: -19.9,
-          data_quality: 'demo',
-        },
-      ]);
+    const t = await svc.from('territories').insert([
+      {
+        id: muni,
+        type: 'municipality',
+        name: `QA ${tag}`,
+        normalized_name: `qa ${tag}`,
+        parent_id: 'mg',
+        ibge_code: muni.slice(3),
+        slug: tag,
+        municipality_name: `QA ${tag}`,
+        centroid_lon: -43.9,
+        centroid_lat: -19.9,
+        data_quality: 'demo',
+      },
+    ]);
     if (t.error) throw new Error(`territory muni: ${t.error.code}`);
-    const h = await svc
-      .from('territories')
-      .insert([
-        {
-          id: hood,
-          type: 'neighborhood',
-          name: `QA bairro ${tag}`,
-          normalized_name: `qa bairro ${tag}`,
-          parent_id: muni,
-          slug: `qa-${tag}`,
-          municipality_name: `QA ${tag}`,
-          centroid_lon: -43.9,
-          centroid_lat: -19.9,
-          data_quality: 'demo',
-        },
-      ]);
+    const h = await svc.from('territories').insert([
+      {
+        id: hood,
+        type: 'neighborhood',
+        name: `QA bairro ${tag}`,
+        normalized_name: `qa bairro ${tag}`,
+        parent_id: muni,
+        slug: `qa-${tag}`,
+        municipality_name: `QA ${tag}`,
+        centroid_lon: -43.9,
+        centroid_lat: -19.9,
+        data_quality: 'demo',
+      },
+    ]);
     if (h.error) throw new Error(`territory hood: ${h.error.code}`);
     const o1 = await verifiedSession('org1');
     org1Tok = o1.token;
