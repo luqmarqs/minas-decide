@@ -11,6 +11,9 @@ Os dados eleitorais reais já existem em um projeto Supabase legado (`dashboard-
 3. **Snapshot estático**: o mapa lê JSON versionado em `public/data/` produzido pelo ETL; não há consulta a banco para métricas eleitorais.
 4. **Isolamento verificável**: `npm run check:isolation` falha o CI se identificadores do SOURCE aparecerem em `src/`, `worker/`, `public/`, `dist/`, `wrangler.jsonc`, `.env.example`.
 
+## Ressalva registrada após auditoria (2026-10-09)
+O comando `supabase db query --linked` provisiona um role de login temporário gerido pela plataforma no projeto consultado (`POST /v1/projects/<ref>/cli/login-role`) e conecta como `postgres`. Isso não altera schema/dados/configuração, mas contraria o espírito de "credencial mínima". Decisão: manter o resultado desta rodada (todas as consultas foram `READ ONLY`, verificadas) e migrar o extrator para um usuário `SELECT`-only (`ELECTORAL_SOURCE_DATABASE_URL`) antes da próxima extração.
+
 ## Consequências
 - Custo adicional de compute do TARGET (autorizado).
 - Dados eleitorais atualizam-se por rodada explícita do pipeline, não automaticamente.

@@ -63,6 +63,10 @@ Snapshot do spike (`--out` temporário): 34 territórios, 51 arquivos, 0,6 MB, s
 - **Comparação 2022→2026 (estado):** Dep. Federal rastreada 208.332 → 229.535 votos (+0,16 pp dos válidos); Dep. Estadual rastreada 51.304 → 104.524 (+0,47 pp). Resultados públicos TSE; a nota de metodologia esclarece que não indicam transferência de votos.
 - **Amostragem de 10 municípios:** NÃO EXECUTADA formalmente nesta rodada (apenas Mariana validada manualmente + validador automático em 6.931 territórios). Pendência P-DATA-1.
 
+## 5.1 Ressalva sobre o mecanismo do CLI (QA-1 F06)
+
+Cada `supabase db query --linked` provisiona, via Management API, um **role de login temporário gerido pela plataforma** no projeto consultado antes de conectar pelo pooler como `postgres` (detalhes em `DATA_SOURCE_AUDIT.md` §7). Não houve alteração de schema, dados, políticas ou configuração, mas é preciso registrar que a leitura não foi feita com um usuário `SELECT`-only. Próximo passo: usuário somente leitura + `ELECTORAL_SOURCE_DATABASE_URL`.
+
 ## 6. Privacidade e isolamento
 
 - Nenhum arquivo publicado contém e-mail, telefone, CPF, ID de usuário, token, connection string, ref ou URL do SOURCE (`build-snapshot` recusa escrever; `data:validate` e `check:isolation` reverificam).
