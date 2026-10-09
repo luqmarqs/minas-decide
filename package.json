@@ -24,6 +24,8 @@
     "data:validate": "tsx scripts/validate-data/validate-snapshot.ts",
     "data:validate:release": "tsx scripts/validate-data/validate-snapshot.ts --manifest",
     "tse:sample": "tsx scripts/tse/sample-check.ts",
+    "tse:2022": "tsx scripts/tse/fetch-2022.ts",
+    "pois:fetch": "tsx scripts/pois/fetch-overpass.ts",
     "etl:export": "tsx scripts/import-electoral/export.ts",
     "etl:build": "tsx scripts/import-electoral/build-snapshot.ts",
     "db:push": "tsx scripts/db/guarded-push.ts",

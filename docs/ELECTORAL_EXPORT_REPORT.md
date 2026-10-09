@@ -127,3 +127,84 @@ F17: com `ELECTORAL_SOURCE_DATABASE_URL` o extrator usa o driver `postgres` em-p
 2. Sub judice por candidatura: expor um indicador (ex.: `votes_annulled`) ou excluir os votos anulados da candidatura; requer mudança em `CandidateResult`.
 3. Contrato: `SnapshotManifest.releases[]` (para 1º e 2º turno no mesmo ponteiro) e `ComparisonPoint.votes_2026/valid_2026` → nomes neutros (`votes_current`) quando o 2º turno existir.
 4. `ELECTORAL_SOURCE_DATABASE_URL` com role `SELECT`-only continua dependendo do proprietário.
+
+## 10. Rodada 3: 2022 do TSE, comparação presidencial, highlights, POIs
+
+Esta seção acrescenta resultados; as anteriores não foram reescritas. **Nenhuma consulta ao SOURCE** nesta rodada: trabalhou-se com o extrato privado `mg-2026r1-20261008` e com dados abertos do TSE e do OpenStreetMap baixados para `data/private/` (gitignored).
+
+Decisões do proprietário aplicadas: (1) as candidaturas rastreadas deixam de ser destacadas — `comparison_2022 = []`, `has_history = false` em todas as candidaturas, camadas `comparison-<id>` não são mais geradas (e, como `has_layer` dependia de `has_history` para Dep. Federal/Estadual, as camadas `votes-100641` e `votes-101626` também deixaram de existir); `historico-2022.json` do extrato não é mais lido e `historico_votos` saiu de `source_tables`; (2) a comparação 2022 → 2026 passa a ser presidencial: Lula (PT, 13) e Jair Bolsonaro (PL, 22) em 2022 frente a Lula (PT, 13) e Flávio Bolsonaro (PL, 22) em 2026 — confirmados no `candidaturas.json` (ids 100001 `LULA`/PT e 100005 `FLAVIO BOLSONARO`/PL; o build aborta se número, nome ou partido não baterem); (3) `highlights.json` com números-chave calculados.
+
+### 10.1 Fontes do TSE (2022 e contexto 2026) — `npm run tse:2022`
+
+`scripts/tse/fetch-2022.ts` lê por HTTP Range (módulo compartilhado `scripts/tse/zip-range.ts`, agora também usado por `sample-check.ts`; CRC-32 verificado; ZIP64 suportado) e grava caches filtrados em `data/private/tse/2022/` e `data/private/tse/2026/`.
+
+| Arquivo (cdn.tse.jus.br/estatistica/sead/odsele/…) | Entrada(s) | Last-Modified (HTTP) | Geração TSE |
+|---|---|---|---|
+| `votacao_candidato_munzona/votacao_candidato_munzona_2022.zip` (580.941.971 bytes) | `_BR` (Presidente); `_MG` lida só para confirmar: 0 linhas de Presidente | Fri, 09 Oct 2026 07:18:46 GMT | 09/10/2026 03:16:47 |
+| `detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip` | `_BR` (Presidente); `_MG` (0 linhas de Presidente) | Thu, 08 Oct 2026 06:52:59 GMT ¹ | 08/10/2026 03:17:17 |
+| `votacao_secao/votacao_secao_2022_BR.zip` (271.292.455 bytes; CSV de 1,59 GB) | `_BR.csv`, filtrado `SG_UF = MG`, `CD_CARGO = 1` | Thu, 24 Nov 2022 14:26:58 GMT | 01/11/2022 16:05:25 |
+| `eleitorado_locais_votacao/eleitorado_local_votacao_2022.zip` | filtrado MG, turno 1 | Thu, 10 Sep 2026 18:22:35 GMT | 30/09/2024 02:00:32 |
+| `detalhe_votacao_munzona/detalhe_votacao_munzona_2026.zip` | `_BR` (aptos por UF, Presidente, 1º turno) | Fri, 09 Oct 2026 08:46:09 GMT | 09/10/2026 05:32:15 |
+
+¹ Um `HEAD` feito minutos antes respondeu `Last-Modified: Fri, 09 Oct 2026 07:05:48 GMT` para o mesmo arquivo: nós diferentes da CDN servem versões diferentes. O valor registrado é o da resposta efetivamente lida.
+
+**Desvio do pedido:** `votacao_secao_2022_MG.zip` (295 MB, Last-Modified Mon, 22 Jun 2026 14:44:47 GMT) foi baixado e lido inteiro (6.285.638 linhas) e **não contém Presidente** (só cargos estaduais, `CD_ELEICAO 546`). Os votos de Presidente por seção estão em `votacao_secao_2022_BR.zip`, usado no lugar.
+
+Totais lidos (Presidente; `QT_VOTOS_NOMINAIS_VALIDOS` para candidaturas, `QT_TOTAL_VOTOS_VALIDOS` para válidos; 0 linhas de voto em trânsito; 0 votos nominais não válidos para 13/22):
+
+| Recorte | Aptos | Comparecimento | Válidos | Lula | Bolsonaro |
+|---|---:|---:|---:|---:|---:|
+| MG 2022 1º turno | 16.283.828 | 12.655.228 | 12.016.633 | 5.802.571 (48,29 %) | 5.239.264 (43,60 %) |
+| MG 2022 2º turno | 16.284.615 | 12.866.284 | 12.332.270 | 6.190.960 (50,20 %) | 6.141.310 (49,80 %) |
+| Brasil 2022 1º turno | 156.454.011 | 123.682.372 | 118.229.719 | 57.259.504 (48,43 %) | 51.072.345 (43,20 %) |
+| Brasil 2022 2º turno | 156.454.011 | 124.252.796 | 118.552.353 | 60.345.999 (50,90 %) | 58.206.354 (49,10 %) |
+
+MG 2022: abstenção 3.628.600 (1º) / 3.418.331 (2º); brancos 229.425 / 183.206; nulos 409.170 / 350.808. Contexto 2026: eleitorado apto nacional 158.745.502 (inclui 916.534 no exterior); MG 16.372.372 (= snapshot; o build aborta se divergir), 2ª maior UF depois de SP (34.122.892).
+
+**Reconciliação seção × município:** somando os votos de seção por município, Lula, Bolsonaro e válidos coincidem com os arquivos `munzona` em **853 de 853 municípios, nos dois turnos**.
+
+### 10.2 Bairro 2022 (aproximado) — executado
+
+10.014 locais de votação de 2022 com votos para Presidente em MG (89 sem cadastro no `eleitorado_local`, portanto sem `NM_BAIRRO`). Associação ao bairro do snapshot (`matchLocal` em `scripts/tse/president-2022.ts`):
+
+- (a) mesmo município + `nr_zona` + `nr_local` existente em `locais.json` → bairro desse local: **9.244 locais**. Salvaguarda acrescentada: se as duas coordenadas existem e distam mais de **1 km**, o casamento por número é rejeitado (prédio provavelmente diferente) e tenta-se (b): **310 rejeições**.
+- (b) `NM_BAIRRO` 2022 normalizado com `slugify` (`shared/schemas/normalize.ts`) → `mg-<ibge>-<slug>` existente: **606 locais**.
+- (c) descartados e contados: **164 locais**.
+- **Taxa de casamento (votos válidos de Presidente, 1º turno 2022): 99,39 %** (73.758 votos válidos não associados). 761 municípios com 100 %, 831 com ≥ 95 %.
+- **5 municípios abaixo de 80 %** → bairros com `precision: 'unavailable'` (os municípios continuam `exact`): Limeira do Oeste (0 %), Chiador (66,5 %), Santa Margarida (71,0 %), Moema (72,7 %), Iturama (76,4 %). São 20 bairros.
+- Nos 6.077 bairros: 5.815 `approximate`, 242 `unavailable` por não terem nenhum local de 2022 associado, 20 `unavailable` pela regra dos 80 %. Como há locais descartados, a soma dos bairros de 2022 não reproduz o município (documentado na metodologia).
+
+### 10.3 Snapshot — `npm run etl:build -- --extract data/private/extract/mg-2026r1-20261008`
+
+Release **mantido como `mg-2026r1-20261008`**, reconstruído no lugar e ativado. Motivo: nenhum código depende do id, e `sample-check.ts --offline` usa o extrato de mesmo id. Antes, o release da rodada 2 foi copiado para `data/private/rollback/mg-2026r1-20261008-r2/` (com `root-manifest.json`); rollback = copiar de volta a pasta e o manifesto.
+
+- `TerritoryMetrics.president_comparison` preenchido no estado (exact), em 853 municípios (exact) e em 6.077 bairros (ver 10.2). `delta_pp_r1 = (share_2026_r1 − share_2022_r1) × 100`, arredondado a 0,01 p.p.; `delta_votes_r1 = votos 2026 r1 − votos 2022 r1`. O 2026 r1 vem do próprio extrato (votos da candidatura ÷ válidos de Presidente do território).
+- Estado: Lula 48,29 % (2022 r1) → 43,33 % (2026 r1), **−4,96 p.p.** (−613.635 votos); Jair → Flávio Bolsonaro 43,60 % → 48,24 %, **+4,64 p.p.** (+538.284 votos). Belo Horizonte: Lula −1,14 p.p., Bolsonaro +1,70 p.p.
+- Camadas novas: `layers/2026-r1-president_comparison-lula.json` e `-bolsonaro.json` (`unit: 'pp'`, `candidate_id: 'lula' | 'bolsonaro'`, 853 municípios, domínios simétricos [−15,83, 15,83] e [−13,2, 13,2]). Em todos os 853 municípios o delta de Lula é negativo (máx. −0,03) e o de Bolsonaro, positivo (mín. +0,59).
+- `highlights.json` (contrato `Highlights`, gerado por `scripts/tse/highlights.ts`): 20 itens e 5 frases `why_minas`, todos com `source`; percentuais em escala 0–100. Números: eleitorado MG 2026 16.372.372 = 10,31 % do eleitorado nacional com exterior (10,37 % sem), 2º de 27 UFs; 853 municípios; comparecimento 12.637.274 (77,19 %), abstenção 3.735.098 (22,81 %); 2026 r1 Lula 5.188.936 (43,33 %), Flávio Bolsonaro 5.777.548 (48,24 %), diferença −588.612 (−4,91 p.p.); margem de Lula em 2022 r1 +563.307 (+4,69 p.p.); margem de Lula em 2022 r2 **+49.650 votos (+0,40 p.p.)**; Brasil 2022 r2 50,90 % × 49,10 % (+2.139.645, +1,80 p.p.); MG teve 10,40 % dos válidos do país no 2º turno de 2022. Nenhuma afirmação histórica não verificável (ex.: "quem vence em Minas vence o Brasil") foi incluída.
+- Metodologia 1.1.0: `comparison_note` cita a fonte (arquivos e Last-Modified), diz que o bairro 2022 é aproximado e que Jair e Flávio Bolsonaro são pessoas diferentes, sem implicar transferência de votos; nova fonte TSE em `sources`; limitações atualizadas. Manifesto: `years: [2022, 2026]`, nota de cobertura com a taxa de casamento.
+- Arquivos do release: 902 → **901** (−2 `comparison-*`, −2 `votes-*` de rastreadas, +2 `president_comparison-*`, +1 `highlights.json`). Saída: `wrote 901 files (71.2 MB) … status=validated warnings=2` (grafias de bairro unificadas em Montes Claros, já existentes).
+
+### 10.4 POIs de grande circulação — `npm run pois:fetch`
+
+`scripts/pois/fetch-overpass.ts` → `public/data/pois/terminais-mg.json` (`PoiFile`, `© OpenStreetMap contributors`, ODbL 1.0; fora do manifesto do release, validado à parte). Uma consulta combinada (`out center tags`, timeout 180 s). A 1ª tentativa em `overpass-api.de` respondeu **504** e a 2ª (após 15 s), 200. Base OSM de 2026-10-09T16:42:27Z; cache bruto em `data/private/overpass/terminais-mg-raw.json`.
+
+- 532 elementos; 129 descartados sem `name`; 23 removidos por proximidade (< 60 m dentro da mesma família; ônibus e metrô não se fundem, para não esconder uma estação de metrô ao lado de um terminal); **380 publicados**.
+- Por categoria: `bus_terminal` 354, `metro_station` 22, `bus_station` 4. Em MG quase todo `public_transport=station` também tem `amenity=bus_station`, o que pela regra pedida o classificaria como terminal. **Ajuste:** `network` contendo MOVE/BRT → `bus_station` (só 4 objetos têm essa tag). Muitas estações MOVE de BH estão no OSM sem `network` e aparecem como `bus_terminal`.
+- Município por ponto-em-polígono (ray casting, `scripts/pois/geo.ts`) com `public/geo/mg-municipios.geojson`: 380 de 380 (o fallback por centroide não foi usado).
+- Top 10 municípios: Belo Horizonte 97, Uberlândia 10, Poços de Caldas 5, Uberaba 5, Juiz de Fora 4, Contagem 4, Muriaé 4, São João del-Rei 3, Governador Valadares 3, Abadia dos Dourados 2.
+
+### 10.5 Validação e testes
+
+- `npm run data:validate` → `release=mg-2026r1-20261008 status=validated files=901 checked=901 territories=6931 crosschecks=855 warnings=1 errors=0`; `president_comparison=6931 {"exact":854,"approximate":5815,"unavailable":262} pois=380`. Novas checagens: shares em [0,1] e = votos/válidos; `delta_pp_r1` (±0,0051) e `delta_votes_r1` coerentes; precisão por nível (estado/município não `approximate`, bairro não `exact`, `unavailable` sem 2022); 2026 = `results.president` e `valid_by_office.president`; Σ municípios 2022 = estado; camadas `president_comparison` = delta do município, domínio simétrico, `unit: 'pp'`; `highlights.json` (schema, `source` não vazio, ids únicos); POIs (schema, bbox de MG, ids únicos, `osm_url`, atribuição/licença, município no índice).
+- Teste de reprovação: cópia adulterada (delta +1, share 1,2, votos 2022 +5 e precisão `approximate` em BH, `source` vazio, domínio assimétrico, POI fora de MG) → 854 erros.
+- `npx tsx scripts/tse/sample-check.ts --offline` (após a refatoração para o módulo compartilhado) → 330 indicadores, 18 divergentes, **312 idênticos** (inalterado).
+- `npx vitest run scripts/` → 4 arquivos, **56 testes passando** (18 novos em `scripts/tse/president-2022.test.ts` e `scripts/pois/geo.test.ts`).
+
+### 10.6 Pendências / mudanças desejadas (contratos não editados)
+
+1. `HighlightItem.unit` não distingue "posição" (ranking); foi usado `count`. Sugestão: `'rank'`, e explicitar no contrato que `percent` é 0–100.
+2. `PresidentialComparison` poderia levar `match_rate` (taxa do município) e `places_2022`, para o painel exibir a qualidade da aproximação sem parsear `note`.
+3. As camadas `president_comparison` têm domínio simétrico; o frontend precisa de escala divergente (no nível municipal, os valores de Lula são todos negativos e os de Bolsonaro, todos positivos).
+4. `PoiFile` não tem campo para a data da base OSM; hoje ela vai em `source`.
+5. Frontend que ainda leia `comparison-<id>`, `votes-100641|101626` ou `has_history` precisa ser ajustado (não verificado nesta rodada).

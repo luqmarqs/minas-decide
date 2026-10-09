@@ -96,7 +96,29 @@ npm run etl:export -- --dry-run
 ## 10. Conferência com o TSE e validador
 
 - `npx tsx scripts/tse/sample-check.ts` (10 municípios; cache em `data/private/tse/`; `--offline` reusa o cache) → `docs/TSE_SAMPLE_REPORT.md`. Usa os dados abertos do TSE (zips em `cdn.tse.jus.br`, lidos por HTTP Range, CRC-32 verificado; o conteúdo baixado só é lido como CSV).
-- `npm run data:validate` agora também confere Σ municípios = estado e Σ bairros = município (tolerância 0), `share_of_valid` ∈ [0,1] e igual a votos/válidos, `delta_pp`/`delta_votes` coerentes e ausência de `territory_id` órfão (índice, métricas, pais, camadas). Testes unitários: `npx vitest run --project unit scripts`.
+- `npm run data:validate` agora também confere (rodada 3: também `president_comparison`, `highlights.json` e `pois/terminais-mg.json`, ver §11) Σ municípios = estado e Σ bairros = município (tolerância 0), `share_of_valid` ∈ [0,1] e igual a votos/válidos, `delta_pp`/`delta_votes` coerentes e ausência de `territory_id` órfão (índice, métricas, pais, camadas). Testes unitários: `npx vitest run --project unit scripts`.
+
+## 11. Rodada 3: TSE 2022, highlights e POIs (sem SOURCE)
+
+Ordem para reconstruir o snapshot com a comparação presidencial:
+
+```bash
+npm run tse:2022                 # TSE 2022 (Presidente) + eleitorado por UF 2026 → data/private/tse/{2022,2026}/
+npm run tse:2022 -- --offline    # recompõe a partir dos caches (sem rede); --force rebaixa; --skip-sections pula o nível de local
+npm run etl:build -- --extract data/private/extract/mg-2026r1-20261008   # lê data/private/tse/... por padrão
+#   (--tse2022 <arquivo> / --national2026 <arquivo> para outros caminhos; sem eles: president_comparison = null e sem highlights.json, com aviso)
+npm run pois:fetch               # Overpass → public/data/pois/terminais-mg.json (cache bruto em data/private/overpass/)
+npm run pois:fetch -- --offline  # reusa o cache; --force refaz a consulta
+npm run data:validate
+```
+
+- `scripts/tse/zip-range.ts`: leitor de ZIP por HTTP Range (diretório central + entradas pedidas, CRC-32, ZIP64), compartilhado com `sample-check.ts`.
+- `scripts/tse/fetch-2022.ts`: baixa `votacao_candidato_munzona_2022` (_BR/_MG), `detalhe_votacao_munzona_2022` (_BR/_MG), `votacao_secao_2022_BR` (MG, Presidente — o arquivo `_MG` não tem Presidente), `eleitorado_local_votacao_2022` (MG) e `detalhe_votacao_munzona_2026` (_BR). Saídas: `data/private/tse/2022/president-2022.json` (municípios por código TSE, estado, Brasil, UFs, locais com bairro/coord. e votos, `checks` de reconciliação) e `data/private/tse/2026/national-2026.json`.
+- `scripts/tse/president-2022.ts`: funções puras (participação, delta em p.p., margem, casamento local 2022 → bairro 2026, domínio simétrico, ranking de UF); testes em `president-2022.test.ts`.
+- `scripts/tse/highlights.ts`: monta `highlights.json` só com números calculados.
+- `scripts/pois/fetch-overpass.ts` + `scripts/pois/geo.ts` (ray casting, dedupe < 60 m); testes em `geo.test.ts`.
+- Rollback do release: a versão da rodada 2 está em `data/private/rollback/mg-2026r1-20261008-r2/` (copiar a pasta para `public/data/mg-2026r1-20261008/` e `root-manifest.json` para `public/data/manifest.json`).
+- Overpass: uma consulta por execução; respeitar a política de uso (não rodar em loop; usar o cache).
 
 ## Segurança
 

@@ -79,3 +79,34 @@ Todas SECURITY DEFINER, com `search_path=''` e EXECUTE só para service_role.
 
 ## Seed
 `supabase/seed.sql` tem só dados sintéticos `DEMO`: município `mg-0000001`, um grupo ativo, uma atividade publicada e um organizador fictício `@demo.invalid`. Roda apenas em `supabase db reset` num stack local. **Não** é aplicado pelo `npm run db:push` e não deve ir para o TARGET sem decisão explícita. **NÃO EXECUTADO** (não há Docker).
+
+## Snapshot eleitoral público (`public/data/`) — arquivos e campos da rodada 3
+
+Gerado offline (`npm run etl:build`), sem banco em runtime. Contratos em `shared/contracts/metrics.ts` e `shared/contracts/snapshot.ts`.
+
+### `<release>/metrics/*.json` → `TerritoryMetrics.president_comparison`
+
+| Campo | Tipo | Significado |
+|---|---|---|
+| `precision` | `exact` \| `approximate` \| `unavailable` | estado e municípios: `exact` (TSE); bairros: `approximate` (locais de 2022 associados) ou `unavailable` (município com < 80 % dos válidos de 2022 associados, ou bairro sem local de 2022) |
+| `entries[]` | 2 itens, `key` = `lula` \| `bolsonaro` | Lula (13) 2022/2026; Jair Bolsonaro (22, 2022) / Flávio Bolsonaro (22, 2026) |
+| `votes_2022_r1`, `valid_2022_r1`, `share_2022_r1` | int, int, 0..1 | 1º turno de 2022 (válidos de Presidente); `null` se `unavailable` |
+| `votes_2022_r2`, `valid_2022_r2`, `share_2022_r2` | int, int, 0..1 | 2º turno de 2022 (referência) |
+| `votes_2026_r1`, `valid_2026_r1`, `share_2026_r1` | int, int, 0..1 | 1º turno de 2026 (= `results.president` e `valid_by_office.president`) |
+| `delta_pp_r1` | número | `(share_2026_r1 − share_2022_r1) × 100`, 0,01 p.p. |
+| `delta_votes_r1` | int | `votes_2026_r1 − votes_2022_r1` |
+| `note` | texto | fonte e ressalvas (aproximação, sem transferência de votos) |
+
+`comparison_2022` permanece no contrato, sempre `[]`; `has_history` é sempre `false` em `results` e `candidates.json`.
+
+### `<release>/layers/2026-r1-president_comparison-{lula,bolsonaro}.json` (`MapLayerValues`)
+
+`layer: 'president_comparison'`, `unit: 'pp'`, `candidate_id: 'lula' | 'bolsonaro'`, `values` = `delta_pp_r1` por município (853), `domain` simétrico `[-m, m]` (m = maior |delta|). Camadas `comparison-<id>` não existem mais.
+
+### `<release>/highlights.json` (`Highlights`)
+
+`items[]`: `id`, `label`, `value`, `unit` (`people` \| `percent` \| `pp` \| `votes` \| `count`), `compare_value`/`compare_label` (número secundário: total nacional, % ou votos), `note`, `source` (sempre preenchido). **`percent` em escala 0–100.** Ids: `mg_eligible_2026`, `mg_share_national_eligible_2026`, `mg_rank_eligible_2026` (posição; `compare_value` = nº de UFs), `mg_municipalities`, `mg_turnout_2026_r1`, `mg_abstention_2026_r1`, `mg_2026_r1_{lula,flavio}_{votes,share}`, `mg_2026_r1_margin_votes`, `mg_2022_r1_{lula,bolsonaro}_votes`, `mg_2022_r1_margin_votes`, `mg_2022_r2_{lula,bolsonaro}_votes`, `mg_2022_r2_margin_votes`, `br_2022_r2_{lula,bolsonaro}_share`, `br_2022_r2_margin_votes` (margens = Lula − Bolsonaro; negativo = Bolsonaro à frente). `why_minas[]`: `title`, `text` (frase com números calculados), `value`, `unit`, `source`.
+
+### `pois/terminais-mg.json` (`PoiFile`, fora do release e do manifesto)
+
+`generated_at`, `source` (endpoint Overpass, data da base OSM e da consulta), `license: 'ODbL 1.0'`, `attribution: '© OpenStreetMap contributors'`, `items[]`: `id` (`osm-<tipo>-<id>`), `name`, `category` (`bus_terminal` = `amenity=bus_station`; `bus_station` = estação BRT/MOVE ou `public_transport=station`+`bus=yes`; `metro_station` = `railway=station`+`station=subway`), `coordinates` `[lon, lat]`, `municipality_id` (ponto-em-polígono na malha IBGE), `osm_url`.

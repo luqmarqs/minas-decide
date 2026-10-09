@@ -18,10 +18,15 @@
  * says NÃO EXECUTADO with the URLs and HTTP statuses tried.
  */
 import { createHash } from 'node:crypto';
-import { createInflateRaw, crc32 } from 'node:zlib';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { Readable } from 'node:stream';
+import {
+  createClient,
+  csvRows as csvRowsC,
+  zipDirectory as zipDirectoryC,
+  type HttpAttempt,
+  type ZipEntry,
+} from './zip-range.ts';
 import { MunicipalityMetricsFile } from '../../shared/contracts/snapshot.ts';
 import { SnapshotManifest } from '../../shared/contracts/metrics.ts';
 import type { OfficeCode } from '../../shared/contracts/metrics.ts';
@@ -71,118 +76,12 @@ const PRIOR_PROBES = [
   'https://dadosabertos.tse.jus.br/ e /dataset/resultados-2026 → 200 (lista os arquivos .zip em cdn.tse.jus.br usados aqui)',
 ];
 
-// ---------- HTTP log ----------
-interface HttpAttempt {
-  url: string;
-  range?: string;
-  status: number | string;
-  note?: string;
-}
-const attempts: HttpAttempt[] = [];
-
-async function http(url: string, range?: string): Promise<{ buf: Buffer; headers: Headers }> {
-  if (OFFLINE) throw new Error(`--offline: ${url} not cached`);
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      headers: { 'User-Agent': UA, ...(range ? { Range: range } : {}) },
-      redirect: 'follow',
-    });
-  } catch (e) {
-    attempts.push({ url, range, status: 'network error', note: (e as Error).message });
-    throw e;
-  }
-  attempts.push({ url, range, status: res.status });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return { buf: Buffer.from(await res.arrayBuffer()), headers: res.headers };
-}
-
-// ---------- minimal ZIP reader over HTTP Range (no code execution; data only) ----------
-interface ZipEntry {
-  name: string;
-  method: number;
-  csize: number;
-  usize: number;
-  crc: number;
-  offset: number;
-}
-
-async function zipDirectory(url: string): Promise<{ entries: ZipEntry[]; lastModified: string }> {
-  const tail = await http(url, 'bytes=-262144');
-  const cr = tail.headers.get('content-range'); // bytes a-b/total
-  const total = cr ? Number(cr.split('/')[1]) : tail.buf.length;
-  const b = tail.buf;
-  const eocd = b.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
-  if (eocd < 0) throw new Error('zip: EOCD not found');
-  const size = b.readUInt32LE(eocd + 12);
-  const off = b.readUInt32LE(eocd + 16);
-  if (off === 0xffffffff || size === 0xffffffff) throw new Error('zip64 archives unsupported');
-  const start = b.length - (total - off);
-  if (start < 0) throw new Error('zip: central directory outside fetched tail');
-  const entries: ZipEntry[] = [];
-  let p = start;
-  while (p < start + size && b.readUInt32LE(p) === 0x02014b50) {
-    const nl = b.readUInt16LE(p + 28);
-    const el = b.readUInt16LE(p + 30);
-    const cl = b.readUInt16LE(p + 32);
-    entries.push({
-      method: b.readUInt16LE(p + 10),
-      crc: b.readUInt32LE(p + 16),
-      csize: b.readUInt32LE(p + 20),
-      usize: b.readUInt32LE(p + 24),
-      offset: b.readUInt32LE(p + 42),
-      name: b.subarray(p + 46, p + 46 + nl).toString('latin1'),
-    });
-    p += 46 + nl + el + cl;
-  }
-  return { entries, lastModified: tail.headers.get('last-modified') ?? '' };
-}
-
-/** Fetches one entry and yields decoded (latin1) CSV lines; verifies CRC-32. */
-async function* entryLines(url: string, e: ZipEntry): AsyncGenerator<string> {
-  if (e.csize === 0xffffffff) throw new Error(`entry ${e.name} needs zip64`);
-  const head = await http(url, `bytes=${e.offset}-${e.offset + 29}`);
-  const dataStart = e.offset + 30 + head.buf.readUInt16LE(26) + head.buf.readUInt16LE(28);
-  const body = await http(url, `bytes=${dataStart}-${dataStart + e.csize - 1}`);
-  if (body.buf.length !== e.csize) throw new Error(`entry ${e.name}: short read`);
-  const raw =
-    e.method === 0 ? Readable.from(body.buf) : Readable.from(body.buf).pipe(createInflateRaw());
-  let crc = 0;
-  let carry = '';
-  for await (const chunk of raw as AsyncIterable<Buffer>) {
-    crc = crc32(chunk, crc);
-    const text = carry + chunk.toString('latin1');
-    const parts = text.split('\n');
-    carry = parts.pop() ?? '';
-    for (const l of parts) yield l.replace(/\r$/, '');
-  }
-  if (carry) yield carry;
-  if (crc >>> 0 !== e.crc) throw new Error(`entry ${e.name}: CRC-32 mismatch`);
-}
-
-const splitCsv = (line: string): string[] =>
-  line.split(';').map((c) => (c.startsWith('"') && c.endsWith('"') ? c.slice(1, -1) : c));
-
-async function csvRows(
-  url: string,
-  e: ZipEntry,
-  keep: (r: Record<string, string>) => boolean,
-): Promise<Record<string, string>[]> {
-  let header: string[] | null = null;
-  const out: Record<string, string>[] = [];
-  for await (const line of entryLines(url, e)) {
-    if (!line) continue;
-    const cells = splitCsv(line);
-    if (!header) {
-      header = cells;
-      continue;
-    }
-    const r: Record<string, string> = {};
-    header.forEach((h, i) => (r[h] = cells[i] ?? ''));
-    if (keep(r)) out.push(r);
-  }
-  return out;
-}
+// ---------- HTTP (shared ZIP-over-Range reader, scripts/tse/zip-range.ts) ----------
+const client = createClient({ offline: OFFLINE, userAgent: UA });
+const attempts: HttpAttempt[] = client.attempts;
+const zipDirectory = (url: string) => zipDirectoryC(client, url);
+const csvRows = (url: string, e: ZipEntry, keep: (r: Record<string, string>) => boolean) =>
+  csvRowsC(client, url, e, keep);
 
 // ---------- cached loaders ----------
 interface Cached<T> {

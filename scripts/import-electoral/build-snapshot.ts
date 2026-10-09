@@ -2,12 +2,18 @@
  * Build the PUBLIC electoral snapshot from a private extract.
  *
  *   npm run etl:build -- --extract data/private/extract/<release> [--release <id>] [--out public/data] [--top 10] [--no-activate]
+ *       [--tse2022 data/private/tse/2022/president-2022.json] [--national2026 data/private/tse/2026/national-2026.json]
  *
  * Input: files written by export.ts (polling-place level, gitignored).
  * Output: public/data/<release>/... + <release>/release-manifest.json + public/data/manifest.json (current-release pointer; skipped with --no-activate).
  * Election year/round come from extract-manifest.json (legacy extracts without them = 2026 r1).
  * Validations (spec §4.5/§4.13) produce `warnings`; blocking errors abort the build.
  * No PII and no SOURCE identifiers are written.
+ *
+ * Rodada 3: tracked-candidate history (historico-2022.json) is no longer used: comparison_2022 is [] and
+ * has_history is false. The 2022 -> 2026 comparison is presidential (Lula 13 / Bolsonaro 22) with 2022 from
+ * TSE open data (scripts/tse/fetch-2022.ts) -> TerritoryMetrics.president_comparison, layers
+ * <year>-r<round>-president_comparison-{lula,bolsonaro}.json and highlights.json.
  */
 import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -17,18 +23,34 @@ import { normalizeText, slugify } from '../../shared/schemas/normalize.ts';
 import { VOTES_PER_VOTER, type OfficeCode } from '../../shared/contracts/metrics.ts';
 import type {
   CandidateResult,
-  ComparisonPoint,
   MapLayerValues,
+  PresidentialComparison,
   SnapshotManifest,
   TerritoryMetrics,
 } from '../../shared/contracts/metrics.ts';
 import type { TerritoryIndexEntry } from '../../shared/contracts/territory.ts';
 import type {
   CandidateIndex,
+  Highlights,
   Methodology,
   MunicipalityMetricsFile,
 } from '../../shared/contracts/snapshot.ts';
 import { CARGO_TO_OFFICE } from './sql.ts';
+import {
+  addInto,
+  buildEntry,
+  emptyVotes,
+  localKey,
+  matchLocal,
+  matchRate,
+  MIN_MATCH_RATE,
+  symmetricDomain,
+  type National2026File,
+  type Place2026,
+  type PresVotes,
+  type President2022File,
+} from '../tse/president-2022.ts';
+import { buildHighlights } from '../tse/highlights.ts';
 
 // ---------- args ----------
 const argv = process.argv.slice(2);
@@ -43,6 +65,12 @@ if (!extractDir || !existsSync(join(extractDir, 'extract-manifest.json'))) {
 }
 const outRoot = resolve(getArg('--out') ?? join('public', 'data'));
 const TOP_N = Number(getArg('--top') ?? 10);
+const tse2022Path = resolve(
+  getArg('--tse2022') ?? join('data', 'private', 'tse', '2022', 'president-2022.json'),
+);
+const national2026Path = resolve(
+  getArg('--national2026') ?? join('data', 'private', 'tse', '2026', 'national-2026.json'),
+);
 
 // ---------- input types ----------
 interface Municipio {
@@ -62,6 +90,8 @@ interface Local {
   lon: number;
   coord_aproximada: boolean;
   qt_secoes: number;
+  nr_zona: number;
+  nr_local: number;
 }
 interface Totais {
   local_id: number;
@@ -85,15 +115,6 @@ interface VoteRow {
   candidatura_id: number;
   local_id: number;
   votos: number;
-}
-interface HistRow {
-  candidatura_id: number;
-  ano: number;
-  nivel: string;
-  cd_municipio: string;
-  chave: string;
-  votos: number;
-  validos: number;
 }
 
 const readJson = <T>(name: string): T =>
@@ -129,11 +150,25 @@ console.log(
 const municipios = readJson<Municipio[]>('municipios.json');
 const locais = readJson<Local[]>('locais.json');
 const candidaturas = readJson<Candidatura[]>('candidaturas.json');
-const historico = existsSync(join(extractDir, 'historico-2022.json'))
-  ? readJson<HistRow[]>('historico-2022.json')
-  : [];
+// historico-2022.json (tracked candidacies) is deliberately NOT read since rodada 3 (owner decision).
+const tse2022: President2022File | null = existsSync(tse2022Path)
+  ? (JSON.parse(readFileSync(tse2022Path, 'utf8')) as President2022File)
+  : null;
+const national2026: National2026File | null = existsSync(national2026Path)
+  ? (JSON.parse(readFileSync(national2026Path, 'utf8')) as National2026File)
+  : null;
+if (!tse2022)
+  console.warn(
+    `[build] WARNING: ${tse2022Path} not found (run npm run tse:2022); president_comparison = null`,
+  );
+if (tse2022 && tse2022.schema !== 'president-2022/v1')
+  throw new Error('unexpected president-2022 schema');
 
 const munIdByCd = new Map(municipios.map((m) => [m.cd_municipio, `mg-${m.cd_ibge}`]));
+/** TSE code without leading zeros (as stored by fetch-2022.ts) by municipality id */
+const tseCdByMunId = new Map(
+  municipios.map((m) => [`mg-${m.cd_ibge}`, String(Number(m.cd_municipio))]),
+);
 
 // territory of each polling place: [municipalityId, neighborhoodId]
 interface TerritoryAgg {
@@ -187,6 +222,7 @@ for (const m of municipios) {
   }));
 }
 const localTerritories = new Map<number, [string, string]>();
+const places2026 = new Map<string, Place2026>();
 for (const l of locais) {
   const munId = munIdByCd.get(l.cd_municipio);
   if (!munId) throw new Error(`local ${l.id} references unknown municipality ${l.cd_municipio}`);
@@ -222,6 +258,11 @@ for (const l of locais) {
   st.sections += l.qt_secoes;
   if (l.coord_aproximada) st.approxCount++;
   localTerritories.set(l.id, [munId, nbId]);
+  places2026.set(localKey(l.cd_municipio, l.nr_zona, l.nr_local), {
+    neighborhood_id: nbId,
+    lat: l.coord_aproximada ? null : l.lat,
+    lon: l.coord_aproximada ? null : l.lon,
+  });
 }
 console.log(
   `[build] territories: ${terr.size} (municipalities ${municipios.length}, neighborhoods ${terr.size - municipios.length - 1})`,
@@ -254,7 +295,6 @@ for (const cargo of Object.keys(CARGO_TO_OFFICE).map(Number)) {
 
 // ---------- votes per territory per candidate ----------
 const candById = new Map(candidaturas.map((c) => [c.id, c]));
-const trackedIds = new Set(historico.map((h) => h.candidatura_id));
 const votes = new Map<string, Map<number, number>>(); // territory → (cand → votes)
 const addVote = (tid: string, cand: number, v: number) => {
   let m = votes.get(tid);
@@ -281,31 +321,159 @@ for (const f of voteFiles) {
 }
 console.log(`[build] vote pairs aggregated: ${pairs} from ${voteFiles.length} files`);
 
-// ---------- 2022 history lookup ----------
-const hist = new Map<string, { votos: number; validos: number }>(); // `${territory}|${cand}`
-for (const h of historico) {
-  if (h.ano !== 2022) continue;
-  const munId = munIdByCd.get(h.cd_municipio);
-  if (!munId) continue;
-  if (h.nivel === 'municipio') {
-    const key = `${munId}|${h.candidatura_id}`;
-    const cur = hist.get(key) ?? { votos: 0, validos: 0 };
-    cur.votos += h.votos;
-    cur.validos = Math.max(cur.validos, h.validos);
-    hist.set(key, cur);
-    const st = hist.get(`mg|${h.candidatura_id}`) ?? { votos: 0, validos: 0 };
-    st.votos += h.votos;
-    st.validos += h.validos;
-    hist.set(`mg|${h.candidatura_id}`, st);
-  } else if (h.nivel === 'bairro') {
-    const bairro = h.chave.split('|').slice(1).join('|');
-    const nbId = `${munId}-${slugify(bairro) || 'sem-bairro'}`;
-    const key = `${nbId}|${h.candidatura_id}`;
-    const cur = hist.get(key) ?? { votos: 0, validos: 0 };
-    cur.votos += h.votos;
-    cur.validos += h.validos;
-    hist.set(key, cur);
+// ---------- presidential comparison: 2026 candidacies, 2022 neighborhood matching ----------
+const pres2026 = {
+  lula: candidaturas.find((c) => c.cd_cargo === 1 && c.numero === 13),
+  bolsonaro: candidaturas.find((c) => c.cd_cargo === 1 && c.numero === 22),
+};
+if (pres2026.lula && (pres2026.lula.nm_urna !== 'LULA' || pres2026.lula.sg_partido !== 'PT'))
+  throw new Error(
+    `president 13 is ${pres2026.lula.nm_urna} (${pres2026.lula.sg_partido}), expected LULA (PT)`,
+  );
+if (
+  pres2026.bolsonaro &&
+  (!/BOLSONARO/.test(pres2026.bolsonaro.nm_urna ?? '') || pres2026.bolsonaro.sg_partido !== 'PL')
+)
+  throw new Error(
+    `president 22 is ${pres2026.bolsonaro.nm_urna} (${pres2026.bolsonaro.sg_partido}), expected * BOLSONARO (PL)`,
+  );
+console.log(
+  `[build] president 2026: 13=${pres2026.lula?.nm_urna} (${pres2026.lula?.sg_partido}), 22=${pres2026.bolsonaro?.nm_urna} (${pres2026.bolsonaro?.sg_partido})`,
+);
+
+/** 2022 votes per neighborhood (approximate) and per-municipality match statistics. */
+const nb2022 = new Map<string, { r1: PresVotes; r2: PresVotes; places: number }>();
+interface MunMatch {
+  total_valid: number;
+  matched_valid: number;
+  places: number;
+  same_place: number;
+  bairro_name: number;
+  none: number;
+  rejected_far: number;
+}
+const munMatch = new Map<string, MunMatch>();
+const matchTotals = {
+  places: 0,
+  same_place: 0,
+  bairro_name: 0,
+  none: 0,
+  rejected_far: 0,
+  total_valid: 0,
+  matched_valid: 0,
+  no_municipality: 0,
+};
+let munBelow = 0;
+if (tse2022 && ROUND === 1 && YEAR === 2026) {
+  const neighborhoodIds = new Set(
+    [...terr.values()].filter((t) => t.type === 'neighborhood').map((t) => t.id),
+  );
+  const munIdByTseCd = new Map([...tseCdByMunId].map(([id, cd]) => [cd, id]));
+  for (const l of Object.values(tse2022.locals)) {
+    const munId = munIdByTseCd.get(String(Number(l.cd_municipio)));
+    if (!munId) {
+      matchTotals.no_municipality++;
+      continue;
+    }
+    const mm = munMatch.get(munId) ?? {
+      total_valid: 0,
+      matched_valid: 0,
+      places: 0,
+      same_place: 0,
+      bairro_name: 0,
+      none: 0,
+      rejected_far: 0,
+    };
+    const r = matchLocal(l, munId.slice(3), places2026, neighborhoodIds);
+    mm.places++;
+    mm.total_valid += l.r1.valid;
+    mm[r.method]++;
+    if (r.rejected_far) mm.rejected_far++;
+    if (r.neighborhood_id) {
+      mm.matched_valid += l.r1.valid;
+      const a = nb2022.get(r.neighborhood_id) ?? { r1: emptyVotes(), r2: emptyVotes(), places: 0 };
+      addInto(a.r1, l.r1);
+      addInto(a.r2, l.r2);
+      a.places++;
+      nb2022.set(r.neighborhood_id, a);
+    }
+    munMatch.set(munId, mm);
   }
+  for (const mm of munMatch.values()) {
+    matchTotals.places += mm.places;
+    matchTotals.same_place += mm.same_place;
+    matchTotals.bairro_name += mm.bairro_name;
+    matchTotals.none += mm.none;
+    matchTotals.rejected_far += mm.rejected_far;
+    matchTotals.total_valid += mm.total_valid;
+    matchTotals.matched_valid += mm.matched_valid;
+    if (matchRate(mm.matched_valid, mm.total_valid) < MIN_MATCH_RATE) munBelow++;
+  }
+  console.log(
+    `[build] 2022 places -> neighborhoods: places=${matchTotals.places} same_place=${matchTotals.same_place} bairro_name=${matchTotals.bairro_name} unmatched=${matchTotals.none} rejected_far=${matchTotals.rejected_far} no_municipality=${matchTotals.no_municipality}; valid r1 matched ${(matchRate(matchTotals.matched_valid, matchTotals.total_valid) * 100).toFixed(2)}%; municipalities below ${MIN_MATCH_RATE * 100}%: ${munBelow} of ${munMatch.size}`,
+  );
+  if (process.env.MATCH_REPORT) {
+    const rows = [...munMatch].map(([id, mm]) => ({
+      id,
+      name: terr.get(id)?.name,
+      rate: matchRate(mm.matched_valid, mm.total_valid),
+      ...mm,
+    }));
+    writeFileSync(process.env.MATCH_REPORT, JSON.stringify(rows), 'utf8');
+  }
+}
+
+const PRES_NOTE =
+  'Comparação entre Lula (13) em 2022 e 2026 e entre Jair Bolsonaro (22, 2022) e Flávio Bolsonaro (22, 2026); diferenças não indicam transferência de votos. 2022: TSE, dados abertos.';
+
+function presidentComparison(
+  t: TerritoryAgg,
+  tv: Map<number, number>,
+  valid2026: number | null,
+): PresidentialComparison | null {
+  if (!tse2022 || YEAR !== 2026 || ROUND !== 1) return null;
+  const v26 = (k: 'lula' | 'bolsonaro') => {
+    const c = pres2026[k];
+    return c && valid2026 !== null ? (tv.get(c.id) ?? 0) : null;
+  };
+  const entries = (r1: PresVotes | null, r2: PresVotes | null) =>
+    (['lula', 'bolsonaro'] as const).map((k) => buildEntry(k, r1, r2, v26(k), valid2026));
+  if (t.type === 'state')
+    return {
+      precision: 'exact',
+      entries: entries(tse2022.state_mg.r1, tse2022.state_mg.r2),
+      note: PRES_NOTE,
+    };
+  if (t.type === 'municipality') {
+    const m = tse2022.municipalities[tseCdByMunId.get(t.id) ?? ''];
+    if (!m)
+      return {
+        precision: 'unavailable',
+        entries: entries(null, null),
+        note: 'Município sem linha no arquivo do TSE de 2022.',
+      };
+    return { precision: 'exact', entries: entries(m.r1, m.r2), note: PRES_NOTE };
+  }
+  const mm = munMatch.get(t.parent_id!);
+  const rate = mm ? matchRate(mm.matched_valid, mm.total_valid) : 0;
+  if (!mm || rate < MIN_MATCH_RATE)
+    return {
+      precision: 'unavailable',
+      entries: entries(null, null),
+      note: `2022 por bairro indisponível neste município: só ${(rate * 100).toFixed(1).replace('.', ',')} % dos votos válidos de 2022 puderam ser associados a bairros (mínimo ${MIN_MATCH_RATE * 100} %).`,
+    };
+  const a = nb2022.get(t.id);
+  if (!a)
+    return {
+      precision: 'unavailable',
+      entries: entries(null, null),
+      note: 'Nenhum local de votação de 2022 associado a este bairro.',
+    };
+  return {
+    precision: 'approximate',
+    entries: entries(a.r1, a.r2),
+    note: `Aproximação: 2022 soma ${a.places} local(is) de votação de 2022 associados a este bairro pelo número do local ou pelo bairro do endereço. ${PRES_NOTE}`,
+  };
 }
 
 // ---------- build metrics per territory ----------
@@ -375,7 +543,7 @@ function buildMetrics(t: TerritoryAgg): TerritoryMetrics {
         office,
         votes: v,
         share_of_valid: tot.val > 0 ? Math.min(1, v / tot.val) : 0,
-        has_history: trackedIds.has(cid),
+        has_history: false,
       });
     }
     if (tot.val > 0 && Math.abs(sumCand - tot.val) > WARN_TOL * tot.val) {
@@ -390,34 +558,8 @@ function buildMetrics(t: TerritoryAgg): TerritoryMetrics {
       : list;
     recordsCount += results[office]!.length;
   }
-  const comparison: ComparisonPoint[] = [];
-  for (const cid of trackedIds) {
-    const c = candById.get(cid);
-    if (!c) continue;
-    const office = CARGO_TO_OFFICE[c.cd_cargo] as OfficeCode;
-    const h = hist.get(`${t.id}|${cid}`);
-    const v26 = tv.get(cid) ?? null;
-    const val26 = validByOffice[office] ?? null;
-    const s22 = h && h.validos > 0 ? h.votos / h.validos : null;
-    const s26 = v26 !== null && val26 ? v26 / val26 : null;
-    comparison.push({
-      candidate_id: String(cid),
-      ballot_name: c.nm_urna ?? `Nº ${c.numero}`,
-      party: c.sg_partido ?? '',
-      office,
-      votes_2022: h ? h.votos : null,
-      valid_2022: h ? h.validos : null,
-      votes_2026: v26,
-      valid_2026: val26,
-      delta_votes: h && v26 !== null ? v26 - h.votos : null,
-      delta_pp: s22 !== null && s26 !== null ? Math.round((s26 - s22) * 10000) / 100 : null,
-      note: h
-        ? t.type === 'neighborhood'
-          ? 'Comparação por bairro é aproximada (chave textual do local de votação).'
-          : null
-        : 'Sem dado de 2022 para este recorte.',
-    });
-  }
+  /* comparison_2022 (tracked candidacies) is kept empty since rodada 3. */
+  const presCmp = presidentComparison(t, tv, validByOffice.president ?? null);
   if (t.approxCount > 0)
     warnings.push(`${t.approxCount} local(is) de votação com coordenada aproximada.`);
   if (t.type === 'neighborhood')
@@ -439,7 +581,8 @@ function buildMetrics(t: TerritoryAgg): TerritoryMetrics {
     turnout,
     results,
     valid_by_office: validByOffice,
-    comparison_2022: comparison,
+    comparison_2022: [],
+    president_comparison: presCmp,
     warnings,
   };
 }
@@ -528,8 +671,8 @@ const candidateIndex: CandidateIndex = {
       number: c.numero,
       office: CARGO_TO_OFFICE[c.cd_cargo] as OfficeCode,
       year: YEAR,
-      has_history: trackedIds.has(c.id),
-      has_layer: [1, 3, 5].includes(c.cd_cargo) || trackedIds.has(c.id),
+      has_history: false,
+      has_layer: [1, 3, 5].includes(c.cd_cargo),
     }))
     .sort((a, b) => a.office.localeCompare(b.office) || a.number - b.number),
 };
@@ -542,6 +685,7 @@ const layer = (
   unit: MapLayerValues['unit'],
   candidateId: string | null,
   pick: (m: TerritoryMetrics) => number | null,
+  symmetric = false,
 ) => {
   const values: Record<string, number> = {};
   let lo = Infinity,
@@ -564,7 +708,7 @@ const layer = (
     unit,
     candidate_id: candidateId,
     values,
-    domain: [round4(lo), round4(hi)],
+    domain: symmetric ? symmetricDomain(Object.values(values)) : [round4(lo), round4(hi)],
   } satisfies MapLayerValues);
 };
 layer('abstention', 'rate', null, (m) => m.turnout?.abstention_rate ?? null);
@@ -578,24 +722,44 @@ for (const c of candidateIndex.items.filter((c) => c.has_layer)) {
       m.results[c.office]?.find((r) => r.candidate_id === c.candidate_id)?.share_of_valid ??
       (m.valid_by_office[c.office] ? 0 : null),
   );
-  if (c.has_history)
-    layer(
-      'comparison',
-      'pp',
-      c.candidate_id,
-      (m) => m.comparison_2022.find((x) => x.candidate_id === c.candidate_id)?.delta_pp ?? null,
-    );
 }
+// presidential 2022 -> 2026 comparison layers (delta_pp_r1, municipality level, diverging domain)
+if (tse2022 && YEAR === 2026 && ROUND === 1)
+  for (const key of ['lula', 'bolsonaro'] as const)
+    layer(
+      'president_comparison',
+      'pp',
+      key,
+      (m) => m.president_comparison?.entries.find((e) => e.key === key)?.delta_pp_r1 ?? null,
+      true,
+    );
+
+// highlights ("por que Minas decide")
+if (tse2022 && national2026 && YEAR === 2026 && ROUND === 1) {
+  const st = metricsByTerritory.get('mg')!;
+  const highlights: Highlights = buildHighlights({
+    releaseId,
+    municipalities: municipios.length,
+    state2026: st,
+    tse2022,
+    national2026,
+  });
+  emit('highlights.json', highlights);
+} else
+  console.warn(
+    '[build] WARNING: highlights.json not generated (TSE caches missing or not 2026 r1)',
+  );
 
 // methodology
 const methodology: Methodology = {
-  version: '1.0.0',
+  version: '1.1.0',
   language: 'pt-BR',
   summary: `Resultados do ${ROUND_LABEL} agregados a partir de locais de votação de Minas Gerais. Indicadores por município somam todos os locais do município; indicadores por bairro somam os locais cujo endereço informa aquele bairro.`,
   neighborhood_note:
     'O "bairro" é o bairro do endereço do local de votação, não a residência do eleitor. Eleitores de uma seção podem morar em outro bairro. Não há limites oficiais de bairro; a representação é por ponto (média das coordenadas dos locais).',
-  comparison_note:
-    'A comparação 2022 → 2026 existe apenas para candidaturas com histórico disponível. Diferenças em pontos percentuais (participação nos votos válidos) e em votos absolutos não indicam transferência de votos entre candidaturas.',
+  comparison_note: tse2022
+    ? `A comparação 2022 → 2026 é presidencial: Lula (PT, 13) em 2022 e em 2026, e Jair Bolsonaro (PL, 22) em 2022 frente a Flávio Bolsonaro (PL, 22) em 2026 — são pessoas diferentes; a comparação é entre as candidaturas do mesmo partido e número, e diferenças em pontos percentuais (participação nos votos válidos, 1º turno) ou em votos não indicam transferência de votos. Os números de 2022 vêm dos dados abertos do TSE (${tse2022.sources.map((x) => `${x.url.split('/').pop()}, Last-Modified ${x.last_modified}`).join('; ')}). Estado e municípios: valores exatos do TSE. Bairros: aproximação — os locais de votação de 2022 foram associados aos bairros de 2026 pelo número do local (mesma zona e município, até 1 km de distância) ou pelo nome do bairro do endereço; onde menos de 80 % dos votos válidos de 2022 do município puderam ser associados, o bairro fica sem comparação.`
+    : 'Comparação 2022 → 2026 indisponível nesta versão (dados do TSE de 2022 não carregados).',
   denominators: {
     abstention_rate: 'abstenção ÷ eleitorado apto',
     turnout_rate: 'comparecimento ÷ eleitorado apto',
@@ -609,10 +773,32 @@ const methodology: Methodology = {
       note: 'Extração offline somente leitura; base pública de resultados e locais de votação.',
     },
     { label: 'Malha municipal', note: 'IBGE, API de malhas v3, quando carregada no mapa.' },
+    ...(tse2022
+      ? [
+          {
+            label: 'TSE — Dados Abertos, Eleições 2022 (Presidente)',
+            note: tse2022.sources
+              .map(
+                (x) =>
+                  `${x.url} [${x.entries.join(', ')}] (Last-Modified ${x.last_modified}; geração TSE ${x.generated_by_tse || 'n/d'})`,
+              )
+              .join('; '),
+          },
+        ]
+      : []),
+    ...(national2026
+      ? [
+          {
+            label: 'TSE — Dados Abertos, Eleições 2026 (eleitorado por UF)',
+            note: `${national2026.source.url} [${national2026.source.entries.join(', ')}] (Last-Modified ${national2026.source.last_modified}; geração TSE ${national2026.source.generated_by_tse})`,
+          },
+        ]
+      : []),
   ],
   limitations: [
     ...(ROUND === 1 ? [`Sem 2º turno de ${YEAR} nesta versão.`] : []),
-    'Histórico de 2022 disponível apenas para candidaturas rastreadas; sem abstenção de 2022.',
+    'Comparação 2022 → 2026 apenas para Presidente (Lula e Jair/Flávio Bolsonaro), 1º turno; o 2º turno de 2022 é exibido como referência.',
+    'Bairro 2022 é aproximado (associação de locais de votação de 2022 a bairros de 2026); locais não associados são descartados e contados, por isso a soma dos bairros não reproduz o município em 2022.',
     'Para Deputado Federal e Estadual, exibe-se as 10 candidaturas mais votadas por território além das rastreadas; votos de legenda compõem os válidos mas não aparecem como candidaturas.',
     'A fonte exclui dos votos válidos os votos de candidaturas anuladas sub judice; por isso a soma dos votos de candidaturas pode superar os válidos (em Deputado Federal, 94.114 votos em MG, 0,75 %). As divergências são mantidas e sinalizadas, nunca corrigidas.',
     `${terr.get('mg')!.approxCount} locais de votação com coordenada aproximada.`,
@@ -635,18 +821,11 @@ const manifest: SnapshotManifest = {
   release_id: releaseId,
   status: isPartial ? 'partial' : 'validated',
   generated_at: new Date().toISOString(),
-  years: historico.length ? [2022, YEAR] : [YEAR],
+  years: tse2022 ? [2022, YEAR] : [YEAR],
   rounds: [ROUND],
   geographic_levels: ['state', 'municipality', 'neighborhood'],
   source_project_alias: 'electoral-source-readonly',
-  source_tables: [
-    'municipios',
-    'locais',
-    'totais_local',
-    'candidaturas',
-    'votos_cand',
-    'historico_votos',
-  ],
+  source_tables: ['municipios', 'locais', 'totais_local', 'candidaturas', 'votos_cand'],
   pipeline_commit: commit,
   territories_count: index.length,
   records_count: recordsCount,
@@ -660,7 +839,7 @@ const manifest: SnapshotManifest = {
     'null_votes',
     'votes',
     'share_of_valid',
-    'delta_pp_2022_2026',
+    'president_comparison_delta_pp_r1',
   ],
   files,
   methodology_version: methodology.version,
@@ -668,7 +847,12 @@ const manifest: SnapshotManifest = {
     isPartial
       ? `Cobertura parcial: apenas o município IBGE ${extractManifest.scope.ibge}.`
       : `Cobertura: ${municipios.length} municípios de Minas Gerais, ${locais.length} locais de votação.`,
-    `Eleição ${YEAR}, ${ROUND}º turno; histórico 2022 apenas para candidaturas rastreadas.`,
+    `Eleição ${YEAR}, ${ROUND}º turno; 2022 apenas para Presidente (Lula e Bolsonaro), a partir dos dados abertos do TSE${tse2022 ? '' : ' (não carregado nesta versão)'}.`,
+    ...(tse2022
+      ? [
+          `Bairros 2022 (aproximados): ${matchTotals.places} locais de 2022; ${matchTotals.same_place} associados pelo número do local, ${matchTotals.bairro_name} pelo nome do bairro, ${matchTotals.none} descartados; ${((matchTotals.matched_valid / Math.max(1, matchTotals.total_valid)) * 100).toFixed(2)} % dos votos válidos de 2022 (1º turno) associados; ${munBelow} municípios abaixo de ${MIN_MATCH_RATE * 100} % (bairros sem comparação).`,
+        ]
+      : []),
   ],
   warnings: globalWarnings
     .slice(0, 200)
