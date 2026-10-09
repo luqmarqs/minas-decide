@@ -1,0 +1,12 @@
+# Copy to .dev.vars (gitignored). Local Worker secrets. TARGET project only.
+SUPABASE_TARGET_URL=https://<TARGET_PROJECT_REF>.supabase.co
+SUPABASE_TARGET_ANON_KEY=<target-anon-key>
+SUPABASE_TARGET_SERVICE_ROLE_KEY=<target-service-role-key>
+# Cloudflare official TEST secret: always passes. Replace for staging/prod.
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+RSVP_DEVICE_SECRET=change-me-to-a-random-32-byte-string
+# Comma-separated e-mails bootstrapped as admins by migration seed (dev only).
+ADMIN_EMAILS=
+# Clerk (ADR 0005): server-side key used by the Worker to verify session tokens. NEVER in VITE_*.
+CLERK_SECRET_KEY=<clerk-secret-key>
+CLERK_PUBLISHABLE_KEY=<clerk-publishable-key>

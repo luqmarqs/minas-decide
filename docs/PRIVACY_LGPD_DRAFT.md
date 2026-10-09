@@ -3,7 +3,7 @@
 Este documento organiza os fatos técnicos verdadeiros do sistema para que a revisão jurídica produza a Política de Privacidade e os Termos. Os textos em `/privacidade` e `/termos` continuam marcados como rascunho até essa revisão. Pontos entre colchetes exigem decisão do controlador.
 
 ## 1. Agentes
-- **Controlador:** [organização responsável — a definir]. **Operador(es):** Supabase (banco/auth, região São Paulo), Cloudflare (hospedagem/CDN/Turnstile), [provedor SMTP — a definir], OpenFreeMap (tiles do mapa; recebe IP ao carregar o mapa).
+- **Controlador:** [organização responsável — a definir]. **Operador(es):** Supabase (banco, região São Paulo), **Clerk** (autenticação e envio de códigos de verificação por e-mail; EUA — avaliar transferência internacional), Cloudflare (hospedagem/CDN/Turnstile), [provedor SMTP — a definir], OpenFreeMap (tiles do mapa; recebe IP ao carregar o mapa).
 - **Encarregado (DPO) e canal do titular:** [e-mail — a definir]; o rodapé e `/privacidade` apontam para ele.
 
 ## 2. Dados tratados, finalidade, base legal (proposta) e retenção
