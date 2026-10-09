@@ -1,0 +1,38 @@
+[
+  {
+    "route": "/",
+    "run": 1,
+    "perf": 38,
+    "a11y": 100,
+    "bp": 96,
+    "fcp": "3.3 s",
+    "lcp": "6.7 s",
+    "tbt": "3,130 ms",
+    "cls": "0",
+    "si": "4.7 s",
+    "bootup": [
+      "/assets/maplibre-jYHiI_-f.js:4337ms",
+      "/assets/index-DiQvOB4C.js:1005ms",
+      "Unattributable:255ms",
+      "/:9ms"
+    ]
+  },
+  {
+    "route": "/territorio/mg-3140001",
+    "run": 1,
+    "perf": 25,
+    "a11y": 98,
+    "bp": 96,
+    "fcp": "3.5 s",
+    "lcp": "7.0 s",
+    "tbt": "2,520 ms",
+    "cls": "0.287",
+    "si": "3.6 s",
+    "bootup": [
+      "/assets/maplibre-jYHiI_-f.js:3068ms",
+      "/assets/index-DiQvOB4C.js:1202ms",
+      "Unattributable:310ms",
+      "/territorio/mg-3140001:9ms"
+    ]
+  }
+]

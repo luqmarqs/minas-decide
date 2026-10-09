@@ -29,6 +29,10 @@ simula marca oficial. Toda decisão visual passa por tokens para que a troca de 
 | Motion | `--duration-fast` 140ms, `-base` 200, `-panel` 240, `-sheet` 300, `-map` 500; `--easing-standard/emphasized/exit` | todas zeradas sob `prefers-reduced-motion` |
 | Camadas/layout | `--z-map/panel/header/sheet/dialog/toast`, `--header-height`, `--panel-width`, `--content-max` | |
 
+`--color-border-strong` (rodada 2): `#857d6c` no claro e `#7d7562` no escuro — ≥ 3:1 sobre
+`surface`, `surface-alt` e `surface-raised` (WCAG 1.4.11), usado nas bordas de inputs, selects, checkboxes,
+chips de camada e no contorno do swatch "sem dado". Nenhum token de texto mudou (todos seguem ≥ 4,5:1).
+
 Tema escuro: `prefers-color-scheme: dark` (salvo `data-theme="light"`) e `data-theme="dark"` redefinem os
 mesmos tokens. Os tokens são expostos ao Tailwind 4 via `@theme` em `src/styles/global.css`
 (`bg-surface`, `text-primary`, `bg-action`, `border-border`, `bg-demo-soft`…). Componentes **não** usam hex
@@ -56,7 +60,7 @@ solto; o mapa lê as cores com `getComputedStyle` (`src/features/electoral-map/p
 | `Combobox` | padrão WAI-ARIA 1.2 (input `role=combobox`, `aria-activedescendant`), ↑/↓/Enter/Esc, contagem anunciada em live region |
 | `Select` (Radix) | itens ≥44px, portal acima do mapa |
 | `Dialog` (Radix) | título/descrição obrigatórios, Esc fecha |
-| `BottomSheet` (vaul, lazy) | snap points collapsed/half/expanded (`168px / 55% / 92%`), não modal (mapa segue utilizável), Esc/fechar |
+| `BottomSheet` (vaul, lazy) | snap points recolhido/meio/expandido (`148px / 45% / 92%`, `features/territory/sheet.ts`); abre no **meio** a cada seleção com o mapa visível acima (a busca no celular rola o mapa para o topo); botão explícito "Mostrar/Expandir/Recolher painel" para teclado e leitor de tela; não modal, Esc/fechar; a câmera reserva o seletor de camadas (topo) e a altura do sheet (base) ao enquadrar o território |
 | `SidePanel` | painel desktop recolhível (`aria-expanded`), entrada `--duration-panel` |
 | `Toast` (Radix) + `useToast` (`toastContext.ts`) | região viva polida; erros como foreground |
 | `Tabs` (Radix) | ano/turno; rolagem horizontal interna quando necessário |
@@ -97,14 +101,29 @@ animação bloqueia interação ou submit; marcadores em massa não animam indiv
 
 - MapLibre carregado por `React.lazy` (chunk `maplibre`), worker emitido como asset via
   `maplibre-gl-worker.mjs?url` + `setWorkerUrl` (sem isso o worker 404 no dev e no build).
-- Basemap OpenFreeMap Positron; o style é buscado com timeout de 8 s. Falha → estilo mínimo (fundo liso) e
+- **Início adiado (rodada 2, P-PERF-1):** home, território e atividade pintam primeiro o conteúdo estático e um
+  `MapPlaceholder` (superfície `surface-alt`, skeleton do seletor e legenda com rótulo/rampa da camada, mesma
+  caixa e mesma atribuição do mapa real — sem CLS). `DeferredMapShell` só importa o `MapShell` (Zod, snapshot,
+  MapLibre) depois de `load` + primeiro paint com conteúdo + `requestIdleCallback` (`src/lib/idle.ts`), ou
+  imediatamente se a pessoa selecionar algo na busca. O índice de territórios (~2 MB) é baixado no primeiro
+  foco/toque na busca ou em idle; os documentos normalizados da busca só são montados ao digitar.
+- Coropleta por **propriedade GeoJSON** (`v`) avaliada no worker do MapLibre; `feature-state` fica só para
+  hover. Camadas do basemap sem valor para a leitura (prédios, aeroportos, ferrovias, setas de mão única,
+  escudos de rodovia) são removidas do estilo; `fadeDuration: 0`.
+- Basemap OpenFreeMap **Positron** no claro e **Dark** (`https://tiles.openfreemap.org/styles/dark`) no tema
+  escuro; a troca de `prefers-color-scheme` remonta o canvas com o outro estilo (P-UX-3). `preconnect` para
+  `tiles.openfreemap.org` em `index.html`. O style é buscado com timeout de 8 s. Falha → estilo mínimo (fundo liso) e
   aviso "Mapa de fundo indisponível; dados e contornos continuam visíveis" (T29). Atribuição sempre visível
   abaixo do mapa: "© OpenFreeMap © OpenMapTiles Dados © OpenStreetMap contributors · Malha municipal: IBGE".
-- Municípios: malha IBGE (`public/geo/mg-municipios.geojson`, 455 KB, fetch sob demanda), coloridos por
-  `feature-state` (nada de estado React por feição). Falha da malha → círculos nos centroides.
+- Municípios: malha IBGE (`public/geo/mg-municipios.geojson`, 455 KB, fetch sob demanda), coloridos pela
+  propriedade `v` (nada de estado React por feição). Falha da malha → círculos nos centroides.
 - Bairros: **pontos** (sem polígonos inventados) do município selecionado, rotulados "aprox.".
 - Atividades: fonte GeoJSON `cluster: true` (WebGL), clique no cluster aproxima; clique no ponto abre card
   compacto (não modal).
+- Alvos de toque: botões de zoom 44×44 px (CSS com especificidade acima do `maplibre-gl.css`, que carrega
+  depois) e ícones invertidos no tema escuro; links da atribuição com `min-height` 24 px (P-UX-5).
+- Home desktop: herói + mapa ocupam exatamente a viewport (`flex`), então o selo DEMO no herói reduz o mapa em
+  vez de empurrar a atribuição para fora da tela (P-UX-4).
 - `cooperativeGestures` ligado sempre: Ctrl/⌘ + rolagem no desktop e dois dedos no celular, para o mapa nunca
   capturar a rolagem da página. Controles de zoom no canto inferior direito, deslocados do painel.
 - Sem WebGL, erro de contexto ou escolha do usuário ("Ver como lista") → `TerritoryListFallback` com a mesma
@@ -132,3 +151,17 @@ Capturas reais em `docs/screenshots/` (Chromium headless, 1440×900 e 390×844):
 `real-*` com o snapshot publicado (`validated`), `demo-*` com o fallback DEMO
 (`VITE_SNAPSHOT_BASE` apontando para caminho inexistente), `*-sem-webgl-*` com WebGL desligado e
 reduced motion, `real-desktop-basemap-indisponivel.png` com o basemap bloqueado.
+
+### Rodada 2 (FE-3)
+
+`docs/screenshots/final-r2/` (`<tela>-<desktop1440|mobile390>-<estado>-<data>-<commit>.png`): home claro/escuro
+(basemap escuro), home DEMO, território mobile sem CLS, bottom sheet no estado meio, retorno do magic link com
+"Confira seus dados", `/conta/seguranca` (enrolamento TOTP), `/admin` pedindo o segundo fator e com
+Suspender/Revelar contato. Resultados de axe/CLS/alvos em `_resultados-r2.json`, Lighthouse antes/depois em
+`lighthouse-*.json`, validação real em `_validacao-real.json`. Scripts: `scripts/visual/{capture-r2,lighthouse,
+r2-validate,paint-probe,totp}.mjs`.
+
+Padrões novos: `ProfileReview`/`ProfileReviewGate` (revisão de dados após a promoção da sessão),
+`MfaGate` + `OtpField` (código de 6 dígitos, `autocomplete="one-time-code"`, `inputmode="numeric"`),
+`RevealContact` (contato completo só em estado local, some ao fechar a revisão ou esconder a aba),
+`ModerationDialog` genérico (aprovar/rejeitar/suspender/reativar, motivo obrigatório).

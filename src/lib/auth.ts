@@ -14,6 +14,7 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import type { z } from 'zod';
 import { MeResponse } from '@shared/contracts/registration.ts';
 import { ApiClientError, apiRequest, type RequestOptions } from './api';
+import { markSupabaseLoaded } from './sessionPresence';
 
 export class AuthUnavailableError extends Error {
   constructor(message = 'O serviço de login não está configurado neste ambiente.') {
@@ -28,7 +29,9 @@ export class AuthUnavailableError extends Error {
  */
 export async function loadSupabase(): Promise<SupabaseClient | null> {
   const m = await import('./supabase');
-  return m.getSupabase();
+  const sb = m.getSupabase();
+  if (sb) markSupabaseLoaded();
+  return sb;
 }
 
 export async function getCurrentSession(): Promise<Session | null> {
@@ -150,7 +153,13 @@ export function useMe(session: Session | null) {
 }
 
 /** Internal paths a post-login redirect may target (never an open redirect). */
-const ALLOWED_EXACT = new Set(['/', '/minhas-atividades', '/criar-atividade']);
+const ALLOWED_EXACT = new Set([
+  '/',
+  '/minhas-atividades',
+  '/criar-atividade',
+  '/admin',
+  '/conta/seguranca',
+]);
 const TERRITORY_PATH = /^\/territorio\/mg(?:-\d{7}(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?)?$/;
 
 export function safeRedirectPath(raw: string | null | undefined, fallback = '/'): string {

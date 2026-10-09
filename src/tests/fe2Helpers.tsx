@@ -69,8 +69,93 @@ export function createFakeSupabase(initial: Session | null = null) {
       return { error: null };
     }),
   };
+  // ---- MFA (TOTP) fake: one optional factor; codes '123456' pass. ----
+  const mfaState = {
+    current: 'aal1' as string,
+    factors: [] as {
+      id: string;
+      friendly_name?: string;
+      factor_type: 'totp';
+      status: 'verified' | 'unverified';
+      created_at: string;
+      updated_at: string;
+    }[],
+  };
+  const next = () => (mfaState.factors.some((f) => f.status === 'verified') ? 'aal2' : 'aal1');
+  const mfa = {
+    getAuthenticatorAssuranceLevel: vi.fn(async () => ({
+      data: { currentLevel: mfaState.current, nextLevel: next(), currentAuthenticationMethods: [] },
+      error: null,
+    })),
+    listFactors: vi.fn(async () => ({
+      data: {
+        all: mfaState.factors,
+        totp: mfaState.factors.filter((f) => f.status === 'verified'),
+        phone: [],
+      },
+      error: null,
+    })),
+    enroll: vi.fn(async () => {
+      const id = `factor-${mfaState.factors.length + 1}`;
+      mfaState.factors.push({
+        id,
+        friendly_name: 'Autenticador teste',
+        factor_type: 'totp',
+        status: 'unverified',
+        created_at: '2026-10-09T00:00:00Z',
+        updated_at: '2026-10-09T00:00:00Z',
+      });
+      return {
+        data: {
+          id,
+          type: 'totp',
+          friendly_name: 'Autenticador teste',
+          totp: {
+            qr_code: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+            secret: 'JBSWY3DPEHPK3PXP',
+            uri: 'otpauth://totp/Minas:pessoa?secret=JBSWY3DPEHPK3PXP',
+          },
+        },
+        error: null,
+      };
+    }),
+    challenge: vi.fn(async () => ({ data: { id: 'challenge-1', expires_at: 0 }, error: null })),
+    verify: vi.fn(async ({ factorId, code }: { factorId: string; code: string }) => {
+      if (code !== '123456') {
+        return {
+          data: null,
+          error: { code: 'mfa_verification_failed', status: 422, message: 'invalid' },
+        };
+      }
+      const f = mfaState.factors.find((x) => x.id === factorId);
+      if (f) f.status = 'verified';
+      mfaState.current = 'aal2';
+      return { data: {}, error: null };
+    }),
+    unenroll: vi.fn(async ({ factorId }: { factorId: string }) => {
+      const f = mfaState.factors.find((x) => x.id === factorId);
+      if (f?.status === 'verified' && mfaState.current !== 'aal2') {
+        return { data: null, error: { code: 'insufficient_aal', status: 403, message: 'aal2' } };
+      }
+      mfaState.factors = mfaState.factors.filter((x) => x.id !== factorId);
+      return { data: { id: factorId }, error: null };
+    }),
+  };
   return {
-    auth,
+    auth: { ...auth, mfa },
+    mfaState,
+    /** Adds a verified TOTP factor (session stays aal1 until verify). */
+    withVerifiedFactor() {
+      mfaState.factors.push({
+        id: 'factor-verified',
+        friendly_name: 'Celular',
+        factor_type: 'totp',
+        status: 'verified',
+        created_at: '2026-10-01T00:00:00Z',
+        updated_at: '2026-10-01T00:00:00Z',
+      });
+      return this;
+    },
     setSession(s: Session | null) {
       session = s;
     },

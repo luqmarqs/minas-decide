@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ButtonLink } from '@/components/ui/Button';
 import { signOut, useMe, useSession } from '@/lib/auth';
 
 /**
@@ -8,19 +7,13 @@ import { signOut, useMe, useSession } from '@/lib/auth';
  * minimal menu. Falls back to the "Participar" CTA when there is no session.
  * Never renders e-mail/phone; the API already returns them masked.
  */
-export function SessionMenu() {
+export function SessionMenuActive({ fallback }: { fallback: ReactNode }) {
   const session = useSession();
   const me = useMe(session.session);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
-  if (session.status !== 'active' || !me.data) {
-    return (
-      <ButtonLink to="/participar" size="sm">
-        Participar
-      </ButtonLink>
-    );
-  }
+  if (session.status !== 'active' || !me.data) return <>{fallback}</>;
 
   const label = me.data.email_verified
     ? (me.data.display_name ?? 'Conta verificada')
@@ -64,16 +57,26 @@ export function SessionMenu() {
           <Link
             role="menuitem"
             to="/minhas-atividades"
-            className="block rounded-md px-3 py-2 text-sm hover:bg-surface-alt"
+            className="flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-surface-alt"
             onClick={() => setOpen(false)}
           >
             Minhas atividades
           </Link>
+          {me.data.email_verified && (
+            <Link
+              role="menuitem"
+              to="/conta/seguranca"
+              className="flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-surface-alt"
+              onClick={() => setOpen(false)}
+            >
+              Segurança da conta
+            </Link>
+          )}
           {me.data.is_admin && (
             <Link
               role="menuitem"
               to="/admin"
-              className="block rounded-md px-3 py-2 text-sm hover:bg-surface-alt"
+              className="flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-surface-alt"
               onClick={() => setOpen(false)}
             >
               Moderação
@@ -82,7 +85,7 @@ export function SessionMenu() {
           <button
             type="button"
             role="menuitem"
-            className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-surface-alt"
+            className="flex min-h-11 w-full items-center rounded-md px-3 text-left text-sm hover:bg-surface-alt"
             onClick={() => void handleSignOut()}
           >
             Sair

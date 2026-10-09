@@ -2,7 +2,7 @@
  * MapLibre canvas. Loaded ONLY through React.lazy from MapShell, so maplibre-gl
  * (and its CSS) live in a separate chunk. Rendering rules:
  * - municipalities: IBGE polygons (lazy fetched GeoJSON) coloured through
- *   feature-state (no React state per feature); centroid circles if the mesh fails;
+ *   GeoJSON properties (bucketed in the worker; feature-state only for hover); centroid circles if the mesh fails;
  * - neighborhoods: points (no invented polygons) for the selected municipality;
  * - activities: clustered GeoJSON source (WebGL, no DOM markers);
  * - colours from --map-* tokens; camera moves use --duration-map (0 when reduced motion);
@@ -30,10 +30,10 @@ import { cssDurationMs, prefersReducedMotion } from '@/lib/media';
 import type { TerritoryIndex } from './hooks';
 import { formatLayerValue, LAYERS } from './layers';
 import { readMapPalette, safeDomain, type MapPalette } from './palette';
+import { BASEMAP_STYLE_URLS, fillExpression, trimBasemapStyle } from './mapExpressions';
 
 setWorkerUrl(maplibreWorkerUrl);
 
-const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
 const MG_BOUNDS: [[number, number], [number, number]] = [
   [-51.1, -22.95],
   [-39.8, -14.2],
@@ -89,8 +89,10 @@ export interface MapCanvasProps {
   onFatalError: () => void;
   onBasemapProblem: (p: BasemapProblem) => void;
   /** Extra right padding (desktop side panel) and bottom padding (mobile sheet). */
-  padding: { right: number; bottom: number };
+  padding: { top?: number; right: number; bottom: number };
   ariaLabel?: string;
+  /** Dark basemap. The parent remounts the canvas (key) when the scheme changes. */
+  dark?: boolean;
 }
 
 interface HoverInfo {
@@ -137,11 +139,12 @@ function bboxOf(geom: GeoPolygon | GeoMultiPolygon): [number, number, number, nu
   return [minX, minY, maxX, maxY];
 }
 
-async function loadBaseStyle(signal: AbortSignal): Promise<StyleSpecification> {
+async function loadBaseStyle(signal: AbortSignal, dark: boolean): Promise<StyleSpecification> {
   const timeout = AbortSignal.timeout(8000);
-  const res = await fetch(BASEMAP_STYLE_URL, { signal: AbortSignal.any([signal, timeout]) });
+  const url = dark ? BASEMAP_STYLE_URLS.dark : BASEMAP_STYLE_URLS.light;
+  const res = await fetch(url, { signal: AbortSignal.any([signal, timeout]) });
   if (!res.ok) throw new Error(`style ${res.status}`);
-  return (await res.json()) as StyleSpecification;
+  return trimBasemapStyle((await res.json()) as StyleSpecification);
 }
 
 function fallbackStyle(p: MapPalette): StyleSpecification {
@@ -152,36 +155,6 @@ function fallbackStyle(p: MapPalette): StyleSpecification {
       { id: 'mm-background', type: 'background', paint: { 'background-color': p.surfaceAlt } },
     ],
   };
-}
-
-function fillExpression(
-  p: MapPalette,
-  layer: MapLayerCode,
-  values: MapLayerValues | null | undefined,
-): ExpressionSpecification | string {
-  if (layer === 'activities' || !values) return p.none;
-  const meta = LAYERS[layer];
-  const diverging = meta.scale === 'diverging';
-  const [a, b] = safeDomain(values.domain, diverging);
-  const v: ExpressionSpecification = ['to-number', ['feature-state', 'v'], 0];
-  const ramp: ExpressionSpecification = diverging
-    ? ['interpolate', ['linear'], v, a, p.diverging[0], 0, p.diverging[1], b, p.diverging[2]]
-    : [
-        'interpolate',
-        ['linear'],
-        v,
-        a,
-        p.sequential[0],
-        a + (b - a) * 0.25,
-        p.sequential[1],
-        a + (b - a) * 0.5,
-        p.sequential[2],
-        a + (b - a) * 0.75,
-        p.sequential[3],
-        b,
-        p.sequential[4],
-      ];
-  return ['case', ['boolean', ['feature-state', 'has'], false], ramp, p.none];
 }
 
 function neighborhoodColor(
@@ -214,6 +187,7 @@ export default function MapCanvas(props: MapCanvasProps) {
   const mapRef = useRef<MapLibreMap | null>(null);
   const propsRef = useRef(props);
   const bboxesRef = useRef<Map<string, [number, number, number, number]>>(new Map());
+  const geoRef = useRef<Geo | null>(null);
   const hoverRef = useRef<{ source: string; id: string | number } | null>(null);
   const lastCameraRef = useRef<string | null | undefined>(undefined);
   const [ready, setReady] = useState(false);
@@ -237,7 +211,7 @@ export default function MapCanvas(props: MapCanvasProps) {
     (async () => {
       let style: StyleSpecification;
       try {
-        style = await loadBaseStyle(ctrl.signal);
+        style = await loadBaseStyle(ctrl.signal, !!propsRef.current.dark);
       } catch {
         if (disposed) return;
         propsRef.current.onBasemapProblem('style');
@@ -254,6 +228,8 @@ export default function MapCanvas(props: MapCanvasProps) {
           minZoom: 4,
           maxZoom: 15,
           attributionControl: false,
+          // No label fade-in frames: less main-thread work on slow phones (P-PERF-1).
+          fadeDuration: 0,
           cooperativeGestures: true,
           dragRotate: false,
           pitchWithRotate: false,
@@ -544,11 +520,11 @@ export default function MapCanvas(props: MapCanvasProps) {
     loadMunicipalGeo()
       .then((geo) => {
         if (cancelled) return;
-        const map = mapRef.current;
         const boxes = new Map<string, [number, number, number, number]>();
         for (const f of geo.features) boxes.set(String(f.properties.codarea), bboxOf(f.geometry));
         bboxesRef.current = boxes;
-        map?.getSource<GeoJSONSource>(SRC_MUNI)?.setData(geo);
+        geoRef.current = geo;
+        // Data (with values) is set by the choropleth effect once geoState = 'ok'.
         setGeoState('ok');
       })
       .catch(() => {
@@ -559,39 +535,49 @@ export default function MapCanvas(props: MapCanvasProps) {
     };
   }, [ready]);
 
-  // Centroid circles: always fed (used for hover/colour when the mesh is missing).
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!ready || !map) return;
-    const features: GeoFeature<GeoPoint>[] = props.index.municipalities
-      .filter((m) => m.centroid && m.ibge_code)
-      .map((m) => ({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: m.centroid as [number, number] },
-        properties: { codarea: m.ibge_code },
-      }));
-    map.getSource<GeoJSONSource>(SRC_MUNI_PTS)?.setData({ type: 'FeatureCollection', features });
-    map.setLayoutProperty(
-      'mm-muni-circles',
-      'visibility',
-      geoState === 'failed' ? 'visible' : 'none',
-    );
-  }, [ready, geoState, props.index]);
-
-  // ---- choropleth values (feature-state) ------------------------------------
+  // ---- choropleth: polygons (or centroid circles when the mesh fails) -------
+  // Values travel as GeoJSON properties; MapLibre buckets them in its worker.
   const { layer, layerValues, index } = props;
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
     const palette = readMapPalette();
-    for (const source of [SRC_MUNI, SRC_MUNI_PTS]) map.removeFeatureState({ source });
-    for (const m of index.municipalities) {
-      if (!m.ibge_code) continue;
-      const v = layer === 'activities' ? undefined : layerValues?.values[m.id];
-      const state = { has: v !== undefined && v !== null, v: v ?? 0, known: true };
-      map.setFeatureState({ source: SRC_MUNI, id: m.ibge_code }, state);
-      map.setFeatureState({ source: SRC_MUNI_PTS, id: m.ibge_code }, state);
+    const valueOf = (code: string): number | undefined => {
+      if (layer === 'activities') return undefined;
+      const v = layerValues?.values[`mg-${code}`];
+      return v === null || v === undefined ? undefined : v;
+    };
+    const geo = geoRef.current;
+    if (geoState === 'ok' && geo) {
+      map.getSource<GeoJSONSource>(SRC_MUNI)?.setData({
+        type: 'FeatureCollection',
+        features: geo.features.map((f) => {
+          const v = valueOf(String(f.properties.codarea));
+          return {
+            ...f,
+            properties: v === undefined ? f.properties : { ...f.properties, v },
+          };
+        }),
+      });
     }
+    if (geoState === 'failed') {
+      const features: GeoFeature<GeoPoint>[] = index.municipalities
+        .filter((m) => m.centroid && m.ibge_code)
+        .map((m) => {
+          const v = valueOf(m.ibge_code!);
+          return {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: m.centroid as [number, number] },
+            properties: v === undefined ? { codarea: m.ibge_code } : { codarea: m.ibge_code, v },
+          };
+        });
+      map.getSource<GeoJSONSource>(SRC_MUNI_PTS)?.setData({ type: 'FeatureCollection', features });
+    }
+    map.setLayoutProperty(
+      'mm-muni-circles',
+      'visibility',
+      geoState === 'failed' ? 'visible' : 'none',
+    );
     const expr = fillExpression(palette, layer, layerValues);
     map.setPaintProperty('mm-muni-fill', 'fill-color', expr);
     map.setPaintProperty('mm-muni-fill', 'fill-opacity', layer === 'activities' ? 0.35 : 0.8);
@@ -658,7 +644,9 @@ export default function MapCanvas(props: MapCanvasProps) {
     if (geoState === 'loading' && selectedId && municipalityIdOf(selectedId) !== 'mg') return;
     const selectedEntry = selectedId ? index.byId.get(selectedId) : undefined;
     // Re-frame a municipality once its polygon bbox becomes available (deep links).
-    const key = `${selectedId ?? ''}|${selectedEntry?.type === 'municipality' ? geoState : ''}`;
+    // Padding is part of the key: the mobile sheet overlap is measured after it opens and
+    // the territory is re-framed in the visible part of the map.
+    const key = `${selectedId ?? ''}|${selectedEntry?.type === 'municipality' ? geoState : ''}|${padding.top ?? 72}|${padding.bottom}`;
     if (lastCameraRef.current === key) return;
     const firstMove = lastCameraRef.current === undefined;
     lastCameraRef.current = key;
@@ -667,7 +655,12 @@ export default function MapCanvas(props: MapCanvasProps) {
       firstMove || prefersReducedMotion()
         ? 0
         : Math.min(650, Math.max(350, cssDurationMs('--duration-map', 500)));
-    const pad = { top: 72, left: 24, right: 24 + padding.right, bottom: 24 + padding.bottom };
+    const pad = {
+      top: padding.top ?? 72,
+      left: 24,
+      right: 24 + padding.right,
+      bottom: 24 + padding.bottom,
+    };
     const entry = selectedEntry;
     const move = (fn: () => void) => {
       try {
@@ -701,7 +694,7 @@ export default function MapCanvas(props: MapCanvasProps) {
           : map.flyTo({ center, zoom: 9, padding: pad, duration, essential: false }),
       );
     }
-  }, [ready, geoState, selectedId, index, padding.right, padding.bottom]);
+  }, [ready, geoState, selectedId, index, padding.top, padding.right, padding.bottom]);
 
   return (
     <div className="absolute inset-0">

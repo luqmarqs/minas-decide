@@ -23,9 +23,9 @@ describe('MapShell without WebGL (T20)', () => {
     const onStateChange = vi.fn();
     renderWithApp(<MapShell state={state} onStateChange={onStateChange} />);
 
-    const list = await screen.findByTestId('territory-list-fallback');
+    const list = await screen.findByTestId('territory-list-fallback', {}, { timeout: 5000 });
     expect(within(list).getByText(/não oferece WebGL/)).toBeInTheDocument();
-    const row = await within(list).findByRole('button', { name: /Vale Demo/ });
+    const row = await within(list).findByRole('button', { name: /Vale Demo/ }, { timeout: 5000 });
     expect(row).toHaveTextContent('%');
 
     await userEvent.setup().click(row);

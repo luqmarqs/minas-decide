@@ -209,6 +209,33 @@ describe('/participar — RegistrationForm', () => {
     expect(screen.getByRole('heading', { name: 'Entrar por e-mail' })).toBeInTheDocument();
   });
 
+  it('P-UX-1: 409 with an existing provisional session offers "Usar outro e-mail" (sign out + new anonymous session)', async () => {
+    const ts = installTurnstile();
+    stubFetch((url) =>
+      url === '/api/v1/registrations'
+        ? Promise.resolve(
+            apiError('CONFLICT', 409, 'Não foi possível concluir o cadastro com este e-mail.'),
+          )
+        : undefined,
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await fillValid(user);
+    await waitFor(() => expect(ts.render).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: 'Cadastrar' }));
+    const restart = await screen.findByRole('button', {
+      name: 'Usar outro e-mail (sair e recomeçar)',
+    });
+    expect(fake().auth.signInAnonymously).toHaveBeenCalledTimes(1);
+    await user.click(restart);
+    expect(await screen.findByText(/Sessão anterior encerrada/)).toBeInTheDocument();
+    expect(fake().auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(fake().auth.signInAnonymously).toHaveBeenCalledTimes(2);
+    // Form values are kept so only the e-mail needs changing.
+    expect(screen.getByLabelText(/^Nome/)).toHaveValue('Maria Silva');
+    await waitFor(() => expect(screen.getByLabelText(/^E-mail/)).toHaveFocus());
+  });
+
   it('429 shows an honest rate-limit message', async () => {
     const ts = installTurnstile();
     stubFetch((url) =>

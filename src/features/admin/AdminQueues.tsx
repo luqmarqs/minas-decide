@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import type { AdminActivity, AdminGroupProposal } from '@shared/contracts/admin.ts';
 import { ACTIVITY_TYPE_LABEL_PT, ActivityType } from '@shared/contracts/activities.ts';
@@ -12,20 +12,24 @@ import { formatActivityWhen, formatDateNumeric, formatTime } from '@/lib/format'
 import { useTerritoryName } from '@/features/registration/useTerritoryName';
 import {
   ACTIVITY_STATUS_FILTERS,
+  ACTIVITY_STATUS_LABEL,
   fetchActivityQueue,
   fetchGroupQueue,
   fetchSecurityEvents,
-  findGroupForProposal,
   GROUP_STATUS_FILTERS,
+  GROUP_STATUS_LABEL,
   moderateActivity,
   moderateGroup,
+  setActivitySuspended,
+  setGroupSuspended,
   type ActivityQueue,
   type GroupQueue,
   type SecurityEventsPage,
 } from './api';
 import { adminErrorMessage } from './errors';
 import { GroupManagement } from './GroupManagement';
-import { ModerationDialog } from './ModerationDialog';
+import { ModerationDialog, type ModerationKind } from './ModerationDialog';
+import { RevealContact } from './RevealContact';
 
 const when = (iso: string) => `${formatDateNumeric(iso)} ${formatTime(iso)}`;
 
@@ -58,6 +62,17 @@ function QueueState({ q, children }: { q: ReturnType<typeof useAdminPages>; chil
   }
   return (
     <>
+      <div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void q.refetch()}
+          loading={q.isFetching && !q.isFetchingNextPage}
+          loadingText="Atualizando…"
+        >
+          Atualizar fila
+        </Button>
+      </div>
       {children}
       {q.hasNextPage ? (
         <Button
@@ -174,10 +189,12 @@ export function GroupsQueue() {
                           ? 'warning'
                           : p.status === 'active'
                             ? 'success'
-                            : 'neutral'
+                            : p.status === 'suspended'
+                              ? 'error'
+                              : 'neutral'
                       }
                     >
-                      {p.status}
+                      {GROUP_STATUS_LABEL[p.status] ?? p.status}
                     </Badge>
                     <Button
                       size="sm"
@@ -208,35 +225,36 @@ function hostOf(url: string): string {
 }
 
 function GroupReview({ proposal: p }: { proposal: AdminGroupProposal }) {
-  const queryClient = useQueryClient();
-  const [dialog, setDialog] = useState<'approve' | 'reject' | null>(null);
-  const [groupId, setGroupId] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<ModerationKind | null>(null);
+  // The proposal carries the id of the group created on approval (contract `group_id`).
+  const [groupId, setGroupId] = useState<string | null>(p.group_id);
+  const [status, setStatus] = useState<string>(p.status);
+  const [managing, setManaging] = useState(false);
   const [done, setDone] = useState<string | null>(null);
-  const [lookup, setLookup] = useState<'idle' | 'loading' | 'missing' | 'error'>('idle');
   const host = hostOf(p.join_url_proposed);
 
   async function decide(reason: string) {
-    const res = await moderateGroup(p.id, dialog!, reason);
-    setDone(
-      res.status === 'active'
-        ? 'Proposta aprovada: o grupo está publicado.'
-        : 'Proposta rejeitada.',
-    );
-    if (res.group_id) setGroupId(res.group_id);
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] });
-  }
-
-  async function openManagement() {
-    setLookup('loading');
-    try {
-      const id = await findGroupForProposal(p);
-      if (id) {
-        setGroupId(id);
-        setLookup('idle');
-      } else setLookup('missing');
-    } catch {
-      setLookup('error');
+    if (dialog === 'approve' || dialog === 'reject') {
+      const res = await moderateGroup(p.id, dialog, reason);
+      setStatus(res.status);
+      setDone(
+        res.status === 'active'
+          ? 'Proposta aprovada: o grupo está publicado.'
+          : 'Proposta rejeitada.',
+      );
+      if (res.group_id) setGroupId(res.group_id);
+    } else if (dialog && groupId) {
+      const suspend = dialog === 'suspend';
+      await setGroupSuspended(groupId, suspend, reason);
+      setStatus(suspend ? 'suspended' : 'active');
+      setDone(
+        suspend
+          ? 'Grupo suspenso: saiu das páginas públicas.'
+          : 'Suspensão retirada: o grupo voltou a ser exibido.',
+      );
     }
+    // The list is NOT refetched here: the item would vanish from the current filter while
+    // the moderator may still suspend/reveal/manage it. "Atualizar fila" refreshes it.
   }
 
   return (
@@ -267,48 +285,52 @@ function GroupReview({ proposal: p }: { proposal: AdminGroupProposal }) {
           </>
         }
       />
-      <p className="text-xs text-muted">
-        Contatos chegam mascarados da API. Não há revelação nesta versão.
-      </p>
+      <RevealContact proposalId={p.id} />
       {done ? (
         <p role="status" className="text-sm font-medium">
           {done}
         </p>
       ) : null}
-      {p.status === 'pending' && !done ? (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => setDialog('approve')}>
-            Aprovar
-          </Button>
-          <Button size="sm" variant="danger" onClick={() => setDialog('reject')}>
-            Rejeitar
-          </Button>
-        </div>
-      ) : null}
-      {p.status === 'active' && !groupId ? (
-        <div className="flex flex-col gap-1">
-          <div>
+      <div className="flex flex-wrap gap-2">
+        {status === 'pending' && !done ? (
+          <>
+            <Button size="sm" onClick={() => setDialog('approve')}>
+              Aprovar
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => setDialog('reject')}>
+              Rejeitar
+            </Button>
+          </>
+        ) : null}
+        {groupId && (status === 'active' || status === 'suspended') ? (
+          <>
             <Button
               size="sm"
               variant="secondary"
-              loading={lookup === 'loading'}
-              onClick={() => void openManagement()}
+              aria-expanded={managing}
+              onClick={() => setManaging((m) => !m)}
             >
-              Gerenciar grupo publicado
+              {managing ? 'Fechar gestão do grupo' : 'Gerenciar grupo'}
             </Button>
-          </div>
-          {lookup === 'missing' ? (
-            <p className="text-sm text-warning">
-              Grupo não encontrado entre os ativos deste território (pode estar inativo ou ter outro
-              link).
-            </p>
-          ) : null}
-          {lookup === 'error' ? (
-            <p className="text-sm text-error">Não foi possível localizar o grupo agora.</p>
-          ) : null}
-        </div>
+            {status === 'active' ? (
+              <Button size="sm" variant="danger" onClick={() => setDialog('suspend')}>
+                Suspender grupo
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => setDialog('unsuspend')}>
+                Reativar grupo
+              </Button>
+            )}
+          </>
+        ) : null}
+      </div>
+      {!groupId && (status === 'active' || status === 'suspended') ? (
+        <p className="text-sm text-warning">
+          Esta proposta não tem grupo vinculado na resposta da API: edição e suspensão indisponíveis
+          por aqui.
+        </p>
       ) : null}
-      {groupId ? (
+      {groupId && managing ? (
         <GroupManagement
           groupId={groupId}
           initialName={p.name_proposed}
@@ -369,10 +391,12 @@ export function ActivitiesQueue() {
                           ? 'warning'
                           : a.status === 'published'
                             ? 'success'
-                            : 'neutral'
+                            : a.status === 'suspended'
+                              ? 'error'
+                              : 'neutral'
                       }
                     >
-                      {a.status}
+                      {ACTIVITY_STATUS_LABEL[a.status] ?? a.status}
                     </Badge>
                     <Button
                       size="sm"
@@ -395,21 +419,32 @@ export function ActivitiesQueue() {
 }
 
 function ActivityReview({ activity: a }: { activity: AdminActivity }) {
-  const queryClient = useQueryClient();
-  const [dialog, setDialog] = useState<'approve' | 'reject' | null>(null);
+  const [dialog, setDialog] = useState<ModerationKind | null>(null);
+  const [status, setStatus] = useState<string>(a.status);
   const [done, setDone] = useState<string | null>(null);
   const typeLabel = ActivityType.safeParse(a.type).success
     ? ACTIVITY_TYPE_LABEL_PT[a.type as ActivityType]
     : a.type;
 
   async function decide(reason: string) {
-    const res = await moderateActivity(a.id, dialog!, reason);
-    setDone(
-      res.status === 'published'
-        ? 'Atividade publicada no mapa e na agenda.'
-        : 'Atividade rejeitada.',
-    );
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'activities'] });
+    if (dialog === 'approve' || dialog === 'reject') {
+      const res = await moderateActivity(a.id, dialog, reason);
+      setStatus(res.status);
+      setDone(
+        res.status === 'published'
+          ? 'Atividade publicada no mapa e na agenda.'
+          : 'Atividade rejeitada.',
+      );
+    } else if (dialog) {
+      const res = await setActivitySuspended(a.id, dialog === 'suspend', reason);
+      setStatus(res.status);
+      setDone(
+        res.status === 'suspended'
+          ? 'Atividade suspensa: saiu do mapa e da agenda.'
+          : 'Suspensão retirada: a atividade voltou para análise e precisa ser aprovada de novo.',
+      );
+    }
+    // Not refetched automatically (see GroupReview); "Atualizar fila" refreshes the list.
   }
 
   return (
@@ -446,22 +481,39 @@ function ActivityReview({ activity: a }: { activity: AdminActivity }) {
           {done}
         </p>
       ) : null}
-      {a.status === 'pending_review' && !done ? (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => setDialog('approve')}>
-            Aprovar e publicar
+      <div className="flex flex-wrap gap-2">
+        {status === 'pending_review' && !done ? (
+          <>
+            <Button size="sm" onClick={() => setDialog('approve')}>
+              Aprovar e publicar
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => setDialog('reject')}>
+              Rejeitar
+            </Button>
+          </>
+        ) : null}
+        {status === 'published' ? (
+          <Button size="sm" variant="danger" onClick={() => setDialog('suspend')}>
+            Suspender atividade
           </Button>
-          <Button size="sm" variant="danger" onClick={() => setDialog('reject')}>
-            Rejeitar
+        ) : null}
+        {status === 'suspended' ? (
+          <Button size="sm" onClick={() => setDialog('unsuspend')}>
+            Reativar (volta para análise)
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
       {dialog ? (
         <ModerationDialog
           open
           onOpenChange={(o) => !o && setDialog(null)}
           decision={dialog}
           subject={a.title}
+          detail={
+            dialog === 'unsuspend'
+              ? 'Ela volta para a fila de análise e só reaparece no mapa depois de nova aprovação.'
+              : undefined
+          }
           onConfirm={decide}
         />
       ) : null}

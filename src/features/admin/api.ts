@@ -8,12 +8,11 @@ import { z } from 'zod';
 import {
   AdminActivity,
   AdminGroupProposal,
+  AdminRevealContactResponse,
   SecurityEvent,
   type AdminGroupPatch,
   type GroupManagerInput,
 } from '@shared/contracts/admin.ts';
-import { PublicGroupsResponse } from '@shared/contracts/groups.ts';
-import { apiRequest } from '@/lib/api';
 import { authedRequest } from '@/lib/auth';
 
 export const GroupQueue = z.object({
@@ -56,18 +55,49 @@ export const SecurityEventsPage = z.object({
 });
 export type SecurityEventsPage = z.infer<typeof SecurityEventsPage>;
 
+/** Results of POST /admin/groups/:id/(un)suspend and /admin/activities/:id/(un)suspend. */
+export const GroupSuspensionResult = z.object({
+  id: z.string().uuid(),
+  status: z.string(),
+  updated_at: z.string(),
+});
+export const ActivitySuspensionResult = z.object({
+  id: z.string().uuid(),
+  status: z.enum(['suspended', 'pending_review']),
+  version: z.number().int(),
+});
+
 export const GROUP_STATUS_FILTERS = [
   { value: 'pending', label: 'Pendentes' },
   { value: 'active', label: 'Aprovados' },
+  { value: 'suspended', label: 'Suspensos' },
   { value: 'rejected', label: 'Rejeitados' },
   { value: 'all', label: 'Todos' },
 ];
 export const ACTIVITY_STATUS_FILTERS = [
   { value: 'pending_review', label: 'Pendentes' },
   { value: 'published', label: 'Publicadas' },
+  { value: 'suspended', label: 'Suspensas' },
   { value: 'rejected', label: 'Rejeitadas' },
   { value: 'cancelled', label: 'Canceladas' },
 ];
+
+export const GROUP_STATUS_LABEL: Record<string, string> = {
+  pending: 'Pendente',
+  active: 'Aprovado',
+  inactive: 'Inativo',
+  rejected: 'Rejeitado',
+  suspended: 'Suspenso',
+};
+export const ACTIVITY_STATUS_LABEL: Record<string, string> = {
+  draft: 'Rascunho',
+  pending_review: 'Pendente',
+  published: 'Publicada',
+  rejected: 'Rejeitada',
+  cancelled: 'Cancelada',
+  archived: 'Arquivada',
+  suspended: 'Suspensa',
+};
 
 export function fetchGroupQueue(status: string, cursor: string | null, signal?: AbortSignal) {
   return authedRequest('/admin/queue', GroupQueue, {
@@ -123,15 +153,33 @@ export function fetchSecurityEvents(cursor: string | null, signal?: AbortSignal)
   });
 }
 
+/** Suspend/lift a published GROUP (id = whatsapp group id, from `proposal.group_id`). */
+export function setGroupSuspended(groupId: string, suspended: boolean, reason: string) {
+  return authedRequest(
+    `/admin/groups/${encodeURIComponent(groupId)}/${suspended ? 'suspend' : 'unsuspend'}`,
+    GroupSuspensionResult,
+    { method: 'POST', body: { reason } },
+  );
+}
+
+/** Suspend a published activity; lifting it sends it back to review. */
+export function setActivitySuspended(id: string, suspended: boolean, reason: string) {
+  return authedRequest(
+    `/admin/activities/${encodeURIComponent(id)}/${suspended ? 'suspend' : 'unsuspend'}`,
+    ActivitySuspensionResult,
+    { method: 'POST', body: { reason } },
+  );
+}
+
 /**
- * The queue lists PROPOSALS; group edits need the GROUP id. Until the contract
- * exposes `group_id` on approved proposals, find it among the public active
- * groups of the territory by matching the invite URL.
+ * Full proposer contact. Audited server-side and only allowed with a real aal2
+ * session. The answer is never cached (no React Query) and lives only in the
+ * component state of the open review.
  */
-export async function findGroupForProposal(p: AdminGroupProposal): Promise<string | null> {
-  const res = await apiRequest('/groups', PublicGroupsResponse, {
-    query: { territory_id: p.territory_id },
-  });
-  if (res.fallback !== 'exact') return null;
-  return res.items.find((g) => g.join_url === p.join_url_proposed)?.id ?? null;
+export function revealProposalContact(proposalId: string, reason?: string) {
+  return authedRequest(
+    `/admin/group-proposals/${encodeURIComponent(proposalId)}/reveal-contact`,
+    AdminRevealContactResponse,
+    { method: 'POST', body: reason ? { reason } : {} },
+  );
 }

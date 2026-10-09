@@ -8,6 +8,7 @@
  */
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { MeResponse } from '@shared/contracts/registration.ts';
+import type { MeResponse as MeResponseT } from '@shared/contracts/registration.ts';
 import { ApiClientError } from '@/lib/api';
 import { authedRequest, consumeAuthNext, loadSupabase, safeRedirectPath } from '@/lib/auth';
 
@@ -61,7 +62,7 @@ export function scrubAuthUrl(): void {
 }
 
 export type ReturnOutcome =
-  | { status: 'success'; next: string }
+  | { status: 'success'; next: string; me: MeResponseT | null }
   | { status: 'expired' }
   | { status: 'invalid'; reason: 'no_params' | 'rejected' | 'other_browser' }
   | { status: 'unconfirmed'; message: string }
@@ -75,8 +76,12 @@ function isExpired(code: string | undefined, status?: number): boolean {
 export async function confirmAndRefresh(next: string): Promise<ReturnOutcome> {
   const sb = await loadSupabase();
   if (!sb) return { status: 'error', message: 'Login não configurado.', canRetry: false };
+  let confirmed: MeResponseT;
   try {
-    await authedRequest('/auth/confirm-email', MeResponse, { method: 'POST', body: {} });
+    confirmed = await authedRequest('/auth/confirm-email', MeResponse, {
+      method: 'POST',
+      body: {},
+    });
   } catch (err) {
     if (err instanceof ApiClientError && err.code === 'EMAIL_NOT_VERIFIED') {
       return { status: 'unconfirmed', message: err.message };
@@ -102,7 +107,15 @@ export async function confirmAndRefresh(next: string): Promise<ReturnOutcome> {
       canRetry: false,
     };
   }
-  return { status: 'success', next };
+  // P-SEC-1: read the profile with the refreshed (verified) session; the page asks
+  // the person to review it when `profile_review_required` is set.
+  let me: MeResponseT | null = confirmed;
+  try {
+    me = await authedRequest('/me', MeResponse, { session: data.session });
+  } catch {
+    // keep the confirm-email answer
+  }
+  return { status: 'success', next, me };
 }
 
 export async function processAuthReturn(href: string): Promise<ReturnOutcome> {

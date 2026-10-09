@@ -4,7 +4,9 @@ import { PageShell } from '@/components/layouts/PageShell';
 import { ButtonLink } from '@/components/ui/Button';
 import { LoadingBlock } from '@/components/ui/Skeleton';
 import { ErrorState, Note } from '@/components/ui/States';
+import type { MeResponse } from '@shared/contracts/registration.ts';
 import { safeRedirectPath } from '@/lib/auth';
+import { ProfileReview } from '@/features/account/ProfileReview';
 import {
   confirmAndRefresh,
   processAuthReturn,
@@ -17,6 +19,8 @@ const NEXT_LABEL: Record<string, string> = {
   '/criar-atividade': 'Continuar para criar a atividade',
   '/minhas-atividades': 'Ir para minhas atividades',
   '/': 'Ir para o mapa',
+  '/admin': 'Ir para a moderação',
+  '/conta/seguranca': 'Ir para a segurança da conta',
 };
 
 export default function AuthRetornoPage() {
@@ -35,7 +39,7 @@ export default function AuthRetornoPage() {
     }
     void started.current.then((o) => {
       if (!alive) return;
-      queryClient.removeQueries({ queryKey: ['me'] });
+      void queryClient.resetQueries({ queryKey: ['me'] });
       setOutcome(o);
     });
     return () => {
@@ -46,7 +50,7 @@ export default function AuthRetornoPage() {
   async function retryConfirm() {
     setRetrying(true);
     const o = await confirmAndRefresh('/');
-    queryClient.removeQueries({ queryKey: ['me'] });
+    void queryClient.resetQueries({ queryKey: ['me'] });
     setOutcome(o);
     setRetrying(false);
   }
@@ -57,7 +61,7 @@ export default function AuthRetornoPage() {
       <meta name="referrer" content="no-referrer" />
       <div aria-live="polite">
         {!outcome ? <LoadingBlock label="Confirmando o link do e-mail…" lines={2} /> : null}
-        {outcome?.status === 'success' ? <Success next={outcome.next} /> : null}
+        {outcome?.status === 'success' ? <Success next={outcome.next} me={outcome.me} /> : null}
         {outcome?.status === 'expired' ? (
           <Failure
             title="Este link expirou ou já foi usado"
@@ -95,14 +99,27 @@ export default function AuthRetornoPage() {
   );
 }
 
-function Success({ next }: { next: string }) {
+function Success({ next, me }: { next: string; me: MeResponse | null }) {
   const target = safeRedirectPath(next);
+  const [reviewed, setReviewed] = useState(false);
+  const note = (
+    <Note>
+      E-mail confirmado. Sua sessão neste navegador agora é de uma conta verificada: você pode
+      organizar atividades. Sessões antigas em outros aparelhos foram encerradas por segurança.
+    </Note>
+  );
+  if (me?.profile_review_required && !reviewed) {
+    return (
+      <div className="flex flex-col gap-4">
+        {note}
+        <ProfileReview me={me} onDone={() => setReviewed(true)} />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-4">
-      <Note>
-        E-mail confirmado. Sua sessão neste navegador agora é de uma conta verificada: você pode
-        organizar atividades. Sessões antigas em outros aparelhos foram encerradas por segurança.
-      </Note>
+      {note}
+      {reviewed ? <p role="status">Dados conferidos. Obrigado!</p> : null}
       <div className="flex flex-wrap gap-2">
         <ButtonLink to={target} replace>
           {NEXT_LABEL[target] ?? 'Continuar'}

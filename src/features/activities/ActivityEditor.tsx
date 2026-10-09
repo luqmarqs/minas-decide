@@ -33,6 +33,7 @@ import {
   type FieldErrors,
 } from '@/features/registration/formErrors';
 import { TerritoryField } from '@/features/registration/TerritoryField';
+import { readDraft as readStoredDraft, writeDraft as writeStoredDraft } from './draftStore';
 import { useTerritoryName } from '@/features/registration/useTerritoryName';
 import {
   createActivity,
@@ -78,26 +79,10 @@ const EMPTY_DRAFT: ActivityDraft = {
   contactValue: '',
 };
 
-export const DRAFT_STORAGE_KEY = 'mm.activity-draft';
-
-function readDraft(): ActivityDraft | null {
-  try {
-    const raw = window.sessionStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ActivityDraft>;
-    return { ...EMPTY_DRAFT, ...parsed, confirmed: false };
-  } catch {
-    return null;
-  }
-}
-
-function writeDraft(d: ActivityDraft | null) {
-  try {
-    if (d) window.sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(d));
-    else window.sessionStorage.removeItem(DRAFT_STORAGE_KEY);
-  } catch {
-    // storage unavailable: draft just isn't kept
-  }
+function loadDraft(owner: string | undefined): ActivityDraft | null {
+  if (!owner) return null;
+  const parsed = readStoredDraft<Partial<ActivityDraft>>(owner);
+  return parsed ? { ...EMPTY_DRAFT, ...parsed, confirmed: false } : null;
 }
 
 function draftFrom(a: MyActivity): ActivityDraft {
@@ -192,6 +177,8 @@ export interface ActivityEditorProps {
   initial?: MyActivity;
   /** When set, the form can be filled (draft) but not submitted. */
   blockedReason?: ReactNode;
+  /** User id that owns the persisted draft (create mode). Without it nothing is stored. */
+  draftOwner?: string;
   onSaved: (activity: MyActivity) => void;
   onCancel?: () => void;
 }
@@ -201,11 +188,12 @@ export function ActivityEditor({
   mode,
   initial,
   blockedReason,
+  draftOwner,
   onSaved,
   onCancel,
 }: ActivityEditorProps) {
   const [draft, setDraft] = useState<ActivityDraft>(() =>
-    initial ? draftFrom(initial) : (readDraft() ?? EMPTY_DRAFT),
+    initial ? draftFrom(initial) : (loadDraft(draftOwner) ?? EMPTY_DRAFT),
   );
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -213,10 +201,10 @@ export function ActivityEditor({
   const [showMap, setShowMap] = useState(false);
   const { entry: territoryEntry } = useTerritoryName(draft.territoryId);
 
-  // Draft survives the e-mail verification detour (same tab) — create mode only.
+  // Draft survives the e-mail verification detour (any tab, 7 days) — create mode only.
   useEffect(() => {
-    if (mode === 'create') writeDraft(draft);
-  }, [mode, draft]);
+    if (mode === 'create' && draftOwner) writeStoredDraft(draftOwner, draft);
+  }, [mode, draft, draftOwner]);
 
   const set = <K extends keyof ActivityDraft>(k: K, v: ActivityDraft[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
@@ -333,7 +321,7 @@ export function ActivityEditor({
         mode === 'edit' && initial && body
           ? await patchActivity(initial.id, body)
           : await createActivity(input);
-      if (mode === 'create') writeDraft(null);
+      if (mode === 'create' && draftOwner) writeStoredDraft(draftOwner, null);
       onSaved(saved);
     } catch (err) {
       const fields = serverFieldErrors(err);

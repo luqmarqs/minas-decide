@@ -13,6 +13,9 @@
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <title>Minas em Movimento</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Basemap (OpenFreeMap): open the connection early; the map itself starts after idle. -->
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+    <link rel="dns-prefetch" href="https://tiles.openfreemap.org" />
   </head>
   <body>
     <div id="root"></div>

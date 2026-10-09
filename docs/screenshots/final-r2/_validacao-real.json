@@ -1,0 +1,91 @@
+{
+  "commit": "0a2c6cf",
+  "date": "20261009",
+  "results": [
+    {
+      "step": "setup: POST /registrations (provisória)",
+      "ok": true,
+      "detail": "status=201"
+    },
+    {
+      "step": "setup: POST /groups/proposals",
+      "ok": true,
+      "detail": "status=201"
+    },
+    {
+      "step": "setup: svc_grant_admin (usuário descartável)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P-SEC-1: retorno mostra \"Confira seus dados\" com telefone mascarado",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P-SEC-1: sem botão de continuar antes da revisão",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P-SEC-1: PATCH /me {profile_reviewed:true} limpou o flag (GET /me real)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P-AUTH-1: QR (data: SVG) + segredo em texto",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P-AUTH-1: enroll + challenge + verify (código RFC 6238 gerado em Node)",
+      "ok": true,
+      "detail": "aal=aal2"
+    },
+    {
+      "step": "sessão nova via magic link é aal1",
+      "ok": true,
+      "detail": "aal=aal1"
+    },
+    {
+      "step": "Worker APP_ENV=staging: /admin/queue com aal1 → 403 (sem bypass)",
+      "ok": true,
+      "detail": "status=403"
+    },
+    {
+      "step": "MfaGate: /admin pede o código antes de carregar o painel",
+      "ok": true,
+      "detail": "admin_requests=0"
+    },
+    {
+      "step": "MfaGate: painel carregou com JWT aal2 no Worker sem bypass",
+      "ok": true,
+      "detail": "aals=aal2"
+    },
+    {
+      "step": "admin: aprovação (aal2) e botão Suspender via group_id",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "admin: Revelar contato (aal2 real) mostra e-mail completo + aviso de auditoria",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "admin: Suspender tira o grupo da resposta pública",
+      "ok": true,
+      "detail": "status=200"
+    },
+    {
+      "step": "admin: Reativar disponível após suspender",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "admin: contato some ao fechar a revisão",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

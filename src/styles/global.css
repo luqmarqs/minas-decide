@@ -138,15 +138,27 @@
   }
 }
 
-/* ---- MapLibre controls aligned with tokens ---- */
-.maplibregl-ctrl-group {
+/* ---- MapLibre controls aligned with tokens ----
+   Prefixed with .maplibregl-map: maplibre-gl.css is loaded later (lazy chunk) with the same
+   specificity and would otherwise win (white box, 29 px buttons). */
+.maplibregl-map .maplibregl-ctrl-group {
   background: var(--color-surface-raised);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-raised);
 }
-.maplibregl-ctrl-group button {
-  width: 40px;
-  height: 40px;
+.maplibregl-map .maplibregl-ctrl-group button {
+  /* ≥ 44 px touch targets for zoom (WCAG 2.5.5 / P-UX-5). */
+  width: 44px;
+  height: 44px;
+}
+/* MapLibre icons are dark SVGs: invert them on the dark raised surface. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .maplibregl-ctrl button .maplibregl-ctrl-icon {
+    filter: invert(1);
+  }
+}
+:root[data-theme='dark'] .maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: invert(1);
 }
 .maplibregl-ctrl button:focus-visible,
 .maplibregl-canvas:focus-visible {

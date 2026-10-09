@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { PublicActivity } from '@shared/contracts/activities.ts';
 import { OFFICE_LABEL_PT, type MapLayerCode } from '@shared/contracts/metrics.ts';
 import { municipalityIdOf } from '@shared/contracts/snapshot.ts';
@@ -7,7 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/States';
 import { cn } from '@/lib/cn';
-import { DESKTOP_QUERY, useMediaQuery } from '@/lib/media';
+import { DARK_QUERY, DESKTOP_QUERY, useMediaQuery } from '@/lib/media';
 import { hasWebGL } from '@/lib/webgl';
 import { ActivityCard } from '@/features/activities/ActivityCard';
 import { useActivities } from '@/features/activities/api';
@@ -18,10 +18,15 @@ import { MapLayerSelector } from './MapLayerSelector';
 import { MapLegend, StatusBadge } from './MapLegend';
 import { TerritoryListFallback, type FallbackReason } from './TerritoryListFallback';
 import type { MapUrlState } from './useMapUrlState';
+import { SHEET_HALF } from '@/features/territory/sheet';
 
 const MapCanvas = lazy(() => import('./MapCanvas'));
 
-export const MAP_ATTRIBUTION = '© OpenFreeMap © OpenMapTiles Dados © OpenStreetMap contributors';
+/** Height reserved for the layer selector overlay on mobile (camera padding). */
+const MOBILE_TOP_PAD = 140;
+
+export { MAP_ATTRIBUTION, MapAttribution } from './MapAttribution';
+import { MapAttribution } from './MapAttribution';
 
 export interface MapShellProps {
   state: MapUrlState;
@@ -33,39 +38,6 @@ export interface MapShellProps {
   /** Override activities shown (e.g. the single activity on its page). */
   activitiesOverride?: PublicActivity[];
   className?: string;
-}
-
-export function MapAttribution({ className }: { className?: string }) {
-  return (
-    <p className={cn('text-xs text-muted', className)}>
-      <a
-        href="https://openfreemap.org"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="underline"
-      >
-        © OpenFreeMap
-      </a>{' '}
-      <a
-        href="https://www.openmaptiles.org/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="underline"
-      >
-        © OpenMapTiles
-      </a>{' '}
-      Dados{' '}
-      <a
-        href="https://www.openstreetmap.org/copyright"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="underline"
-      >
-        © OpenStreetMap contributors
-      </a>{' '}
-      · Malha municipal: IBGE
-    </p>
-  );
 }
 
 /**
@@ -81,13 +53,14 @@ export function MapShell({
   className,
 }: MapShellProps) {
   const desktop = useMediaQuery(DESKTOP_QUERY);
+  const dark = useMediaQuery(DARK_QUERY);
   const [webglOk] = useState(() => hasWebGL());
   const [mapFailed, setMapFailed] = useState(false);
   const [basemapProblem, setBasemapProblem] = useState<BasemapProblem | null>(null);
   const [activityId, setActivityId] = useState<string | null>(null);
 
   const { index, snapshot, isLoading, error, refetch } = useTerritoryIndex();
-  const candidatesQ = useCandidates();
+  const candidatesQ = useCandidates({ enabled: LAYERS[state.layer].needsCandidate });
   const latestYear = snapshot ? Math.max(...snapshot.manifest.years) : state.year;
 
   const layer: MapLayerCode = state.layer;
@@ -170,9 +143,32 @@ export function MapShell({
   };
 
   const showPanelSpace = !!panel && desktop && variant === 'full';
+
+  // P-UX-2: measure how much of the map the mobile sheet covers once it has opened (and
+  // the page scrolled the map up), so the camera frames the territory in the visible part.
+  const mapBoxRef = useRef<HTMLDivElement>(null);
+  const [sheetOverlap, setSheetOverlap] = useState(0);
+  const sheetCase = !desktop && variant === 'full' && !!panel && !!state.territoryId;
+  useEffect(() => {
+    if (!sheetCase) return;
+    const measure = () => {
+      const box = mapBoxRef.current?.getBoundingClientRect();
+      if (!box) return;
+      const sheet = document.querySelector('[data-vaul-drawer]')?.getBoundingClientRect();
+      const sheetTop = sheet?.top ?? window.innerHeight * (1 - SHEET_HALF);
+      const overlap = Math.round(box.bottom - sheetTop);
+      // Keep at least ~120 px of map for the territory itself.
+      setSheetOverlap(Math.max(0, Math.min(overlap, box.height - MOBILE_TOP_PAD - 120)));
+    };
+    const t = setTimeout(measure, 500);
+    return () => clearTimeout(t);
+  }, [sheetCase, state.territoryId]);
   const padding = {
+    // Mobile: the layer selector covers ~140 px at the top of the map.
+    top: variant === 'full' && !desktop ? MOBILE_TOP_PAD : 72,
     right: showPanelSpace ? 420 : 0,
-    bottom: !desktop && state.territoryId && variant === 'full' ? 260 : 0,
+    // Mobile: only the part of the map actually covered by the half-open sheet.
+    bottom: sheetCase ? sheetOverlap : 0,
   };
 
   const legend = snapshot ? (
@@ -241,6 +237,8 @@ export function MapShell({
         }
       >
         <MapCanvas
+          key={dark ? 'dark' : 'light'}
+          dark={dark}
           index={index}
           selectedId={state.territoryId}
           layer={layer}
@@ -260,6 +258,7 @@ export function MapShell({
   return (
     <div className={cn('flex flex-col', className)}>
       <div
+        ref={mapBoxRef}
         className={cn(
           'relative min-h-0 flex-1 overflow-hidden bg-surface-alt',
           showPanelSpace && 'mm-map-has-panel',
@@ -316,7 +315,12 @@ export function MapShell({
         ) : null}
 
         {snapshot && !fallbackReason && variant === 'full' ? (
-          <div className="pointer-events-none absolute bottom-0 left-0 z-(--z-panel) w-full p-2 sm:p-3 lg:w-auto [&>*]:pointer-events-auto">
+          <div
+            className={cn(
+              'pointer-events-none absolute left-0 z-(--z-panel) w-full p-2 sm:p-3 lg:w-auto [&>*]:pointer-events-auto',
+              'bottom-0',
+            )}
+          >
             {legend}
           </div>
         ) : null}

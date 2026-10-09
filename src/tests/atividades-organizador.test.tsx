@@ -6,6 +6,7 @@ import {
   saoPauloOffsetLabel,
   utcIsoToSaoPauloLocal,
 } from '@/features/activities/api';
+import { draftKey, writeDraft } from '@/features/activities/draftStore';
 import CriarAtividadePage from '@/pages/CriarAtividadePage';
 import MinhasAtividadesPage from '@/pages/MinhasAtividadesPage';
 import { stubFetch } from './utils';
@@ -41,6 +42,8 @@ function me(verified: boolean) {
     selected_territory_id: TERRITORY,
     is_admin: false,
     account_state: 'active',
+    phone_masked: null,
+    profile_review_required: false,
   };
 }
 
@@ -66,8 +69,15 @@ function myActivity(over: Record<string, unknown> = {}) {
   };
 }
 
+/** Seeds the per-user localStorage draft (P-UX-1). */
+function seedDraft(data: Record<string, unknown>) {
+  writeDraft(USER_ID, data);
+}
+const DRAFT_KEY = draftKey(USER_ID);
+
 beforeEach(() => {
   window.sessionStorage.clear();
+  window.localStorage.clear();
   installTurnstile();
 });
 afterEach(() => {
@@ -121,7 +131,7 @@ describe('/criar-atividade guard', () => {
     ).toBeInTheDocument();
     await user.type(screen.getByLabelText(/^Título/), 'Caminhada no bairro');
     await waitFor(() =>
-      expect(window.sessionStorage.getItem('mm.activity-draft')).toContain('Caminhada no bairro'),
+      expect(window.localStorage.getItem(DRAFT_KEY)).toContain('Caminhada no bairro'),
     );
     expect(screen.getByRole('button', { name: 'Enviar para análise' })).toBeDisabled();
     expect(callsTo(fetchMock, '/api/v1/activities')).toHaveLength(0);
@@ -129,25 +139,22 @@ describe('/criar-atividade guard', () => {
 
   it('verified: validates, converts local time to UTC and ends in "enviada para análise"', async () => {
     sb.current = createFakeSupabase(makeSession({ anonymous: false, email: 'm@exemplo.com.br' }));
-    window.sessionStorage.setItem(
-      'mm.activity-draft',
-      JSON.stringify({
-        title: 'Panfletagem na praça',
-        type: 'panfletagem',
-        description: 'Distribuição de material na praça central.',
-        territoryId: TERRITORY,
-        address: 'Praça Sete, Centro',
-        lon: '-43.9386',
-        lat: '-19.9191',
-        confirmed: true,
-        date: '2030-01-15',
-        startTime: '14:30',
-        endTime: '16:00',
-        contactOptIn: true,
-        contactType: 'instagram',
-        contactValue: 'coletivo.centro',
-      }),
-    );
+    seedDraft({
+      title: 'Panfletagem na praça',
+      type: 'panfletagem',
+      description: 'Distribuição de material na praça central.',
+      territoryId: TERRITORY,
+      address: 'Praça Sete, Centro',
+      lon: '-43.9386',
+      lat: '-19.9191',
+      confirmed: true,
+      date: '2030-01-15',
+      startTime: '14:30',
+      endTime: '16:00',
+      contactOptIn: true,
+      contactType: 'instagram',
+      contactValue: 'coletivo.centro',
+    });
     const fetchMock = stubFetch((url, init) => {
       if (url === '/api/v1/me') return Promise.resolve(ok(me(true)));
       if (url === '/api/v1/activities' && init?.method === 'POST')
@@ -183,25 +190,22 @@ describe('/criar-atividade guard', () => {
       public_contact_opt_in: true,
       public_contact_type: 'instagram',
     });
-    expect(window.sessionStorage.getItem('mm.activity-draft')).toBeNull();
+    expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull();
   });
 
   it('T18: API failure keeps the form and never shows success', async () => {
     sb.current = createFakeSupabase(makeSession({ anonymous: false }));
-    window.sessionStorage.setItem(
-      'mm.activity-draft',
-      JSON.stringify({
-        title: 'Panfletagem na praça',
-        type: 'panfletagem',
-        description: 'Distribuição de material na praça central.',
-        territoryId: TERRITORY,
-        address: 'Praça Sete, Centro',
-        lon: '-43.9386',
-        lat: '-19.9191',
-        date: '2030-01-15',
-        startTime: '14:30',
-      }),
-    );
+    seedDraft({
+      title: 'Panfletagem na praça',
+      type: 'panfletagem',
+      description: 'Distribuição de material na praça central.',
+      territoryId: TERRITORY,
+      address: 'Praça Sete, Centro',
+      lon: '-43.9386',
+      lat: '-19.9191',
+      date: '2030-01-15',
+      startTime: '14:30',
+    });
     stubFetch((url) => {
       if (url === '/api/v1/me') return Promise.resolve(ok(me(true)));
       if (url === '/api/v1/activities')
@@ -283,5 +287,46 @@ describe('/minhas-atividades', () => {
     expect(await screen.findByText(/voltou para análise e saiu do mapa/)).toBeInTheDocument();
     const [, init] = firstCallTo(fetchMock, `/api/v1/activities/${ACT_ID}`);
     expect(JSON.parse(String(init.body))).toEqual({ version: 3, title: 'Panfletagem nova' });
+  });
+});
+
+describe('P-SEC-1 — pages blocked until the profile is reviewed', () => {
+  const reviewMe = {
+    ...me(true),
+    profile_review_required: true,
+    phone_masked: '+55 (31) 9****-**88',
+  };
+
+  it('/criar-atividade shows "Confira seus dados" and no editor until "Está correto"', async () => {
+    sb.current = createFakeSupabase(makeSession({ anonymous: false }));
+    const fetchMock = stubFetch((url, init) => {
+      if (url === '/api/v1/me' && init?.method === 'PATCH')
+        return Promise.resolve(ok({ ...reviewMe, profile_review_required: false }));
+      if (url === '/api/v1/me') return Promise.resolve(ok(reviewMe));
+      return undefined;
+    });
+    const user = userEvent.setup();
+    renderRoutes(
+      [{ path: '/criar-atividade', element: <CriarAtividadePage /> }],
+      '/criar-atividade',
+    );
+    expect(await screen.findByRole('heading', { name: 'Confira seus dados' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Título/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Está correto' }));
+    expect(await screen.findByLabelText(/^Título/)).toBeInTheDocument();
+    expect(callsTo(fetchMock, '/api/v1/activities')).toHaveLength(0);
+  });
+
+  it('/minhas-atividades does not list anything before the review', async () => {
+    sb.current = createFakeSupabase(makeSession({ anonymous: false }));
+    const fetchMock = stubFetch((url) =>
+      url === '/api/v1/me' ? Promise.resolve(ok(reviewMe)) : undefined,
+    );
+    renderRoutes(
+      [{ path: '/minhas-atividades', element: <MinhasAtividadesPage /> }],
+      '/minhas-atividades',
+    );
+    expect(await screen.findByRole('heading', { name: 'Confira seus dados' })).toBeInTheDocument();
+    expect(callsTo(fetchMock, '/api/v1/my-activities')).toHaveLength(0);
   });
 });

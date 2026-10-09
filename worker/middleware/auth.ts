@@ -52,6 +52,11 @@ export async function assertOrganizer(c: Context<AppBindings>, user: AuthUser): 
   if (!profile) throw fail('FORBIDDEN');
   if (profile.account_state !== 'active') throw fail('FORBIDDEN');
   if (profile.email_verification_state !== 'verified') throw fail('EMAIL_NOT_VERIFIED');
+  // P-SEC-1: after a magic-link promotion the person must confirm/edit the profile
+  // data (which may have been entered by someone else) before acting as organizer.
+  if (profile.review_required_at) {
+    throw fail('FORBIDDEN', 'Confira seus dados de perfil antes de propor atividades.');
+  }
 }
 
 export const requireOrganizer: MiddlewareHandler<AppBindings> = async (c, next) => {

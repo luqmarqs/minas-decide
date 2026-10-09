@@ -1,0 +1,110 @@
+[
+  {
+    "route": "/",
+    "run": 1,
+    "perf": 69,
+    "a11y": 100,
+    "bp": 96,
+    "fcp": "1.7 s",
+    "lcp": "1.9 s",
+    "tbt": "2,400 ms",
+    "cls": "0.008",
+    "si": "3.8 s",
+    "bootup": [
+      "/assets/maplibre-jYHiI_-f.js:2643ms",
+      "/assets/index-BQqR7ShS.js:1027ms",
+      "Unattributable:269ms",
+      "/:128ms"
+    ]
+  },
+  {
+    "route": "/",
+    "run": 2,
+    "perf": 69,
+    "a11y": 100,
+    "bp": 96,
+    "fcp": "1.7 s",
+    "lcp": "1.9 s",
+    "tbt": "2,320 ms",
+    "cls": "0.008",
+    "si": "3.6 s",
+    "bootup": [
+      "/assets/maplibre-jYHiI_-f.js:2552ms",
+      "/assets/index-BQqR7ShS.js:979ms",
+      "Unattributable:229ms",
+      "/:128ms"
+    ]
+  },
+  {
+    "route": "/",
+    "run": 3,
+    "perf": 69,
+    "a11y": 100,
+    "bp": 96,
+    "fcp": "1.7 s",
+    "lcp": "1.9 s",
+    "tbt": "2,380 ms",
+    "cls": "0.008",
+    "si": "3.6 s",
+    "bootup": [
+      "/assets/maplibre-jYHiI_-f.js:2598ms",
+      "/assets/index-BQqR7ShS.js:1024ms",
+      "Unattributable:222ms",
+      "/:127ms"
+    ]
+  },
+  {
+    "route": "/territorio/mg-3140001",
+    "run": 1,
+    "perf": 62,
+    "a11y": 100,
+    "bp": 96,
+    "fcp": "2.3 s",
+    "lcp": "3.1 s",
+    "tbt": "2,340 ms",
+    "cls": "0",
+    "si": "3.2 s",
+    "bootup": [
+      "/assets/maplibre-jYHiI_-f.js:2831ms",
+      "/assets/index-BQqR7ShS.js:1053ms",
+      "Unattributable:229ms",
+      "/territorio/mg-3140001:108ms"
+    ]
+  },
+  {
+    "route": "/territorio/mg-3140001",
+    "run": 2,
+    "perf": 62,
+    "a11y": 100,
+    "bp": 96,
+    "fcp": "2.3 s",
+    "lcp": "3.0 s",
+    "tbt": "2,390 ms",
+    "cls": "0",
+    "si": "3.4 s",
+    "bootup": [
+      "/assets/maplibre-jYHiI_-f.js:2784ms",
+      "/assets/index-BQqR7ShS.js:1047ms",
+      "Unattributable:196ms",
+      "/territorio/mg-3140001:108ms"
+    ]
+  },
+  {
+    "route": "/territorio/mg-3140001",
+    "run": 3,
+    "perf": 62,
+    "a11y": 100,
+    "bp": 96,
+    "fcp": "2.3 s",
+    "lcp": "3.0 s",
+    "tbt": "2,350 ms",
+    "cls": "0",
+    "si": "3.7 s",
+    "bootup": [
+      "/assets/maplibre-jYHiI_-f.js:2795ms",
+      "/assets/index-BQqR7ShS.js:1094ms",
+      "Unattributable:180ms",
+      "/territorio/mg-3140001:89ms"
+    ]
+  }
+]

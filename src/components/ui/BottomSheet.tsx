@@ -32,7 +32,7 @@ export function BottomSheet({
   title,
   description,
   children,
-  snapPoints = ['168px', 0.55, 0.92],
+  snapPoints = ['148px', 0.45, 0.92],
   activeSnapPoint,
   onActiveSnapPointChange,
   modal = false,

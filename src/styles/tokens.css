@@ -18,7 +18,7 @@
   --color-text-muted: #605d53; /* 4,9:1 sobre surface-alt (axe VR-1) */
   --color-text-on-action: #f6f3ee;
   --color-border: #d8d2c6;
-  --color-border-strong: #b9b1a1;
+  --color-border-strong: #857d6c; /* ≥ 3:1 sobre surface, surface-alt e surface-raised (bordas de controles, WCAG 1.4.11; VR-1 P-UX-5) */
 
   /* ---- ação e estados ---- */
   --color-action-primary: #1f4e3d;
@@ -133,7 +133,7 @@
     --color-text-muted: #9f998b;
     --color-text-on-action: #0f1a15;
     --color-border: #37332a;
-    --color-border-strong: #57513f;
+    --color-border-strong: #7d7562; /* ≥ 3:1 sobre surface-raised escuro */
     --color-action-primary: #8fcba9;
     --color-action-hover: #a8d8bd;
     --color-action-active: #c3e4d1;
@@ -176,7 +176,7 @@
   --color-text-muted: #9f998b;
   --color-text-on-action: #0f1a15;
   --color-border: #37332a;
-  --color-border-strong: #57513f;
+  --color-border-strong: #7d7562;
   --color-action-primary: #8fcba9;
   --color-action-hover: #a8d8bd;
   --color-action-active: #c3e4d1;

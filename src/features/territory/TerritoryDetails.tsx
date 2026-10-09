@@ -15,7 +15,7 @@ import { plural } from '@/lib/format';
 import { absoluteUrl, SHARE_FEEDBACK, shareOrCopy } from '@/lib/share';
 import { useMunicipalityMetrics, useTerritoryIndex } from '@/features/electoral-map/hooks';
 import { pickMetrics } from '@/features/electoral-map/layers';
-import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshot';
+import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshotStatus';
 import { mapQuery } from '@/features/electoral-map/useMapUrlState';
 import { ActivityAgenda } from '@/features/activities/ActivityAgenda';
 import { DataQualityNote } from './DataQualityNote';
@@ -32,6 +32,8 @@ export interface TerritoryDetailsProps {
   onSelectTerritory: (id: string) => void;
   /** 'panel' (map side panel / sheet) or 'page' (/territorio/:id). */
   variant?: 'panel' | 'page';
+  /** `false` keeps the skeleton and does not fetch yet (page waits for first paint). */
+  dataEnabled?: boolean;
 }
 
 function Section({
@@ -142,6 +144,7 @@ export function TerritoryDetails({
   onYearRoundChange,
   onSelectTerritory,
   variant = 'panel',
+  dataEnabled = true,
 }: TerritoryDetailsProps) {
   const {
     index,
@@ -149,7 +152,7 @@ export function TerritoryDetails({
     isLoading: indexLoading,
     error: indexError,
     refetch,
-  } = useTerritoryIndex();
+  } = useTerritoryIndex({ enabled: dataEnabled });
   const entry = index?.byId.get(territoryId);
   const muniId = municipalityIdOf(territoryId);
   const metricsQ = useMunicipalityMetrics(entry ? muniId : null);
@@ -165,7 +168,15 @@ export function TerritoryDetails({
     return list.sort((a, b) => b.year - a.year || a.round - b.round);
   }, [rows]);
 
-  if (indexLoading) return <LoadingBlock label="Carregando território…" lines={5} />;
+  // Index and indicators render in the same step (P-PERF-2): the skeleton reserves
+  // roughly the final height so the bairros list and the footer do not jump.
+  if (!dataEnabled || indexLoading || (entry && metricsQ.isLoading)) {
+    return (
+      <div className={variant === 'page' ? 'min-h-[36rem]' : 'min-h-80'}>
+        <LoadingBlock label="Carregando território…" lines={variant === 'page' ? 12 : 6} />
+      </div>
+    );
+  }
   if (indexError && !index) {
     return (
       <ErrorState
@@ -249,9 +260,7 @@ export function TerritoryDetails({
             </TabsList>
           </Tabs>
         ) : null}
-        {metricsQ.isLoading ? (
-          <LoadingBlock label="Carregando indicadores…" lines={4} />
-        ) : metricsQ.error ? (
+        {metricsQ.error ? (
           <ErrorState
             compact
             title="Indicadores indisponíveis"

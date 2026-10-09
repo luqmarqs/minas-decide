@@ -535,3 +535,29 @@ describe('audited contact reveal', () => {
     expect(item.proposer_email_masked).not.toContain('proponente@');
   });
 });
+
+describe('P-SEC-1: organizer actions blocked while profile review is pending', () => {
+  it('POST /activities -> 403 until PATCH /me {profile_reviewed:true}', async () => {
+    const s = setup();
+    const v = s.users.verified();
+    await s.repo.updateProfile(v.user.id, { review_required: true });
+    const blocked = await s.request('/api/v1/activities', {
+      method: 'POST',
+      token: v.token,
+      json: activityInput(),
+    });
+    expect(blocked.status).toBe(403);
+    const reviewed = await s.request('/api/v1/me', {
+      method: 'PATCH',
+      token: v.token,
+      json: { profile_reviewed: true },
+    });
+    expect(reviewed.status).toBe(200);
+    const ok = await s.request('/api/v1/activities', {
+      method: 'POST',
+      token: v.token,
+      json: activityInput(),
+    });
+    expect(ok.status).toBe(201);
+  });
+});

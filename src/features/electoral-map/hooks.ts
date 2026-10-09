@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { MapLayerCode } from '@shared/contracts/metrics.ts';
 import type { TerritoryIndexEntry } from '@shared/contracts/territory.ts';
-import { loadSnapshot, type SnapshotClient } from './snapshot';
+import type { SnapshotClient } from './snapshot';
 
 export const snapshotKeys = {
   root: ['snapshot'] as const,
@@ -14,13 +14,28 @@ export const snapshotKeys = {
   candidates: (rel: string) => ['snapshot', rel, 'candidates'] as const,
 };
 
-export function useSnapshot() {
+/**
+ * The loader (and Zod + contracts) lives in a separate chunk: the first paint of
+ * the public pages never waits for it (P-PERF-1).
+ */
+const loadSnapshotLazy = async () => (await import('./snapshot')).loadSnapshot();
+
+export interface LazyDataOptions {
+  /**
+   * `false` = do not trigger the download; only read what another component has
+   * already loaded (e.g. the footer, or the search before the first interaction).
+   */
+  enabled?: boolean;
+}
+
+export function useSnapshot({ enabled = true }: LazyDataOptions = {}) {
   return useQuery<SnapshotClient>({
     queryKey: snapshotKeys.root,
-    queryFn: () => loadSnapshot(),
+    queryFn: loadSnapshotLazy,
     staleTime: Infinity,
     gcTime: Infinity,
     retry: false,
+    enabled,
   });
 }
 
@@ -50,13 +65,14 @@ export function buildTerritoryIndex(entries: TerritoryIndexEntry[]): TerritoryIn
   return { entries, byId, childrenOf, municipalities };
 }
 
-export function useTerritoryIndex() {
-  const snap = useSnapshot();
+/** Territories index (~2 MB). Pass `enabled: false` to defer it until needed. */
+export function useTerritoryIndex({ enabled = true }: LazyDataOptions = {}) {
+  const snap = useSnapshot({ enabled });
   const client = snap.data;
   const q = useQuery({
     queryKey: snapshotKeys.index(client?.releaseId ?? 'none'),
     queryFn: () => client!.getIndex(),
-    enabled: !!client,
+    enabled: !!client && enabled,
     staleTime: Infinity,
     gcTime: Infinity,
   });
@@ -64,7 +80,7 @@ export function useTerritoryIndex() {
   return {
     index,
     snapshot: client,
-    isLoading: snap.isLoading || q.isLoading,
+    isLoading: enabled && (snap.isLoading || q.isLoading),
     error: snap.error ?? q.error,
     refetch: q.refetch,
   };
@@ -106,12 +122,13 @@ export function useMethodology() {
   });
 }
 
-export function useCandidates() {
+/** Candidate list (~280 KB); only fetched when a layer needs a candidate. */
+export function useCandidates({ enabled = true }: LazyDataOptions = {}) {
   const { data: client } = useSnapshot();
   return useQuery({
     queryKey: snapshotKeys.candidates(client?.releaseId ?? 'none'),
     queryFn: () => client!.getCandidates(),
-    enabled: !!client,
+    enabled: !!client && enabled,
     staleTime: Infinity,
   });
 }

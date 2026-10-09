@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Field, FormErrorSummary } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { ApiClientError } from '@/lib/api';
+import { ensureProvisionalSession, getCurrentSession, signOut } from '@/lib/auth';
 import { TurnstileWidget, type TurnstileHandle } from '@/lib/turnstile';
 import { SendLinkForm } from '@/features/auth/SendLinkForm';
 import { CONSENT_VERSION, submitRegistration, type ObrigadoState } from './api';
@@ -65,6 +66,10 @@ export function RegistrationForm({ initialTerritoryId }: RegistrationFormProps) 
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
+  /** 409 while a provisional session exists: offer to sign out and start over (P-UX-1). */
+  const [canRestart, setCanRestart] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const [restarted, setRestarted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const ts = useRef<TurnstileHandle>(null);
 
@@ -78,6 +83,8 @@ export function RegistrationForm({ initialTerritoryId }: RegistrationFormProps) 
     if (submitting) return;
     setFormError(null);
     setConflict(false);
+    setCanRestart(false);
+    setRestarted(false);
     const parsed = RegistrationInput.safeParse({
       display_name: name,
       email,
@@ -104,6 +111,8 @@ export function RegistrationForm({ initialTerritoryId }: RegistrationFormProps) 
       if (err instanceof ApiClientError && err.code === 'CONFLICT') {
         setConflict(true);
         setFormError(err.message);
+        const current = await getCurrentSession().catch(() => null);
+        setCanRestart(!!current?.user.is_anonymous);
       } else {
         setFormError(
           Object.keys(fields).length ? 'Revise os campos destacados.' : submitErrorMessage(err),
@@ -113,6 +122,23 @@ export function RegistrationForm({ initialTerritoryId }: RegistrationFormProps) 
     } finally {
       // Turnstile tokens are single use: always get a fresh one for the next attempt.
       ts.current?.reset();
+    }
+  }
+
+  async function restartWithOtherEmail() {
+    setRestarting(true);
+    try {
+      await signOut();
+      await ensureProvisionalSession();
+      setConflict(false);
+      setCanRestart(false);
+      setFormError(null);
+      setRestarted(true);
+      document.getElementById(IDS.email!)?.focus();
+    } catch (err) {
+      setFormError(submitErrorMessage(err));
+    } finally {
+      setRestarting(false);
     }
   }
 
@@ -233,11 +259,36 @@ export function RegistrationForm({ initialTerritoryId }: RegistrationFormProps) 
           <div role="alert" className="rounded-md border border-error/40 bg-error-soft p-3">
             <p className="text-sm text-primary">{formError}</p>
             {conflict ? (
-              <a href="#entrar-por-email" className="mt-1 inline-block text-sm underline">
+              <a
+                href="#entrar-por-email"
+                className="mt-1 inline-flex min-h-6 items-center text-sm underline"
+              >
                 Entrar por e-mail
               </a>
             ) : null}
+            {canRestart ? (
+              <div className="mt-2">
+                <p className="text-sm text-secondary">
+                  Este navegador já tem um cadastro provisório com outro e-mail.
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2"
+                  loading={restarting}
+                  loadingText="Encerrando sessão…"
+                  onClick={() => void restartWithOtherEmail()}
+                >
+                  Usar outro e-mail (sair e recomeçar)
+                </Button>
+              </div>
+            ) : null}
           </div>
+        ) : null}
+        {restarted ? (
+          <p role="status" className="text-sm">
+            Sessão anterior encerrada. Confira o e-mail e envie o cadastro de novo.
+          </p>
         ) : null}
         <div>
           <Button type="submit" size="lg" loading={submitting} loadingText="Enviando cadastro…">

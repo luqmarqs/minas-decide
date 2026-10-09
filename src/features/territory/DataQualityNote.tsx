@@ -57,7 +57,7 @@ export function DataQualityNote({
           ? ` · ${entry.polling_places} locais de votação agregados`
           : ''}{' '}
         ·{' '}
-        <Link to="/metodologia" className="underline">
+        <Link to="/metodologia" className="inline-flex min-h-6 items-center underline">
           Metodologia
         </Link>
       </p>

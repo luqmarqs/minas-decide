@@ -65,11 +65,35 @@ export function snapshotBase(): string {
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
+/** Lets the browser paint/handle input between chunks of heavy validation. */
+const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/**
+ * Validates a large array (territories index, ~7k entries) in chunks so no single
+ * main-thread task blocks input for long (P-PERF-1, TBT). Same Zod contract.
+ */
+export async function parseArrayChunked<S extends z.ZodType>(
+  schema: S,
+  json: unknown,
+  path: string,
+  chunk = 800,
+): Promise<z.infer<S>[]> {
+  if (!Array.isArray(json)) throw new SnapshotFileError(path, 'schema');
+  const out: z.infer<S>[] = [];
+  for (let i = 0; i < json.length; i += chunk) {
+    if (i > 0) await yieldToMain();
+    const parsed = z.array(schema).safeParse(json.slice(i, i + chunk));
+    if (!parsed.success) throw new SnapshotFileError(path, 'schema');
+    for (const item of parsed.data as z.infer<S>[]) out.push(item);
+  }
+  return out;
+}
+
 async function fetchValidated<S extends z.ZodType>(
   fetchImpl: FetchLike,
   url: string,
   path: string,
-  schema: S,
+  schema: S | null,
   opts: { nullOn404?: boolean } = {},
 ): Promise<z.infer<S> | null> {
   let res: Response;
@@ -92,6 +116,7 @@ async function fetchValidated<S extends z.ZodType>(
   } catch {
     throw new SnapshotFileError(path, 'parse');
   }
+  if (schema === null) return json as z.infer<S>; // caller validates (chunked)
   const parsed = schema.safeParse(json);
   if (!parsed.success) throw new SnapshotFileError(path, 'schema');
   return parsed.data as z.infer<S>;
@@ -123,7 +148,8 @@ function remoteClient(
     getIndex: () =>
       once('index', async () => {
         const path = `${rel}/territories-index.json`;
-        return (await fetchValidated(fetchImpl, url(path), path, z.array(TerritoryIndexEntry)))!;
+        const raw = await fetchValidated(fetchImpl, url(path), path, null);
+        return parseArrayChunked(TerritoryIndexEntry, raw, path);
       }),
     getMunicipalityMetrics: (municipalityId) =>
       once(`m:${municipalityId}`, () => {
@@ -195,8 +221,4 @@ export async function loadSnapshot(opts: LoadSnapshotOptions = {}): Promise<Snap
   }
 }
 
-export const SNAPSHOT_STATUS_LABEL: Record<SnapshotStatus, string> = {
-  validated: 'Dados validados',
-  partial: 'Dados parciais',
-  demo: 'DADOS DEMONSTRATIVOS',
-};
+export { SNAPSHOT_STATUS_LABEL } from './snapshotStatus';

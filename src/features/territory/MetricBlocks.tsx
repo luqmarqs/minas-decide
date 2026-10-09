@@ -114,9 +114,9 @@ export function ResultsBlock({
         const valid = m.valid_by_office[office];
         return (
           <section key={office} aria-label={`Votação para ${OFFICE_LABEL_PT[office]}`}>
-            <h4 className="font-body text-sm font-semibold tracking-normal">
+            <h3 className="font-body text-sm font-semibold tracking-normal">
               {OFFICE_LABEL_PT[office]}
-            </h4>
+            </h3>
             <p className="mb-2 text-xs text-muted">
               % dos votos válidos do cargo
               {valid !== undefined ? ` (${formatInt(valid)} válidos)` : ''}

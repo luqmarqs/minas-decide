@@ -15,6 +15,7 @@ import { EmptyState, ErrorState, Note } from '@/components/ui/States';
 import { ApiClientError, messageForError } from '@/lib/api';
 import { formatActivityWhen, plural } from '@/lib/format';
 import { useMe, useSession } from '@/lib/auth';
+import { ProfileReviewGate } from '@/features/account/ProfileReview';
 import { ActivityEditor } from '@/features/activities/ActivityEditor';
 import { cancelActivity, myActivitiesKey, useMyActivities } from '@/features/activities/api';
 import { SendLinkForm } from '@/features/auth/SendLinkForm';
@@ -27,6 +28,7 @@ const STATUS: Record<ActivityStatus, { label: string; variant: BadgeVariant }> =
   rejected: { label: 'Não aprovada', variant: 'error' },
   cancelled: { label: 'Cancelada', variant: 'neutral' },
   archived: { label: 'Arquivada', variant: 'neutral' },
+  suspended: { label: 'Suspensa pela moderação', variant: 'error' },
 };
 
 const MANAGEABLE = new Set<ActivityStatus>(['draft', 'pending_review', 'published']);
@@ -68,7 +70,11 @@ export default function MinhasAtividadesPage() {
       </div>
     );
   } else {
-    body = <MyActivityList userId={active.user.id} />;
+    body = me.data ? (
+      <ProfileReviewGate me={me.data}>
+        <MyActivityList userId={active.user.id} />
+      </ProfileReviewGate>
+    ) : null;
   }
 
   return (
@@ -171,6 +177,17 @@ function MyActivityItem({ activity: a, userId }: { activity: MyActivity; userId:
       {a.status === 'pending_review' ? (
         <p className="mt-2 text-sm text-secondary">
           Aguardando revisão. Ainda não aparece no mapa.
+        </p>
+      ) : null}
+      {a.status === 'suspended' ? (
+        <p className="mt-2 text-sm text-secondary">
+          Suspensa pela moderação. Não aparece no mapa enquanto estiver suspensa.
+          {a.review_reason ? (
+            <>
+              {' '}
+              <strong>Motivo:</strong> {a.review_reason}
+            </>
+          ) : null}
         </p>
       ) : null}
       {a.status === 'rejected' && a.review_reason ? (

@@ -1,47 +1,46 @@
+import type { ComponentType } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router';
-import AtividadePage from '@/pages/AtividadePage';
-import AuthRetornoPage from '@/pages/AuthRetornoPage';
-import CriarAtividadePage from '@/pages/CriarAtividadePage';
 import HomePage from '@/pages/HomePage';
-import MetodologiaPage from '@/pages/MetodologiaPage';
-import MinhasAtividadesPage from '@/pages/MinhasAtividadesPage';
-import NotFoundPage from '@/pages/NotFoundPage';
-import ObrigadoPage from '@/pages/ObrigadoPage';
-import ParticiparPage from '@/pages/ParticiparPage';
-import PrivacidadePage from '@/pages/PrivacidadePage';
-import ProporGrupoPage from '@/pages/ProporGrupoPage';
-import TerritorioPage from '@/pages/TerritorioPage';
-import TermosPage from '@/pages/TermosPage';
 import { RootLayout, RouteError } from './layout';
+
+/**
+ * Only the home (map explorer) ships in the initial chunk. Every other page is a
+ * lazy route chunk (P-PERF-1): forms, Zod contracts, supabase-js, vaul and the
+ * admin panel never block the first paint of the public map.
+ */
+function page(load: () => Promise<{ default: ComponentType }>): Pick<RouteObject, 'lazy'> {
+  return {
+    lazy: async () => {
+      const m = await load();
+      return { Component: m.default };
+    },
+  };
+}
 
 export const routes: RouteObject[] = [
   {
     path: '/',
     Component: RootLayout,
     errorElement: <RouteError />,
+    HydrateFallback: () => null,
     children: [
       { index: true, Component: HomePage },
-      { path: 'territorio/:id', Component: TerritorioPage },
-      { path: 'atividade/:id', Component: AtividadePage },
-      { path: 'participar', Component: ParticiparPage },
-      { path: 'obrigado', Component: ObrigadoPage },
-      { path: 'propor-grupo', Component: ProporGrupoPage },
-      { path: 'criar-atividade', Component: CriarAtividadePage },
-      { path: 'minhas-atividades', Component: MinhasAtividadesPage },
-      { path: 'autenticacao/retorno', Component: AuthRetornoPage },
-      {
-        // Separate lazy chunk; never linked from public navigation.
-        path: 'admin/*',
-        lazy: async () => {
-          const m = await import('@/pages/admin/AdminPage');
-          return { Component: m.default };
-        },
-      },
-      { path: 'privacidade', Component: PrivacidadePage },
-      { path: 'termos', Component: TermosPage },
-      { path: 'metodologia', Component: MetodologiaPage },
-      { path: '404', Component: NotFoundPage },
-      { path: '*', Component: NotFoundPage },
+      { path: 'territorio/:id', ...page(() => import('@/pages/TerritorioPage')) },
+      { path: 'atividade/:id', ...page(() => import('@/pages/AtividadePage')) },
+      { path: 'participar', ...page(() => import('@/pages/ParticiparPage')) },
+      { path: 'obrigado', ...page(() => import('@/pages/ObrigadoPage')) },
+      { path: 'propor-grupo', ...page(() => import('@/pages/ProporGrupoPage')) },
+      { path: 'criar-atividade', ...page(() => import('@/pages/CriarAtividadePage')) },
+      { path: 'minhas-atividades', ...page(() => import('@/pages/MinhasAtividadesPage')) },
+      { path: 'autenticacao/retorno', ...page(() => import('@/pages/AuthRetornoPage')) },
+      { path: 'conta/seguranca', ...page(() => import('@/pages/ContaSegurancaPage')) },
+      // Separate lazy chunk; never linked from public navigation.
+      { path: 'admin/*', ...page(() => import('@/pages/admin/AdminPage')) },
+      { path: 'privacidade', ...page(() => import('@/pages/PrivacidadePage')) },
+      { path: 'termos', ...page(() => import('@/pages/TermosPage')) },
+      { path: 'metodologia', ...page(() => import('@/pages/MetodologiaPage')) },
+      { path: '404', ...page(() => import('@/pages/NotFoundPage')) },
+      { path: '*', ...page(() => import('@/pages/NotFoundPage')) },
     ],
   },
 ];

@@ -13,7 +13,7 @@ import { formatActivityWhen } from '@/lib/format';
 import { absoluteUrl, SHARE_FEEDBACK, shareOrCopy } from '@/lib/share';
 import { useActivity } from '@/features/activities/api';
 import { RSVPButton } from '@/features/activities/RSVPButton';
-import { MapShell } from '@/features/electoral-map/MapShell';
+import { DeferredMapShell } from '@/features/electoral-map/DeferredMapShell';
 import { useTerritoryIndex } from '@/features/electoral-map/hooks';
 import { territoryLabel } from '@/features/territory/search';
 
@@ -211,7 +211,7 @@ export default function AtividadePage() {
         <aside aria-label="Mapa da atividade">
           {a.coordinates ? (
             <div className="h-72 overflow-hidden rounded-card border border-border lg:h-96">
-              <MapShell
+              <DeferredMapShell
                 variant="context"
                 className="h-full"
                 activitiesOverride={[a]}

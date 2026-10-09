@@ -1,0 +1,80 @@
+{
+  "commit": "0a2c6cf",
+  "date": "20261009",
+  "shots": [
+    "docs/screenshots/final-r2/home-desktop1440-claro-20261009-0a2c6cf.png",
+    "docs/screenshots/final-r2/home-mobile390-claro-20261009-0a2c6cf.png",
+    "docs/screenshots/final-r2/home-desktop1440-escuro-20261009-0a2c6cf.png",
+    "docs/screenshots/final-r2/home-mobile390-escuro-20261009-0a2c6cf.png",
+    "docs/screenshots/final-r2/home-desktop1440-demo-20261009-0a2c6cf.png",
+    "docs/screenshots/final-r2/home-mobile390-bottom-sheet-meio-20261009-0a2c6cf.png",
+    "docs/screenshots/final-r2/territorio-mobile390-sem-cls-20261009-0a2c6cf.png"
+  ],
+  "axe": {
+    "home-desktop1440": [],
+    "territorio-desktop1440": [],
+    "participar-desktop1440": [],
+    "atividade-desktop1440": [],
+    "obrigado-desktop1440": [],
+    "propor-grupo-desktop1440": [],
+    "criar-atividade-desktop1440": [],
+    "home-mobile390": [],
+    "territorio-mobile390": [],
+    "participar-mobile390": [],
+    "atividade-mobile390": [],
+    "obrigado-mobile390": [],
+    "propor-grupo-mobile390": [],
+    "criar-atividade-mobile390": [],
+    "home-escuro-desktop1440": [],
+    "home-sheet-mobile390": []
+  },
+  "cls": {
+    "territorio-mobile390-cpu4x": {
+      "cls": 0,
+      "shifts": []
+    }
+  },
+  "targets": {
+    "home-desktop1440": [
+      "A \"Pular para o conteúdo\" 1x1",
+      "INPUT \"\" 1x1",
+      "INPUT \"\" 1x1",
+      "INPUT \"\" 1x1",
+      "INPUT \"\" 1x1",
+      "INPUT \"\" 1x1"
+    ],
+    "participar-desktop1440": [
+      "A \"Pular para o conteúdo\" 1x1",
+      "A \"termos de uso\" 101x21",
+      "A \"política de privacidade\" 159x21"
+    ],
+    "home-mobile390": [
+      "A \"Pular para o conteúdo\" 1x1",
+      "INPUT \"\" 1x1",
+      "INPUT \"\" 1x1",
+      "INPUT \"\" 1x1",
+      "INPUT \"\" 1x1",
+      "INPUT \"\" 1x1"
+    ],
+    "participar-mobile390": ["A \"Pular para o conteúdo\" 1x1", "A \"termos de uso\" 101x21"]
+  },
+  "notes": [
+    {
+      "activityPath": "/atividade/00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "demoAttribution": {
+        "bottom": 900,
+        "viewport": 900,
+        "inside": true
+      }
+    },
+    {
+      "sheet": {
+        "sheetTop": 515,
+        "mapTop": 56,
+        "visibleMapPx": 451
+      }
+    }
+  ]
+}

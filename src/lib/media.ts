@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 
 export const DESKTOP_QUERY = '(min-width: 1024px)';
 export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+export const DARK_QUERY = '(prefers-color-scheme: dark)';
 export const COARSE_POINTER_QUERY = '(pointer: coarse)';
 
 function matches(query: string): boolean {

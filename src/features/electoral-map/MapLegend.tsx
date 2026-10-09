@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
 import { ActivityMarker } from '@/features/activities/ActivityMarker';
 import { formatLayerValue, LAYERS } from './layers';
 import { safeDomain } from './palette';
-import { SNAPSHOT_STATUS_LABEL } from './snapshot';
+import { SNAPSHOT_STATUS_LABEL } from './snapshotStatus';
 
 export interface MapLegendProps {
   layer: MapLayerCode;
@@ -133,7 +133,7 @@ export function MapLegend({
               </div>
               <p className="mt-1 flex items-center gap-2 text-xs text-secondary">
                 <span
-                  className="inline-block size-3 rounded-sm bg-(--map-fill-none)"
+                  className="inline-block size-3 rounded-sm border border-border-strong bg-(--map-fill-none)"
                   aria-hidden="true"
                 />{' '}
                 sem dado
@@ -175,7 +175,7 @@ export function MapLegend({
           <p>
             <span className="font-semibold">Fonte:</span> snapshot{' '}
             <span className="font-mono">{releaseId}</span> ·{' '}
-            <Link to="/metodologia" className="underline">
+            <Link to="/metodologia" className="inline-flex min-h-6 items-center underline">
               metodologia
             </Link>
           </p>

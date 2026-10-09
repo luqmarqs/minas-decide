@@ -34,6 +34,8 @@ const ME_VERIFIED = {
   selected_territory_id: null,
   is_admin: false,
   account_state: 'active',
+  phone_masked: null,
+  profile_review_required: false,
   requires_session_refresh: true,
 };
 
@@ -67,7 +69,9 @@ describe('safeRedirectPath (no open redirect)', () => {
     ['https://evil.com/criar-atividade', '/'],
     ['/\\evil.com', '/'],
     ['/%2F%2Fevil.com', '/'],
-    ['/admin', '/'],
+    ['/admin', '/admin'],
+    ['/conta/seguranca', '/conta/seguranca'],
+    ['/admin/x', '/'],
     ['/criar-atividade?x=https://evil.com', '/'],
     ['javascript:alert(1)', '/'],
     ['/territorio/../admin', '/'],
@@ -170,5 +174,98 @@ describe('/autenticacao/retorno', () => {
     stubFetch();
     visit('');
     expect(await screen.findByText('Link inválido')).toBeInTheDocument();
+  });
+});
+
+describe('P-SEC-1 — "Confira seus dados" after the magic link', () => {
+  const ME_REVIEW = {
+    ...ME_VERIFIED,
+    display_name: 'Nome digitado antes',
+    selected_territory_id: 'mg-3100104',
+    phone_masked: '+55 (31) 9****-**88',
+    profile_review_required: true,
+  };
+
+  it('"Está correto" PATCHes {profile_reviewed:true} and only then offers to continue', async () => {
+    window.sessionStorage.setItem('mm.auth.next', '/criar-atividade');
+    const fetchMock = stubFetch((url, init) => {
+      if (url === '/api/v1/auth/confirm-email') return Promise.resolve(ok(ME_REVIEW));
+      if (url === '/api/v1/me' && init?.method === 'PATCH')
+        return Promise.resolve(ok({ ...ME_REVIEW, profile_review_required: false }));
+      if (url === '/api/v1/me') return Promise.resolve(ok(ME_REVIEW));
+      return undefined;
+    });
+    visit('#access_token=tok-abcdefghijklmnopqrstuvwxyz&refresh_token=r');
+
+    expect(await screen.findByRole('heading', { name: 'Confira seus dados' })).toBeInTheDocument();
+    expect(screen.getByText('Nome digitado antes')).toBeInTheDocument();
+    expect(screen.getByText('+55 (31) 9****-**88')).toBeInTheDocument();
+    expect(screen.getByText(/antes de o e-mail ser confirmado/)).toBeInTheDocument();
+    // Blocked: no way forward before the review.
+    expect(screen.queryByRole('link', { name: /Continuar para criar/ })).not.toBeInTheDocument();
+
+    screen.getByRole('button', { name: 'Está correto' }).click();
+    expect(
+      await screen.findByRole('link', { name: /Continuar para criar a atividade/ }),
+    ).toBeInTheDocument();
+    const patch = callsTo(fetchMock, '/api/v1/me').find(([, i]) => i?.method === 'PATCH');
+    expect(patch).toBeDefined();
+    expect(JSON.parse(String(patch![1].body))).toEqual({ profile_reviewed: true });
+    expect(headerOf(patch![1], 'Authorization')).toMatch(/^Bearer /);
+  });
+
+  it('"Corrigir" sends name/phone/territory + profile_reviewed and never succeeds before the server', async () => {
+    let patchBody: unknown = null;
+    let release: (r: Response) => void = () => {};
+    stubFetch((url, init) => {
+      if (url === '/api/v1/auth/confirm-email') return Promise.resolve(ok(ME_REVIEW));
+      if (url === '/api/v1/me' && init?.method === 'PATCH') {
+        patchBody = JSON.parse(String(init.body));
+        return new Promise<Response>((r) => (release = r));
+      }
+      if (url === '/api/v1/me') return Promise.resolve(ok(ME_REVIEW));
+      return undefined;
+    });
+    visit('#access_token=tok-abcdefghijklmnopqrstuvwxyz&refresh_token=r');
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Corrigir' }));
+    const name = screen.getByLabelText(/^Nome/);
+    await user.clear(name);
+    await user.type(name, 'Maria Correta');
+    await user.type(screen.getByLabelText(/^Novo WhatsApp/), '(31) 98888-7777');
+    await user.click(screen.getByRole('button', { name: 'Salvar e continuar' }));
+    await waitFor(() => expect(patchBody).not.toBeNull());
+    expect(patchBody).toEqual({
+      display_name: 'Maria Correta',
+      selected_territory_id: 'mg-3100104',
+      phone: '(31) 98888-7777',
+      profile_reviewed: true,
+    });
+    // Pending: still on the review, no "continue".
+    expect(screen.getByRole('heading', { name: 'Confira seus dados' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Ir para o mapa' })).not.toBeInTheDocument();
+    release(ok({ ...ME_REVIEW, display_name: 'Maria Correta', profile_review_required: false }));
+    expect(await screen.findByRole('link', { name: 'Ir para o mapa' })).toBeInTheDocument();
+  });
+
+  it('invalid phone is caught client-side (no PATCH) with the field error', async () => {
+    const fetchMock = stubFetch((url) => {
+      if (url === '/api/v1/auth/confirm-email' || url === '/api/v1/me')
+        return Promise.resolve(ok(ME_REVIEW));
+      return undefined;
+    });
+    visit('#access_token=tok-abcdefghijklmnopqrstuvwxyz&refresh_token=r');
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Corrigir' }));
+    await user.type(screen.getByLabelText(/^Novo WhatsApp/), '123');
+    await user.click(screen.getByRole('button', { name: 'Salvar e continuar' }));
+    expect(
+      (await screen.findAllByText('Informe um WhatsApp brasileiro válido com DDD.')).length,
+    ).toBeGreaterThan(0);
+    expect(callsTo(fetchMock, '/api/v1/me').filter(([, i]) => i?.method === 'PATCH')).toHaveLength(
+      0,
+    );
   });
 });

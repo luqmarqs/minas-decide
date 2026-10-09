@@ -1,9 +1,10 @@
 import { Link } from 'react-router';
 import { useSnapshot } from '@/features/electoral-map/hooks';
-import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshot';
+import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshotStatus';
 
 export function AppFooter() {
-  const { data: snap } = useSnapshot();
+  // Passive: shows the release once a page has loaded the snapshot; never fetches it.
+  const { data: snap } = useSnapshot({ enabled: false });
   return (
     <footer className="border-t border-border bg-surface-alt text-secondary">
       <div className="mx-auto grid max-w-(--content-max) gap-8 px-(--gutter) py-10 sm:grid-cols-2 lg:grid-cols-4 lg:px-6">

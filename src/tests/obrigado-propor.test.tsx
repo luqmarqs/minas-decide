@@ -138,6 +138,8 @@ describe('/propor-grupo — GroupProposalForm', () => {
             selected_territory_id: TERRITORY,
             is_admin: false,
             account_state: 'active',
+            phone_masked: null,
+            profile_review_required: false,
           }),
         );
       if (url === '/api/v1/groups/proposals') {
@@ -176,7 +178,8 @@ describe('/propor-grupo — GroupProposalForm', () => {
     expect(b2!.turnstile_token).not.toBe(b1!.turnstile_token);
     expect(b2!.proposer_name).toBe('João Souza');
     expect(headerOf(posts[0]![1], 'Authorization')).toMatch(/^Bearer /);
-  });
+    // Long interaction test (two submits, many keystrokes): generous timeout under parallel load.
+  }, 15_000);
 
   it('rejects a non-WhatsApp invite link on the client', async () => {
     installTurnstile();

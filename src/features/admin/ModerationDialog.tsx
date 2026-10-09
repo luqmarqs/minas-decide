@@ -6,13 +6,47 @@ import { Field } from '@/components/ui/Field';
 import { Textarea } from '@/components/ui/Input';
 import { adminErrorMessage } from './errors';
 
+export type ModerationKind = 'approve' | 'reject' | 'suspend' | 'unsuspend';
+
 export interface ModerationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  decision: 'approve' | 'reject';
+  decision: ModerationKind;
   subject: string;
   onConfirm: (reason: string) => Promise<void>;
+  /** Extra sentence for the description (e.g. "volta para análise"). */
+  detail?: string;
 }
+
+const COPY: Record<
+  ModerationKind,
+  { title: string; action: string; variant: 'primary' | 'danger'; text: (s: string) => string }
+> = {
+  approve: {
+    title: 'Confirmar aprovação',
+    action: 'Aprovar',
+    variant: 'primary',
+    text: (s) => `“${s}” ficará visível publicamente.`,
+  },
+  reject: {
+    title: 'Confirmar rejeição',
+    action: 'Rejeitar',
+    variant: 'danger',
+    text: (s) => `“${s}” não será publicado. O motivo pode ser mostrado a quem propôs.`,
+  },
+  suspend: {
+    title: 'Confirmar suspensão',
+    action: 'Suspender',
+    variant: 'danger',
+    text: (s) => `“${s}” sai imediatamente do mapa e das páginas públicas.`,
+  },
+  unsuspend: {
+    title: 'Confirmar reativação',
+    action: 'Reativar',
+    variant: 'primary',
+    text: (s) => `A suspensão de “${s}” será retirada.`,
+  },
+};
 
 /** Approve/reject with a mandatory, audited reason and explicit confirmation. */
 export function ModerationDialog({
@@ -21,12 +55,13 @@ export function ModerationDialog({
   decision,
   subject,
   onConfirm,
+  detail,
 }: ModerationDialogProps) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const approve = decision === 'approve';
+  const copy = COPY[decision];
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -53,12 +88,8 @@ export function ModerationDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        title={approve ? 'Confirmar aprovação' : 'Confirmar rejeição'}
-        description={
-          approve
-            ? `“${subject}” ficará visível publicamente.`
-            : `“${subject}” não será publicado. O motivo pode ser mostrado a quem propôs.`
-        }
+        title={copy.title}
+        description={`${copy.text(subject)}${detail ? ` ${detail}` : ''}`}
       >
         <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
           <Field label="Motivo" required id="mod-reason" error={error ?? undefined}>
@@ -77,8 +108,8 @@ export function ModerationDialog({
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant={approve ? 'primary' : 'danger'} loading={busy}>
-              {approve ? 'Aprovar' : 'Rejeitar'}
+            <Button type="submit" variant={copy.variant} loading={busy}>
+              {copy.action}
             </Button>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Voltar

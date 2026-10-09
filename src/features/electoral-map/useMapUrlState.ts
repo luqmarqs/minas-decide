@@ -6,7 +6,7 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import type { MapLayerCode } from '@shared/contracts/metrics.ts';
-import { TerritoryId } from '@shared/contracts/territory.ts';
+import { isTerritoryId } from '@/lib/territoryId';
 import { LAYER_SLUG, layerFromSlug } from './layers';
 
 export interface MapUrlState {
@@ -34,7 +34,7 @@ export function parseMapParams(sp: URLSearchParams): MapUrlState {
   const round = Number.parseInt(sp.get('turno') ?? '', 10);
   const cand = sp.get('cand');
   return {
-    territoryId: t && TerritoryId.safeParse(t).success ? t : null,
+    territoryId: t && isTerritoryId(t) ? t : null,
     layer: layerFromSlug(sp.get('camada')) ?? MAP_DEFAULTS.layer,
     year: Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : MAP_DEFAULTS.year,
     round: round === 1 || round === 2 ? round : MAP_DEFAULTS.round,
