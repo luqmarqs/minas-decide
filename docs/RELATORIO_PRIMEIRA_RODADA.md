@@ -263,6 +263,7 @@ Dados de teste residuais no TARGET dev (sem PII real, e-mails `@example.org`/`ma
 | Lighthouse / axe / CLS | ver R2-1 |
 | `npm audit` | 0 vulnerabilidades |
 | `npx tsx scripts/tse/sample-check.ts` | 330 comparações, 312 idênticas |
+| **CI GitHub Actions** (`luqmarqs/minas-decide`, público) | run 4 em `13145d5`: `verify` (lint, format, typecheck, 313 testes, isolamento, validação, build) e `db-tests` **verdes**. Runs 1–3 falharam por: `secrets` em `if` de job (parse), e testes de formulário que dependiam do `.env` local para a sitekey do Turnstile — reproduzido em Linux via WSL e corrigido fixando `VITE_*` de teste no `vitest.config.ts` |
 
 ## R2-3. Descobertas sobre os dados (honestas)
 
@@ -272,7 +273,7 @@ Dados de teste residuais no TARGET dev (sem PII real, e-mails `@example.org`/`ma
 
 ## R2-4. Pendências que continuam exigindo o proprietário
 
-SMTP transacional (P-SEC-3; a cota padrão voltou a estourar com 4 cadastros de teste); conta Cloudflare/Turnstile real/staging (`docs/STAGING_PLAYBOOK.md`); usuário SELECT-only no SOURCE (P-DATA-2); revisão jurídica (`docs/PRIVACY_LGPD_DRAFT.md`); decisões: 409 na enumeração (F10), top 10 proporcionais, Git vs R2, uso do TSE para marcar sub judice; copiar `docs/claude-settings.proposed.json`; remoto Git para o CI.
+SMTP transacional (P-SEC-3; a cota padrão voltou a estourar com 4 cadastros de teste); conta Cloudflare/Turnstile real/staging (`docs/STAGING_PLAYBOOK.md`); usuário SELECT-only no SOURCE (P-DATA-2); revisão jurídica (`docs/PRIVACY_LGPD_DRAFT.md`); decisões: 409 na enumeração (F10), top 10 proporcionais, Git vs R2, uso do TSE para marcar sub judice; copiar `docs/claude-settings.proposed.json`; remoto Git para o CI (**feito**: `https://github.com/luqmarqs/minas-decide`, CI verde).
 
 ## R2-5. Pendências técnicas restantes (sem bloqueio)
 

@@ -1,5 +1,7 @@
 # Minas em Movimento
 
+[![ci](https://github.com/luqmarqs/minas-decide/actions/workflows/ci.yml/badge.svg)](https://github.com/luqmarqs/minas-decide/actions/workflows/ci.yml)
+
 Atlas eleitoral público de Minas Gerais (município e bairro) combinado com organização voluntária de atividades presenciais: busca territorial, mapa com indicadores de 2026 (e comparação 2022 para candidaturas com histórico), grupos de WhatsApp aprovados por território, atividades com "Eu vou" sem login e moderação administrativa.
 
 > **Rodada 1 — corte vertical demonstrável; rodada 2 — hardening autônomo.** Relatório auditável (com adendo da rodada 2) em [`docs/RELATORIO_PRIMEIRA_RODADA.md`](docs/RELATORIO_PRIMEIRA_RODADA.md). Sem deploy. O que só o proprietário pode fazer: [`docs/STAGING_PLAYBOOK.md`](docs/STAGING_PLAYBOOK.md).
