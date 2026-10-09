@@ -8,7 +8,11 @@ import { subjectHash } from './rate-limit.ts';
 
 export const TURNSTILE_TOKEN_TTL_SECONDS = 300;
 
-async function logFailure(c: Context<AppBindings>, route: string, eventType: string): Promise<void> {
+async function logFailure(
+  c: Context<AppBindings>,
+  route: string,
+  eventType: string,
+): Promise<void> {
   try {
     await c.get('deps').repo.recordAbuse({
       subject_hash: await subjectHash(c.env.RSVP_DEVICE_SECRET, clientIp(c)),
@@ -41,12 +45,21 @@ export async function requireTurnstile(
   const secret = c.env.TURNSTILE_SECRET_KEY;
   const isTestSecret = TURNSTILE_TEST_SECRETS.has(secret);
   if (!secret || (isTestSecret && c.env.APP_ENV === 'production')) {
-    console.error(JSON.stringify({ level: 'error', event: 'turnstile_misconfigured', request_id: c.get('requestId') }));
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        event: 'turnstile_misconfigured',
+        request_id: c.get('requestId'),
+      }),
+    );
     throw fail('TURNSTILE_FAILED');
   }
 
   const { repo, turnstile } = c.get('deps');
-  const firstUse = await repo.consumeTurnstileToken(await sha256Hex(token), TURNSTILE_TOKEN_TTL_SECONDS);
+  const firstUse = await repo.consumeTurnstileToken(
+    await sha256Hex(token),
+    TURNSTILE_TOKEN_TTL_SECONDS,
+  );
   if (!firstUse) {
     await logFailure(c, route, 'turnstile_reused');
     throw fail('TURNSTILE_FAILED');

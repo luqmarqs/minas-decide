@@ -11,9 +11,14 @@ import type { ProfileRow } from '../repositories/types.ts';
 
 export const me = new Hono<AppBindings>();
 
-export async function buildMe(c: Context<AppBindings>, user: AuthUser, profile: ProfileRow | null): Promise<MeResponse> {
+export async function buildMe(
+  c: Context<AppBindings>,
+  user: AuthUser,
+  profile: ProfileRow | null,
+): Promise<MeResponse> {
   const { repo } = c.get('deps');
-  const verified = !user.is_anonymous && user.email_confirmed && (await repo.isEmailVerified(user.id));
+  const verified =
+    !user.is_anonymous && user.email_confirmed && (await repo.isEmailVerified(user.id));
   const email = user.email ?? profile?.email_contact ?? null;
   return {
     user_id: user.id,
@@ -40,11 +45,18 @@ me.patch('/me', noStore, requireSession, async (c) => {
   if (!(await repo.getProfile(user.id))) throw fail('NOT_FOUND', 'Cadastro não encontrado.');
   if (patch.selected_territory_id) {
     const [t] = await repo.getTerritories([patch.selected_territory_id]);
-    if (!t) throw fail('VALIDATION_ERROR', undefined, { selected_territory_id: 'Território inexistente.' });
+    if (!t)
+      throw fail('VALIDATION_ERROR', undefined, {
+        selected_territory_id: 'Território inexistente.',
+      });
   }
   const updated = await repo.updateProfile(user.id, {
-    ...(patch.display_name !== undefined ? { display_name: sanitizePlainText(patch.display_name, 120) } : {}),
-    ...(patch.selected_territory_id !== undefined ? { selected_territory_id: patch.selected_territory_id } : {}),
+    ...(patch.display_name !== undefined
+      ? { display_name: sanitizePlainText(patch.display_name, 120) }
+      : {}),
+    ...(patch.selected_territory_id !== undefined
+      ? { selected_territory_id: patch.selected_territory_id }
+      : {}),
     ...(patch.contact_opt_in !== undefined ? { contact_opt_in: patch.contact_opt_in } : {}),
   });
   return ok(c, await buildMe(c, user, updated));

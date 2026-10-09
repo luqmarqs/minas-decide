@@ -50,7 +50,11 @@ rsvp.post('/activities/:id/rsvp', noStore, rateLimit('rsvp'), optionalSession, a
   if (!who) throw fail('FORBIDDEN');
   const idem = input.idempotency_key ? await sha256Hex(`rsvp:${input.idempotency_key}`) : null;
   const res = await c.get('deps').repo.upsertRsvp(activityId, who, true, idem);
-  const body: RsvpState = { activity_id: activityId, going: res.going, rsvp_count_approx: res.rsvp_count };
+  const body: RsvpState = {
+    activity_id: activityId,
+    going: res.going,
+    rsvp_count_approx: res.rsvp_count,
+  };
   return ok(c, body);
 });
 
@@ -60,6 +64,10 @@ rsvp.delete('/activities/:id/rsvp', noStore, rateLimit('rsvp'), optionalSession,
   // No session and no device cookie: nothing this caller could own (T11).
   if (!who) throw fail('FORBIDDEN');
   const res = await c.get('deps').repo.upsertRsvp(activityId, who, false, null);
-  const body: RsvpState = { activity_id: activityId, going: res.going, rsvp_count_approx: res.rsvp_count };
+  const body: RsvpState = {
+    activity_id: activityId,
+    going: res.going,
+    rsvp_count_approx: res.rsvp_count,
+  };
   return ok(c, body);
 });

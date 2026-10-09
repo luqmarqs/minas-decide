@@ -14,13 +14,21 @@ export class SlidingWindowLimiter {
 
   constructor(private readonly maxKeys = 10_000) {}
 
-  check(key: string, limit: number, windowMs: number, now: number): { allowed: boolean; retryAfterSec: number } {
+  check(
+    key: string,
+    limit: number,
+    windowMs: number,
+    now: number,
+  ): { allowed: boolean; retryAfterSec: number } {
     const since = now - windowMs;
     const list = (this.hits.get(key) ?? []).filter((t) => t > since);
     if (list.length >= limit) {
       this.hits.set(key, list);
       const oldest = list[0] ?? now;
-      return { allowed: false, retryAfterSec: Math.max(1, Math.ceil((oldest + windowMs - now) / 1000)) };
+      return {
+        allowed: false,
+        retryAfterSec: Math.max(1, Math.ceil((oldest + windowMs - now) / 1000)),
+      };
     }
     list.push(now);
     this.hits.set(key, list);

@@ -27,6 +27,10 @@ export const DEFAULT_MESSAGES: Record<ApiErrorCode, string> = {
   INTERNAL_ERROR: 'Erro inesperado. Tente novamente.',
 };
 
-export function fail(code: ApiErrorCode, message?: string, fields?: Record<string, string>): AppError {
+export function fail(
+  code: ApiErrorCode,
+  message?: string,
+  fields?: Record<string, string>,
+): AppError {
   return new AppError(code, message ?? DEFAULT_MESSAGES[code], fields);
 }

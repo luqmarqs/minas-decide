@@ -1,0 +1,202 @@
+/**
+ * Electoral snapshot loader (spec §4.12, ADR 0004). Reads
+ * `${VITE_SNAPSHOT_BASE ?? '/data'}/manifest.json`, validates every file with the
+ * Zod contracts and exposes typed getters. If the manifest is missing (404),
+ * unreachable, not JSON (e.g. SPA fallback HTML) or invalid, it falls back to the
+ * SYNTHETIC demo fixture — whose status is 'demo' and is always labelled in the UI.
+ * The browser never queries a database for electoral data.
+ */
+import { z } from 'zod';
+import {
+  MapLayerValues,
+  SnapshotManifest,
+  type MapLayerCode,
+  type SnapshotStatus,
+} from '@shared/contracts/metrics.ts';
+import { TerritoryIndexEntry } from '@shared/contracts/territory.ts';
+import {
+  CandidateIndex,
+  Methodology,
+  MunicipalityMetricsFile,
+  SNAPSHOT_BASE_DEFAULT,
+  layerFilePath,
+  metricsFilePath,
+} from '@shared/contracts/snapshot.ts';
+
+export type SnapshotMode = 'remote' | 'demo';
+
+export interface SnapshotClient {
+  mode: SnapshotMode;
+  manifest: SnapshotManifest;
+  status: SnapshotStatus;
+  releaseId: string;
+  /** Why the demo fixture is in use (diagnostics; not shown verbatim to users). */
+  fallbackReason: string | null;
+  getIndex(): Promise<TerritoryIndexEntry[]>;
+  /** `null` when the snapshot has no file for that municipality. */
+  getMunicipalityMetrics(municipalityId: string): Promise<MunicipalityMetricsFile | null>;
+  /** `null` when the layer file does not exist for that year/round/candidate. */
+  getLayer(
+    year: number,
+    round: number,
+    layer: MapLayerCode,
+    candidateId?: string | null,
+  ): Promise<MapLayerValues | null>;
+  getMethodology(): Promise<Methodology>;
+  getCandidates(): Promise<CandidateIndex>;
+}
+
+export class SnapshotFileError extends Error {
+  constructor(
+    readonly path: string,
+    readonly reason: 'network' | 'http' | 'parse' | 'schema',
+    readonly status = 0,
+  ) {
+    super(`Snapshot file ${path} failed (${reason}${status ? ` ${status}` : ''})`);
+    this.name = 'SnapshotFileError';
+  }
+}
+
+export function snapshotBase(): string {
+  const raw = import.meta.env.VITE_SNAPSHOT_BASE ?? SNAPSHOT_BASE_DEFAULT;
+  const base = typeof raw === 'string' && raw.trim() ? raw.trim() : SNAPSHOT_BASE_DEFAULT;
+  return base.endsWith('/') ? base.slice(0, -1) : base;
+}
+
+type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+async function fetchValidated<S extends z.ZodType>(
+  fetchImpl: FetchLike,
+  url: string,
+  path: string,
+  schema: S,
+  opts: { nullOn404?: boolean } = {},
+): Promise<z.infer<S> | null> {
+  let res: Response;
+  try {
+    res = await fetchImpl(url, { headers: { Accept: 'application/json' } });
+  } catch {
+    throw new SnapshotFileError(path, 'network');
+  }
+  if (res.status === 404 && opts.nullOn404) return null;
+  if (!res.ok) throw new SnapshotFileError(path, 'http', res.status);
+  const contentType = res.headers.get('content-type') ?? '';
+  if (contentType.includes('text/html')) {
+    // Dev server / static host SPA fallback: the file does not exist.
+    if (opts.nullOn404) return null;
+    throw new SnapshotFileError(path, 'http', 404);
+  }
+  let json: unknown;
+  try {
+    json = await res.json();
+  } catch {
+    throw new SnapshotFileError(path, 'parse');
+  }
+  const parsed = schema.safeParse(json);
+  if (!parsed.success) throw new SnapshotFileError(path, 'schema');
+  return parsed.data as z.infer<S>;
+}
+
+function remoteClient(
+  fetchImpl: FetchLike,
+  base: string,
+  manifest: SnapshotManifest,
+): SnapshotClient {
+  const rel = manifest.release_id;
+  const url = (path: string) => `${base}/${path}`;
+  const cache = new Map<string, Promise<unknown>>();
+  function once<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    let p = cache.get(key) as Promise<T> | undefined;
+    if (!p) {
+      p = fn();
+      cache.set(key, p);
+      p.catch(() => cache.delete(key));
+    }
+    return p;
+  }
+  return {
+    mode: 'remote',
+    manifest,
+    status: manifest.status,
+    releaseId: rel,
+    fallbackReason: null,
+    getIndex: () =>
+      once('index', async () => {
+        const path = `${rel}/territories-index.json`;
+        return (await fetchValidated(fetchImpl, url(path), path, z.array(TerritoryIndexEntry)))!;
+      }),
+    getMunicipalityMetrics: (municipalityId) =>
+      once(`m:${municipalityId}`, () => {
+        const path = metricsFilePath(rel, municipalityId);
+        return fetchValidated(fetchImpl, url(path), path, MunicipalityMetricsFile, {
+          nullOn404: true,
+        });
+      }),
+    getLayer: (year, round, layer, candidateId) =>
+      once(`l:${year}:${round}:${layer}:${candidateId ?? ''}`, () => {
+        const path = layerFilePath(rel, year, round, layer, candidateId);
+        return fetchValidated(fetchImpl, url(path), path, MapLayerValues, { nullOn404: true });
+      }),
+    getMethodology: () =>
+      once('methodology', async () => {
+        const path = `${rel}/methodology.json`;
+        return (await fetchValidated(fetchImpl, url(path), path, Methodology))!;
+      }),
+    getCandidates: () =>
+      once('candidates', async () => {
+        const path = `${rel}/candidates.json`;
+        return (await fetchValidated(fetchImpl, url(path), path, CandidateIndex))!;
+      }),
+  };
+}
+
+async function demoClient(reason: string): Promise<SnapshotClient> {
+  const { buildDemoSnapshot } = await import('@/fixtures/electoral/demo');
+  const demo = buildDemoSnapshot();
+  const rel = demo.manifest.release_id;
+  return {
+    mode: 'demo',
+    manifest: demo.manifest,
+    status: 'demo',
+    releaseId: rel,
+    fallbackReason: reason,
+    getIndex: async () => demo.index,
+    getMunicipalityMetrics: async (id) => demo.metrics[metricsFilePath(rel, id)] ?? null,
+    getLayer: async (year, round, layer, cand) =>
+      demo.layers[layerFilePath(rel, year, round, layer, cand)] ?? null,
+    getMethodology: async () => demo.methodology,
+    getCandidates: async () => demo.candidates,
+  };
+}
+
+export interface LoadSnapshotOptions {
+  fetchImpl?: FetchLike;
+  base?: string;
+}
+
+export async function loadSnapshot(opts: LoadSnapshotOptions = {}): Promise<SnapshotClient> {
+  const fetchImpl: FetchLike = opts.fetchImpl ?? ((i, init) => fetch(i, init));
+  const base = opts.base ?? snapshotBase();
+  try {
+    const manifest = await fetchValidated(
+      fetchImpl,
+      `${base}/manifest.json`,
+      'manifest.json',
+      SnapshotManifest,
+    );
+    if (!manifest) return demoClient('manifest ausente');
+    return remoteClient(fetchImpl, base, manifest);
+  } catch (err) {
+    const reason =
+      err instanceof SnapshotFileError
+        ? `${err.reason}${err.status ? ` ${err.status}` : ''}`
+        : 'erro';
+    return demoClient(`manifest indisponível (${reason})`);
+  }
+}
+
+export const SNAPSHOT_STATUS_LABEL: Record<SnapshotStatus, string> = {
+  validated: 'Dados validados',
+  partial: 'Dados parciais',
+  demo: 'DADOS DEMONSTRATIVOS',
+};

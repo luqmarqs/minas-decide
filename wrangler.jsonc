@@ -11,15 +11,15 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*"],
   },
   "observability": { "enabled": true },
   "vars": {
     "APP_ENV": "local",
     "WRITES_ENABLED": "true",
     "PUBLIC_ORIGIN": "http://127.0.0.1:8787",
-    "TURNSTILE_EXPECTED_HOSTNAMES": "localhost,127.0.0.1"
-  }
+    "TURNSTILE_EXPECTED_HOSTNAMES": "localhost,127.0.0.1",
+  },
   // Secrets (set with `wrangler secret put` or in .dev.vars for local):
   //   SUPABASE_TARGET_URL, SUPABASE_TARGET_ANON_KEY, SUPABASE_TARGET_SERVICE_ROLE_KEY,
   //   TURNSTILE_SECRET_KEY, RSVP_DEVICE_SECRET, ADMIN_EMAILS

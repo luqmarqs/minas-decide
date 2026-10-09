@@ -14,7 +14,13 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { assertNotTarget, resolveSource, runQuery } from './source.ts';
-import { ELECTORAL_TABLES, MAJORITARIAN_CARGOS, PROPORTIONAL_CARGOS, q, scopeWhere } from './sql.ts';
+import {
+  ELECTORAL_TABLES,
+  MAJORITARIAN_CARGOS,
+  PROPORTIONAL_CARGOS,
+  q,
+  scopeWhere,
+} from './sql.ts';
 
 interface Args {
   dryRun: boolean;
@@ -35,7 +41,8 @@ function parseArgs(argv: string[]): Args {
   };
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const municipality = get('--municipality');
-  if (municipality && !/^\d{7}$/.test(municipality)) throw new Error('--municipality expects a 7-digit IBGE code');
+  if (municipality && !/^\d{7}$/.test(municipality))
+    throw new Error('--municipality expects a 7-digit IBGE code');
   return {
     dryRun: argv.includes('--dry-run'),
     municipality,
@@ -72,22 +79,35 @@ async function main() {
   const where = scopeWhere(scope);
   const outDir = resolve(args.output || join('data', 'private', 'extract', args.release));
 
-  console.log(`[etl] source=${conn.alias} mode=${conn.mode} scope=${args.municipality ? `municipality ${args.municipality}` : 'all MG'} release=${args.release}`);
+  console.log(
+    `[etl] source=${conn.alias} mode=${conn.mode} scope=${args.municipality ? `municipality ${args.municipality}` : 'all MG'} release=${args.release}`,
+  );
   console.log(`[etl] output=${outDir} dryRun=${args.dryRun}`);
 
   // 1) probe: read-only, correct schema
-  const probe = runQuery<{ db: string; read_only: string; statement_timeout: string; electoral_tables: number }>(conn, q.probe(), { statementTimeout: '5s' });
+  const probe = runQuery<{
+    db: string;
+    read_only: string;
+    statement_timeout: string;
+    electoral_tables: number;
+  }>(conn, q.probe(), { statementTimeout: '5s' });
   const p = probe.rows[0];
   if (!p || p.read_only !== 'on') throw new Error('SOURCE session is not read-only; aborting.');
   if (Number(p.electoral_tables) !== ELECTORAL_TABLES.length) {
-    throw new Error(`SOURCE schema mismatch: expected ${ELECTORAL_TABLES.length} electoral tables, found ${p.electoral_tables}.`);
+    throw new Error(
+      `SOURCE schema mismatch: expected ${ELECTORAL_TABLES.length} electoral tables, found ${p.electoral_tables}.`,
+    );
   }
   const healthBefore = runQuery(conn, q.health(), { statementTimeout: '5s' }).rows[0];
-  console.log(`[etl] probe ok (read_only=on, tables=${p.electoral_tables}) health=${JSON.stringify(healthBefore)}`);
+  console.log(
+    `[etl] probe ok (read_only=on, tables=${p.electoral_tables}) health=${JSON.stringify(healthBefore)}`,
+  );
 
   if (args.dryRun) {
     console.log('[etl] dry-run: would run queries:');
-    console.log('  - municipalities, locais, totais×5 cargos, candidaturas, votes batches per cargo, historico');
+    console.log(
+      '  - municipalities, locais, totais×5 cargos, candidaturas, votes batches per cargo, historico',
+    );
     console.log(`  - where: ${where}`);
     return;
   }
@@ -98,14 +118,25 @@ async function main() {
   const save = (name: string, rows: unknown[], ms: number, sql: string) => {
     const text = JSON.stringify(rows);
     totalRows += rows.length;
-    if (totalRows > args.maxRows) throw new Error(`--max-rows exceeded (${totalRows} > ${args.maxRows}); stopping.`);
+    if (totalRows > args.maxRows)
+      throw new Error(`--max-rows exceeded (${totalRows} > ${args.maxRows}); stopping.`);
     writeFileSync(join(outDir, name), text, 'utf8');
-    manifest.push({ file: name, rows: rows.length, bytes: Buffer.byteLength(text), ms, sha256: sha256(text), sql });
+    manifest.push({
+      file: name,
+      rows: rows.length,
+      bytes: Buffer.byteLength(text),
+      ms,
+      sha256: sha256(text),
+      sql,
+    });
     console.log(`[etl] ${name}: ${rows.length} rows, ${ms} ms`);
   };
 
   // 2) static dimensions
-  let r = runQuery(conn, args.municipality ? q.municipalityByIbge(args.municipality) : q.municipalities('MG'));
+  let r = runQuery(
+    conn,
+    args.municipality ? q.municipalityByIbge(args.municipality) : q.municipalities('MG'),
+  );
   save('municipios.json', r.rows, r.ms, 'municipalities');
   if (r.rows.length === 0) throw new Error('No municipality matched the scope.');
   await sleep(args.pauseMs);
@@ -126,12 +157,19 @@ async function main() {
 
   // 3) votes per polling place, keyset-batched by candidate id per office
   for (const cargo of [...MAJORITARIAN_CARGOS, ...PROPORTIONAL_CARGOS]) {
-    const ids = runQuery<{ id: number }>(conn, q.candidateIds('MG', cargo)).rows.map((x) => Number(x.id));
+    const ids = runQuery<{ id: number }>(conn, q.candidateIds('MG', cargo)).rows.map((x) =>
+      Number(x.id),
+    );
     const batchSize = MAJORITARIAN_CARGOS.includes(cargo) ? ids.length || 1 : args.batchSize;
     for (let i = 0, b = 0; i < ids.length; i += batchSize, b++) {
       const batch = ids.slice(i, i + batchSize);
       const res = runQuery(conn, q.votes(batch, where), { statementTimeout: '60s' });
-      save(`votes-cargo-${cargo}-batch-${String(b).padStart(3, '0')}.json`, res.rows, res.ms, `votes cargo ${cargo} ids[${batch[0]}..${batch[batch.length - 1]}]`);
+      save(
+        `votes-cargo-${cargo}-batch-${String(b).padStart(3, '0')}.json`,
+        res.rows,
+        res.ms,
+        `votes cargo ${cargo} ids[${batch[0]}..${batch[batch.length - 1]}]`,
+      );
       await sleep(args.pauseMs);
     }
   }
@@ -158,8 +196,14 @@ async function main() {
     total_ms: manifest.reduce((a, m) => a + m.ms, 0),
     files: manifest,
   };
-  writeFileSync(join(outDir, 'extract-manifest.json'), JSON.stringify(extractManifest, null, 2), 'utf8');
-  console.log(`[etl] done: ${manifest.length} files, ${totalRows} rows, ${extractManifest.total_ms} ms of queries → ${outDir}`);
+  writeFileSync(
+    join(outDir, 'extract-manifest.json'),
+    JSON.stringify(extractManifest, null, 2),
+    'utf8',
+  );
+  console.log(
+    `[etl] done: ${manifest.length} files, ${totalRows} rows, ${extractManifest.total_ms} ms of queries → ${outDir}`,
+  );
   if (!existsSync(join(outDir, 'extract-manifest.json'))) throw new Error('manifest not written');
 }
 

@@ -34,14 +34,19 @@ export function resolveSource(): SourceConnection {
   const dbUrl = process.env.ELECTORAL_SOURCE_DATABASE_URL;
   if (dbUrl) return { mode: 'db-url', dbUrl, alias: 'electoral-source-readonly' };
   const workdir = resolve(
-    process.env.ELECTORAL_SOURCE_WORKDIR ?? join(homedir(), '.minas-em-movimento', 'source-readonly'),
+    process.env.ELECTORAL_SOURCE_WORKDIR ??
+      join(homedir(), '.minas-em-movimento', 'source-readonly'),
   );
   if (!existsSync(join(workdir, 'supabase', '.temp', 'project-ref'))) {
     throw new Error(
       `SOURCE workdir not linked: ${workdir}. Link the SOURCE project there (outside the repo) with the Supabase CLI, or set ELECTORAL_SOURCE_DATABASE_URL.`,
     );
   }
-  if (workdir === process.cwd() || workdir.startsWith(process.cwd() + '\\') || workdir.startsWith(process.cwd() + '/')) {
+  if (
+    workdir === process.cwd() ||
+    workdir.startsWith(process.cwd() + '\\') ||
+    workdir.startsWith(process.cwd() + '/')
+  ) {
     throw new Error('SOURCE workdir must be outside the repository.');
   }
   return { mode: 'cli-workdir', workdir, alias: 'electoral-source-readonly' };
@@ -50,26 +55,34 @@ export function resolveSource(): SourceConnection {
 /** Ensures the SOURCE link is not the repository's (TARGET) link. */
 export function assertNotTarget(conn: SourceConnection): void {
   if (conn.mode !== 'cli-workdir' || !conn.workdir) return;
-  const sourceRef = readFileSync(join(conn.workdir, 'supabase', '.temp', 'project-ref'), 'utf8').trim();
+  const sourceRef = readFileSync(
+    join(conn.workdir, 'supabase', '.temp', 'project-ref'),
+    'utf8',
+  ).trim();
   const repoRefFile = resolve(process.cwd(), 'supabase', '.temp', 'project-ref');
   if (existsSync(repoRefFile)) {
     const targetRef = readFileSync(repoRefFile, 'utf8').trim();
     if (targetRef === sourceRef) {
-      throw new Error('Refusing: SOURCE workdir is linked to the same project as the repository (TARGET).');
+      throw new Error(
+        'Refusing: SOURCE workdir is linked to the same project as the repository (TARGET).',
+      );
     }
   }
   const expectedFile = join(homedir(), '.minas-em-movimento', 'source.ref');
   if (existsSync(expectedFile)) {
     const expected = readFileSync(expectedFile, 'utf8').trim();
     if (expected !== sourceRef) {
-      throw new Error('Refusing: SOURCE workdir is linked to a project different from the confirmed SOURCE ref.');
+      throw new Error(
+        'Refusing: SOURCE workdir is linked to a project different from the confirmed SOURCE ref.',
+      );
     }
   }
 }
 
 export function assertReadOnlySql(sql: string): void {
   const trimmed = sql.trim();
-  if (!/^(SELECT|WITH)\b/i.test(trimmed)) throw new Error('Only SELECT/WITH statements are allowed against SOURCE.');
+  if (!/^(SELECT|WITH)\b/i.test(trimmed))
+    throw new Error('Only SELECT/WITH statements are allowed against SOURCE.');
   if (FORBIDDEN.test(trimmed)) throw new Error('Forbidden keyword in SOURCE query.');
   if (trimmed.includes(';')) throw new Error('Multiple statements are not allowed.');
 }

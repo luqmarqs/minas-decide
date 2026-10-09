@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { MyActivity, PublicActivity } from '../../shared/contracts/activities.ts';
 import { body, setup } from './fakes.ts';
 
-const future = (days: number) => new Date(Date.parse('2026-10-08T12:00:00Z') + days * 86_400_000).toISOString();
+const future = (days: number) =>
+  new Date(Date.parse('2026-10-08T12:00:00Z') + days * 86_400_000).toISOString();
 
 const activityInput = (over: Record<string, unknown> = {}) => ({
   title: 'Panfletagem na praça',
@@ -39,8 +40,13 @@ describe('public activities', () => {
     const res = await request('/api/v1/activities');
     expect(res.headers.get('Cache-Control')).toBe('public, max-age=60');
     const text = await res.text();
-    const items = (JSON.parse(text) as { data: { items: unknown[] } }).data.items.map((i) => PublicActivity.parse(i));
-    expect(items.map((i) => i.title).sort()).toEqual(['Cancelada pública', 'Panfletagem no centro']);
+    const items = (JSON.parse(text) as { data: { items: unknown[] } }).data.items.map((i) =>
+      PublicActivity.parse(i),
+    );
+    expect(items.map((i) => i.title).sort()).toEqual([
+      'Cancelada pública',
+      'Panfletagem no centro',
+    ]);
     expect(text).not.toContain(creator);
     expect(text).not.toContain('creator_user_id');
     expect(text).not.toContain('nota interna de moderação');
@@ -56,7 +62,9 @@ describe('public activities', () => {
     const p1 = await body(await request('/api/v1/activities?limit=2&bbox=-44,-21,-43,-20'));
     expect(p1.data?.items).toHaveLength(2);
     const cursor = String(p1.data?.next_cursor);
-    const p2 = await body(await request(`/api/v1/activities?limit=2&cursor=${encodeURIComponent(cursor)}`));
+    const p2 = await body(
+      await request(`/api/v1/activities?limit=2&cursor=${encodeURIComponent(cursor)}`),
+    );
     expect(p2.data?.items).toHaveLength(1);
     expect(p2.data?.next_cursor).toBeNull();
     expect((await request('/api/v1/activities?cursor=garbage')).status).toBe(400);
@@ -66,7 +74,9 @@ describe('public activities', () => {
     const { request, repo } = setup();
     const pending = repo.seedActivity(repo.uuid(), { status: 'pending_review' });
     expect((await request(`/api/v1/activities/${pending.id}`)).status).toBe(404);
-    expect((await request('/api/v1/activities/00000000-0000-4000-8000-ffffffffffff')).status).toBe(404);
+    expect((await request('/api/v1/activities/00000000-0000-4000-8000-ffffffffffff')).status).toBe(
+      404,
+    );
     expect((await request('/api/v1/activities/not-a-uuid')).status).toBe(404);
   });
 });
@@ -75,10 +85,16 @@ describe('organizer flow (T06, T07, T16, T21, T27)', () => {
   it('T06: provisional (anonymous) session cannot create -> 403 EMAIL_NOT_VERIFIED; no session -> 401', async () => {
     const { request, users, repo } = setup();
     const anon = users.anonymous();
-    const res = await request('/api/v1/activities', { method: 'POST', token: anon.token, json: activityInput() });
+    const res = await request('/api/v1/activities', {
+      method: 'POST',
+      token: anon.token,
+      json: activityInput(),
+    });
     expect(res.status).toBe(403);
     expect((await body(res)).error?.code).toBe('EMAIL_NOT_VERIFIED');
-    expect((await request('/api/v1/activities', { method: 'POST', json: activityInput() })).status).toBe(401);
+    expect(
+      (await request('/api/v1/activities', { method: 'POST', json: activityInput() })).status,
+    ).toBe(401);
     expect(repo.activities).toHaveLength(0);
   });
 
@@ -86,7 +102,11 @@ describe('organizer flow (T06, T07, T16, T21, T27)', () => {
     const { request, users, repo } = setup();
     const v = users.verified();
     repo.verified.delete(v.user.id);
-    const res = await request('/api/v1/activities', { method: 'POST', token: v.token, json: activityInput() });
+    const res = await request('/api/v1/activities', {
+      method: 'POST',
+      token: v.token,
+      json: activityInput(),
+    });
     expect((await body(res)).error?.code).toBe('EMAIL_NOT_VERIFIED');
   });
 
@@ -125,7 +145,11 @@ describe('organizer flow (T06, T07, T16, T21, T27)', () => {
       [{ location_confirmed: false }, 'location_confirmed'],
     ];
     for (const [over, field] of cases) {
-      const res = await request('/api/v1/activities', { method: 'POST', token: v.token, json: activityInput(over) });
+      const res = await request('/api/v1/activities', {
+        method: 'POST',
+        token: v.token,
+        json: activityInput(over),
+      });
       expect(res.status, field).toBe(400);
       expect((await body(res)).error?.fields?.[field], field).toBeDefined();
     }
@@ -135,7 +159,11 @@ describe('organizer flow (T06, T07, T16, T21, T27)', () => {
     const { request, users, repo } = setup();
     const v = users.verified();
     const a = repo.seedActivity(v.user.id);
-    const stale = await request(`/api/v1/activities/${a.id}`, { method: 'PATCH', token: v.token, json: { version: 99, title: 'Novo título aqui' } });
+    const stale = await request(`/api/v1/activities/${a.id}`, {
+      method: 'PATCH',
+      token: v.token,
+      json: { version: 99, title: 'Novo título aqui' },
+    });
     expect(stale.status).toBe(409);
     const res = await request(`/api/v1/activities/${a.id}`, {
       method: 'PATCH',
@@ -165,7 +193,9 @@ describe('organizer flow (T06, T07, T16, T21, T27)', () => {
     expect((await body(res)).data?.status).toBe('published');
     const pub = await request(`/api/v1/activities/${a.id}`);
     const text = await pub.text();
-    expect((JSON.parse(text) as { data: { contact_public: unknown } }).data.contact_public).toBeNull();
+    expect(
+      (JSON.parse(text) as { data: { contact_public: unknown } }).data.contact_public,
+    ).toBeNull();
     expect(text).not.toContain('@organizador');
   });
 
@@ -173,8 +203,14 @@ describe('organizer flow (T06, T07, T16, T21, T27)', () => {
     const { request, users, repo } = setup();
     const v = users.verified();
     const a = repo.seedActivity(v.user.id);
-    await request(`/api/v1/activities/${a.id}`, { method: 'PATCH', token: v.token, json: { version: 1, type: 'encontro' } });
-    expect((await body(await request(`/api/v1/activities/${a.id}`))).data?.contact_public).not.toBeNull();
+    await request(`/api/v1/activities/${a.id}`, {
+      method: 'PATCH',
+      token: v.token,
+      json: { version: 1, type: 'encontro' },
+    });
+    expect(
+      (await body(await request(`/api/v1/activities/${a.id}`))).data?.contact_public,
+    ).not.toBeNull();
   });
 
   it("another organizer cannot edit or cancel someone else's activity (404)", async () => {
@@ -182,8 +218,19 @@ describe('organizer flow (T06, T07, T16, T21, T27)', () => {
     const owner = users.verified();
     const other = users.verified();
     const a = repo.seedActivity(owner.user.id);
-    expect((await request(`/api/v1/activities/${a.id}`, { method: 'PATCH', token: other.token, json: { version: 1, title: 'Sequestrado!' } })).status).toBe(404);
-    expect((await request(`/api/v1/activities/${a.id}/cancel`, { method: 'POST', token: other.token })).status).toBe(404);
+    expect(
+      (
+        await request(`/api/v1/activities/${a.id}`, {
+          method: 'PATCH',
+          token: other.token,
+          json: { version: 1, title: 'Sequestrado!' },
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await request(`/api/v1/activities/${a.id}/cancel`, { method: 'POST', token: other.token }))
+        .status,
+    ).toBe(404);
     expect(repo.activities[0]!.status).toBe('published');
   });
 
@@ -191,16 +238,27 @@ describe('organizer flow (T06, T07, T16, T21, T27)', () => {
     const { request, users, repo } = setup();
     const v = users.verified();
     const a = repo.seedActivity(v.user.id);
-    const res = await request(`/api/v1/activities/${a.id}/cancel`, { method: 'POST', token: v.token, json: { reason: 'chuva forte' } });
+    const res = await request(`/api/v1/activities/${a.id}/cancel`, {
+      method: 'POST',
+      token: v.token,
+      json: { reason: 'chuva forte' },
+    });
     expect((await body(res)).data?.status).toBe('cancelled');
-    expect(repo.audit.some((e) => e.action === 'activity.cancel' && e.entity_id === a.id)).toBe(true);
-    expect((await request(`/api/v1/activities/${a.id}/cancel`, { method: 'POST', token: v.token })).status).toBe(409);
+    expect(repo.audit.some((e) => e.action === 'activity.cancel' && e.entity_id === a.id)).toBe(
+      true,
+    );
+    expect(
+      (await request(`/api/v1/activities/${a.id}/cancel`, { method: 'POST', token: v.token }))
+        .status,
+    ).toBe(409);
   });
 
   it('my-activities requires a verified organizer', async () => {
     const { request, users } = setup();
     expect((await request('/api/v1/my-activities')).status).toBe(401);
-    expect((await request('/api/v1/my-activities', { token: users.anonymous().token })).status).toBe(403);
+    expect(
+      (await request('/api/v1/my-activities', { token: users.anonymous().token })).status,
+    ).toBe(403);
     const ok = await request('/api/v1/my-activities', { token: users.verified().token });
     expect(ok.status).toBe(200);
     expect(ok.headers.get('Cache-Control')).toBe('no-store');
@@ -228,7 +286,9 @@ describe('RSVP (T09, T10, T11)', () => {
     }
     expect(repo.rsvps).toHaveLength(1);
     // the hash/device is never returned
-    const text = await (await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST', cookie })).text();
+    const text = await (
+      await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST', cookie })
+    ).text();
     expect(text).not.toContain(cookie.split('=')[1]!);
     expect(text).not.toMatch(/[0-9a-f]{64}/);
   });
@@ -245,7 +305,10 @@ describe('RSVP (T09, T10, T11)', () => {
     const a = repo.seedActivity(repo.uuid());
     const mine = deviceCookie(await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST' }));
     await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST' }); // another device
-    const del = await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'DELETE', cookie: mine });
+    const del = await request(`/api/v1/activities/${a.id}/rsvp`, {
+      method: 'DELETE',
+      cookie: mine,
+    });
     expect((await body(del)).data).toMatchObject({ going: false, rsvp_count_approx: 1 });
     expect(repo.rsvps.filter((r) => r.status === 'going')).toHaveLength(1);
   });
@@ -269,7 +332,11 @@ describe('RSVP (T09, T10, T11)', () => {
     const a = repo.seedActivity(repo.uuid());
     const s = users.anonymous();
     await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST', token: s.token });
-    const r = await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST', token: s.token, cookie: 'mm_device=BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' });
+    const r = await request(`/api/v1/activities/${a.id}/rsvp`, {
+      method: 'POST',
+      token: s.token,
+      cookie: 'mm_device=BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+    });
     expect((await body(r)).data?.rsvp_count_approx).toBe(1);
     expect(repo.rsvps[0]!.user_id).toBe(s.user.id);
   });
@@ -278,16 +345,28 @@ describe('RSVP (T09, T10, T11)', () => {
     const { request, repo } = setup();
     const cancelled = repo.seedActivity(repo.uuid(), { status: 'cancelled' });
     const pending = repo.seedActivity(repo.uuid(), { status: 'pending_review' });
-    expect((await request(`/api/v1/activities/${cancelled.id}/rsvp`, { method: 'POST' })).status).toBe(409);
-    expect((await request(`/api/v1/activities/${pending.id}/rsvp`, { method: 'POST' })).status).toBe(404);
-    expect((await request(`/api/v1/activities/${pending.id}/rsvp`, { method: 'POST', token: 'expired-token-xxxxxxxxxxxxxxxx' })).status).toBe(401);
+    expect(
+      (await request(`/api/v1/activities/${cancelled.id}/rsvp`, { method: 'POST' })).status,
+    ).toBe(409);
+    expect(
+      (await request(`/api/v1/activities/${pending.id}/rsvp`, { method: 'POST' })).status,
+    ).toBe(404);
+    expect(
+      (
+        await request(`/api/v1/activities/${pending.id}/rsvp`, {
+          method: 'POST',
+          token: 'expired-token-xxxxxxxxxxxxxxxx',
+        })
+      ).status,
+    ).toBe(401);
   });
 
   it('rsvp rate limit: 31st request in 10 min -> 429', async () => {
     const { request, repo } = setup();
     const a = repo.seedActivity(repo.uuid());
     let last = 0;
-    for (let i = 0; i < 31; i++) last = (await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST' })).status;
+    for (let i = 0; i < 31; i++)
+      last = (await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST' })).status;
     expect(last).toBe(429);
   });
 });

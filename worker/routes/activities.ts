@@ -1,10 +1,19 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { ActivityInput, ActivityPatch, PublicActivitiesQuery } from '../../shared/contracts/activities.ts';
+import {
+  ActivityInput,
+  ActivityPatch,
+  PublicActivitiesQuery,
+} from '../../shared/contracts/activities.ts';
 import type { AppBindings, AuthUser } from '../env.ts';
 import { fail } from '../errors.ts';
 import { ok, parse, readJson, uuidParam } from '../http.ts';
-import { assertOrganizer, isAdminWithMfa, requireOrganizer, requireSession } from '../middleware/auth.ts';
+import {
+  assertOrganizer,
+  isAdminWithMfa,
+  requireOrganizer,
+  requireSession,
+} from '../middleware/auth.ts';
 import { cachePublic, noStore } from '../middleware/cache.ts';
 import { rateLimit } from '../middleware/rate-limit.ts';
 import { requireTurnstile } from '../middleware/turnstile.ts';
@@ -25,17 +34,24 @@ function parseBbox(raw: string | undefined): [number, number, number, number] | 
   const valid =
     parts.length === 4 &&
     parts.every(Number.isFinite) &&
-    minLon >= -180 && maxLon <= 180 && minLat >= -90 && maxLat <= 90 &&
-    minLon < maxLon && minLat < maxLat &&
-    maxLon - minLon <= MAX_BBOX_SPAN && maxLat - minLat <= MAX_BBOX_SPAN;
-  if (!valid) throw fail('VALIDATION_ERROR', undefined, { bbox: 'bbox inválido ou grande demais.' });
+    minLon >= -180 &&
+    maxLon <= 180 &&
+    minLat >= -90 &&
+    maxLat <= 90 &&
+    minLon < maxLon &&
+    minLat < maxLat &&
+    maxLon - minLon <= MAX_BBOX_SPAN &&
+    maxLat - minLat <= MAX_BBOX_SPAN;
+  if (!valid)
+    throw fail('VALIDATION_ERROR', undefined, { bbox: 'bbox inválido ou grande demais.' });
   return [minLon, minLat, maxLon, maxLat];
 }
 
 function cursorOrThrow(raw: string | undefined): Cursor | null {
   if (!raw) return null;
   const c = decodeCursor(raw, ['at', 'id']);
-  if (!c || Number.isNaN(Date.parse(c.at ?? ''))) throw fail('VALIDATION_ERROR', undefined, { cursor: 'Cursor inválido.' });
+  if (!c || Number.isNaN(Date.parse(c.at ?? '')))
+    throw fail('VALIDATION_ERROR', undefined, { cursor: 'Cursor inválido.' });
   return { at: c.at!, id: c.id! };
 }
 
@@ -58,7 +74,8 @@ activities.get('/activities', cachePublic(60), async (c) => {
   const last = page[page.length - 1];
   return ok(c, {
     items: page.map(toPublicActivity),
-    next_cursor: rows.length > q.limit && last ? encodeCursor({ at: last.starts_at, id: last.id }) : null,
+    next_cursor:
+      rows.length > q.limit && last ? encodeCursor({ at: last.starts_at, id: last.id }) : null,
   });
 });
 
@@ -85,29 +102,38 @@ activities.get('/my-activities', noStore, requireOrganizer, async (c) => {
   const last = page[page.length - 1];
   return ok(c, {
     items: page.map((r) => toMyActivity(r, counts[r.id] ?? 0)),
-    next_cursor: rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
+    next_cursor:
+      rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
   });
 });
 
-activities.post('/activities', noStore, rateLimit('activities_write'), requireOrganizer, async (c) => {
-  const input = ActivityInput.parse(await readJson(c));
-  // Turnstile is "per risk" for activities (spec §9.4): verified whenever the client sends one.
-  if (input.turnstile_token) await requireTurnstile(c, input.turnstile_token, 'activities', 'activity');
-  const { repo, now } = c.get('deps');
-  const write = buildActivityWrite(input, now());
-  const [territory] = await repo.getTerritories([write.territory_id]);
-  if (!territory) throw fail('VALIDATION_ERROR', undefined, { territory_id: 'Território inexistente.' });
-  const user = c.get('user')!;
-  const row = await repo.createActivity(user.id, write);
-  await repo.recordAudit({
-    actor: user.id,
-    action: 'activity.create',
-    entity_type: 'activity',
-    entity_id: row.id,
-    request_id: c.get('requestId'),
-  });
-  return ok(c, toMyActivity(row), 201);
-});
+activities.post(
+  '/activities',
+  noStore,
+  rateLimit('activities_write'),
+  requireOrganizer,
+  async (c) => {
+    const input = ActivityInput.parse(await readJson(c));
+    // Turnstile is "per risk" for activities (spec §9.4): verified whenever the client sends one.
+    if (input.turnstile_token)
+      await requireTurnstile(c, input.turnstile_token, 'activities', 'activity');
+    const { repo, now } = c.get('deps');
+    const write = buildActivityWrite(input, now());
+    const [territory] = await repo.getTerritories([write.territory_id]);
+    if (!territory)
+      throw fail('VALIDATION_ERROR', undefined, { territory_id: 'Território inexistente.' });
+    const user = c.get('user')!;
+    const row = await repo.createActivity(user.id, write);
+    await repo.recordAudit({
+      actor: user.id,
+      action: 'activity.create',
+      entity_type: 'activity',
+      entity_id: row.id,
+      request_id: c.get('requestId'),
+    });
+    return ok(c, toMyActivity(row), 201);
+  },
+);
 
 /** Loads an activity the caller may manage: its author (verified organizer) or an admin with MFA. */
 async function loadManageable(
@@ -128,64 +154,79 @@ async function loadManageable(
 
 const EDITABLE = new Set(['draft', 'pending_review', 'published']);
 
-activities.patch('/activities/:id', noStore, rateLimit('activities_write'), requireSession, async (c) => {
-  const id = uuidParam(c);
-  const raw = await readJson(c);
-  const parsed = ActivityPatch.parse(raw);
-  const presentKeys = new Set(raw && typeof raw === 'object' ? Object.keys(raw) : []);
-  const user = c.get('user')!;
-  const { repo, now } = c.get('deps');
-  const { row, asAdmin } = await loadManageable(c, user, id);
-  if (!EDITABLE.has(row.status)) throw fail('CONFLICT', 'Esta atividade não pode mais ser editada.');
-  if (parsed.version !== row.version) throw fail('CONFLICT', 'A atividade foi alterada. Recarregue e tente de novo.');
+activities.patch(
+  '/activities/:id',
+  noStore,
+  rateLimit('activities_write'),
+  requireSession,
+  async (c) => {
+    const id = uuidParam(c);
+    const raw = await readJson(c);
+    const parsed = ActivityPatch.parse(raw);
+    const presentKeys = new Set(raw && typeof raw === 'object' ? Object.keys(raw) : []);
+    const user = c.get('user')!;
+    const { repo, now } = c.get('deps');
+    const { row, asAdmin } = await loadManageable(c, user, id);
+    if (!EDITABLE.has(row.status))
+      throw fail('CONFLICT', 'Esta atividade não pode mais ser editada.');
+    if (parsed.version !== row.version)
+      throw fail('CONFLICT', 'A atividade foi alterada. Recarregue e tente de novo.');
 
-  const { update, sensitive } = buildActivityPatch(row, parsed, presentKeys, now());
-  if (update.territory_id && update.territory_id !== row.territory_id) {
-    const [t] = await repo.getTerritories([update.territory_id]);
-    if (!t) throw fail('VALIDATION_ERROR', undefined, { territory_id: 'Território inexistente.' });
-  }
-  // Sensitive edits by the author of a published activity go back to moderation (T21).
-  if (sensitive && !asAdmin && row.status === 'published') update.status = 'pending_review';
+    const { update, sensitive } = buildActivityPatch(row, parsed, presentKeys, now());
+    if (update.territory_id && update.territory_id !== row.territory_id) {
+      const [t] = await repo.getTerritories([update.territory_id]);
+      if (!t)
+        throw fail('VALIDATION_ERROR', undefined, { territory_id: 'Território inexistente.' });
+    }
+    // Sensitive edits by the author of a published activity go back to moderation (T21).
+    if (sensitive && !asAdmin && row.status === 'published') update.status = 'pending_review';
 
-  const updated = await repo.updateActivity(id, row.version, update);
-  if (!updated) throw fail('CONFLICT', 'A atividade foi alterada. Recarregue e tente de novo.');
-  await repo.recordAudit({
-    actor: user.id,
-    action: sensitive ? 'activity.update_sensitive' : 'activity.update',
-    entity_type: 'activity',
-    entity_id: id,
-    request_id: c.get('requestId'),
-  });
-  const counts = await repo.rsvpCounts([id]);
-  return ok(c, toMyActivity(updated, counts[id] ?? 0));
-});
+    const updated = await repo.updateActivity(id, row.version, update);
+    if (!updated) throw fail('CONFLICT', 'A atividade foi alterada. Recarregue e tente de novo.');
+    await repo.recordAudit({
+      actor: user.id,
+      action: sensitive ? 'activity.update_sensitive' : 'activity.update',
+      entity_type: 'activity',
+      entity_id: id,
+      request_id: c.get('requestId'),
+    });
+    const counts = await repo.rsvpCounts([id]);
+    return ok(c, toMyActivity(updated, counts[id] ?? 0));
+  },
+);
 
 const CancelInput = z.object({
   version: z.number().int().positive().optional(),
   reason: z.string().trim().max(500).optional(),
 });
 
-activities.post('/activities/:id/cancel', noStore, rateLimit('activities_write'), requireSession, async (c) => {
-  const id = uuidParam(c);
-  const input = CancelInput.parse(await readJson(c, true));
-  const user = c.get('user')!;
-  const { repo, now } = c.get('deps');
-  const { row } = await loadManageable(c, user, id);
-  if (!EDITABLE.has(row.status)) throw fail('CONFLICT', 'Esta atividade não pode ser cancelada.');
-  if (input.version !== undefined && input.version !== row.version) throw fail('CONFLICT');
-  const updated = await repo.updateActivity(id, row.version, {
-    status: 'cancelled',
-    cancelled_at: new Date(now()).toISOString(),
-  });
-  if (!updated) throw fail('CONFLICT');
-  await repo.recordAudit({
-    actor: user.id,
-    action: 'activity.cancel',
-    entity_type: 'activity',
-    entity_id: id,
-    request_id: c.get('requestId'),
-    reason: input.reason ?? null,
-  });
-  const counts = await repo.rsvpCounts([id]);
-  return ok(c, toMyActivity(updated, counts[id] ?? 0));
-});
+activities.post(
+  '/activities/:id/cancel',
+  noStore,
+  rateLimit('activities_write'),
+  requireSession,
+  async (c) => {
+    const id = uuidParam(c);
+    const input = CancelInput.parse(await readJson(c, true));
+    const user = c.get('user')!;
+    const { repo, now } = c.get('deps');
+    const { row } = await loadManageable(c, user, id);
+    if (!EDITABLE.has(row.status)) throw fail('CONFLICT', 'Esta atividade não pode ser cancelada.');
+    if (input.version !== undefined && input.version !== row.version) throw fail('CONFLICT');
+    const updated = await repo.updateActivity(id, row.version, {
+      status: 'cancelled',
+      cancelled_at: new Date(now()).toISOString(),
+    });
+    if (!updated) throw fail('CONFLICT');
+    await repo.recordAudit({
+      actor: user.id,
+      action: 'activity.cancel',
+      entity_type: 'activity',
+      entity_id: id,
+      request_id: c.get('requestId'),
+      reason: input.reason ?? null,
+    });
+    const counts = await repo.rsvpCounts([id]);
+    return ok(c, toMyActivity(updated, counts[id] ?? 0));
+  },
+);

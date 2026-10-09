@@ -47,7 +47,9 @@ async function main() {
 
   for (const email of emails) {
     let user = await findUserByEmail(db, email);
-    console.log(`bootstrap-admin: ${maskEmail(email)} -> ${user ? 'existing user' : 'no user yet'}`);
+    console.log(
+      `bootstrap-admin: ${maskEmail(email)} -> ${user ? 'existing user' : 'no user yet'}`,
+    );
     if (dryRun) continue;
     if (!user) {
       const { data, error } = await db.auth.admin.createUser({ email, email_confirm: true });
@@ -56,7 +58,9 @@ async function main() {
     }
     const { error } = await db.rpc('svc_grant_admin', { p_user: user.id });
     if (error) throw new Error(`svc_grant_admin failed (${error.code ?? 'unknown'})`);
-    console.log(`bootstrap-admin: ${maskEmail(email)} is admin (enrol TOTP MFA before using admin routes outside local).`);
+    console.log(
+      `bootstrap-admin: ${maskEmail(email)} is admin (enrol TOTP MFA before using admin routes outside local).`,
+    );
   }
   if (dryRun) console.log('bootstrap-admin: --dry-run, nothing written.');
 }

@@ -27,7 +27,10 @@ export function toPublicGroup(g: PublicGroupRow): PublicGroup {
   };
 }
 
-function contact(type: ActivityRow['contact_public_type'], value: string | null): PublicActivity['contact_public'] {
+function contact(
+  type: ActivityRow['contact_public_type'],
+  value: string | null,
+): PublicActivity['contact_public'] {
   return type && value ? { type, value } : null;
 }
 
@@ -116,7 +119,8 @@ export function toTerritorySummary(t: TerritoryRow): TerritorySummary {
     parent_id: t.parent_id,
     ibge_code: t.ibge_code,
     state_code: 'MG',
-    centroid: t.centroid_lon !== null && t.centroid_lat !== null ? [t.centroid_lon, t.centroid_lat] : null,
+    centroid:
+      t.centroid_lon !== null && t.centroid_lat !== null ? [t.centroid_lon, t.centroid_lat] : null,
     data_quality: t.data_quality,
   };
 }
@@ -134,6 +138,7 @@ export function toSearchItem(t: TerritoryRow): TerritorySearchItem {
     name: t.name,
     slug: t.slug,
     label,
-    municipality_name: t.type === 'neighborhood' ? t.municipality_name : t.type === 'municipality' ? t.name : null,
+    municipality_name:
+      t.type === 'neighborhood' ? t.municipality_name : t.type === 'municipality' ? t.name : null,
   };
 }

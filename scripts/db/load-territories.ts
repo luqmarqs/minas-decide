@@ -23,11 +23,13 @@ function resolveInput(arg: string | undefined): string {
   if (arg) return resolve(arg);
   const manifestPath = resolve('public/data/manifest.json');
   if (!existsSync(manifestPath)) {
-    throw new Error('No path given and public/data/manifest.json not found. Generate the snapshot first (npm run etl:build).');
+    throw new Error(
+      'No path given and public/data/manifest.json not found. Generate the snapshot first (npm run etl:build).',
+    );
   }
-  const manifest = z.object({ release_id: z.string().regex(/^[A-Za-z0-9._-]+$/) }).parse(
-    JSON.parse(readFileSync(manifestPath, 'utf8')),
-  );
+  const manifest = z
+    .object({ release_id: z.string().regex(/^[A-Za-z0-9._-]+$/) })
+    .parse(JSON.parse(readFileSync(manifestPath, 'utf8')));
   return resolve('public/data', manifest.release_id, 'territories-index.json');
 }
 
@@ -57,10 +59,18 @@ async function main() {
   if (!existsSync(file)) throw new Error(`File not found: ${file}`);
 
   const entries = z.array(TerritoryIndexEntry).parse(JSON.parse(readFileSync(file, 'utf8')));
-  const rows = entries.map(toRow).sort((a, b) => TYPE_ORDER[a.type as keyof typeof TYPE_ORDER] - TYPE_ORDER[b.type as keyof typeof TYPE_ORDER]);
+  const rows = entries
+    .map(toRow)
+    .sort(
+      (a, b) =>
+        TYPE_ORDER[a.type as keyof typeof TYPE_ORDER] -
+        TYPE_ORDER[b.type as keyof typeof TYPE_ORDER],
+    );
   const ids = new Set(rows.map((r) => r.id));
   const orphans = rows.filter((r) => r.parent_id && !ids.has(r.parent_id));
-  console.log(`load-territories: ${rows.length} entries (${orphans.length} with parent outside the file)`);
+  console.log(
+    `load-territories: ${rows.length} entries (${orphans.length} with parent outside the file)`,
+  );
   if (dryRun) {
     console.log('load-territories: --dry-run, nothing written.');
     return;
@@ -77,7 +87,8 @@ async function main() {
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
     const { error } = await db.from('territories').upsert(batch, { onConflict: 'id' });
-    if (error) throw new Error(`upsert failed at batch ${i / BATCH} (code ${error.code ?? 'unknown'})`);
+    if (error)
+      throw new Error(`upsert failed at batch ${i / BATCH} (code ${error.code ?? 'unknown'})`);
     done += batch.length;
     console.log(`load-territories: upserted ${done}/${rows.length}`);
   }

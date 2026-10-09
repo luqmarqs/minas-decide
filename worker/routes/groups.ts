@@ -41,13 +41,16 @@ groups.post('/groups/proposals', noStore, rateLimit('proposals'), optionalSessio
   const input = await parseBody(c, GroupProposalInput);
   const phone = normalizeBrazilPhone(input.proposer_phone);
   if (!phone) {
-    throw fail('VALIDATION_ERROR', undefined, { proposer_phone: 'Informe um WhatsApp brasileiro válido com DDD.' });
+    throw fail('VALIDATION_ERROR', undefined, {
+      proposer_phone: 'Informe um WhatsApp brasileiro válido com DDD.',
+    });
   }
   await requireTurnstile(c, input.turnstile_token, 'proposals', 'group_proposal');
 
   const { repo } = c.get('deps');
   const [territory] = await repo.getTerritories([input.territory_id]);
-  if (!territory) throw fail('VALIDATION_ERROR', undefined, { territory_id: 'Território inexistente.' });
+  if (!territory)
+    throw fail('VALIDATION_ERROR', undefined, { territory_id: 'Território inexistente.' });
 
   // Idempotency: explicit key, or a content key so a re-submit after timeout doesn't duplicate.
   const idemSource = input.idempotency_key

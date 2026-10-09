@@ -4,7 +4,7 @@ import { normalizeText, slugify } from './normalize.ts';
 describe('normalizeText', () => {
   it('strips accents, case, punctuation and whitespace', () => {
     expect(normalizeText('  São João del-Rei ')).toBe('sao joao del rei');
-    expect(normalizeText("Pouso Alegre")).toBe('pouso alegre');
+    expect(normalizeText('Pouso Alegre')).toBe('pouso alegre');
     expect(normalizeText('BRASÍLIA DE MINAS')).toBe('brasilia de minas');
   });
 });

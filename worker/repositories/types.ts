@@ -3,7 +3,11 @@
  * `./supabase.ts`; tests use an in-memory fake with the same semantics
  * (`worker/tests/fakes.ts`). Repositories throw `AppError` with stable codes.
  */
-import type { ActivityStatus, ActivityType, PublicContactType } from '../../shared/contracts/activities.ts';
+import type {
+  ActivityStatus,
+  ActivityType,
+  PublicContactType,
+} from '../../shared/contracts/activities.ts';
 import type { DataQuality, TerritoryType } from '../../shared/contracts/territory.ts';
 import type { AuthUser } from '../env.ts';
 
@@ -212,7 +216,9 @@ export interface Repo {
   countChildren(id: string): Promise<number>;
   // groups
   listActiveGroups(territoryId: string): Promise<PublicGroupRow[]>;
-  createGroupProposal(p: NewGroupProposal): Promise<{ id: string; status: string; created: boolean }>;
+  createGroupProposal(
+    p: NewGroupProposal,
+  ): Promise<{ id: string; status: string; created: boolean }>;
   patchGroup(id: string, patch: GroupPatch): Promise<GroupRow | null>;
   // activities
   listPublicActivities(q: PublicActivityQuery): Promise<PublicActivityRow[]>;
@@ -220,9 +226,17 @@ export interface Repo {
   getActivity(id: string): Promise<ActivityRow | null>;
   createActivity(creatorId: string, a: ActivityWrite): Promise<ActivityRow>;
   /** Conditional update on (id, version). Returns null when the version no longer matches. */
-  updateActivity(id: string, expectedVersion: number, patch: ActivityUpdate): Promise<ActivityRow | null>;
+  updateActivity(
+    id: string,
+    expectedVersion: number,
+    patch: ActivityUpdate,
+  ): Promise<ActivityRow | null>;
   listMyActivities(creatorId: string, limit: number, cursor: Cursor | null): Promise<ActivityRow[]>;
-  listActivitiesByStatus(status: ActivityStatus, limit: number, cursor: Cursor | null): Promise<ActivityRow[]>;
+  listActivitiesByStatus(
+    status: ActivityStatus,
+    limit: number,
+    cursor: Cursor | null,
+  ): Promise<ActivityRow[]>;
   rsvpCounts(ids: string[]): Promise<Record<string, number>>;
   upsertRsvp(
     activityId: string,
@@ -239,10 +253,29 @@ export interface Repo {
   isAdmin(userId: string): Promise<boolean>;
   isEmailVerified(userId: string): Promise<boolean>;
   // moderation
-  listGroupProposals(status: string | null, limit: number, cursor: Cursor | null): Promise<GroupProposalRow[]>;
-  approveGroupProposal(id: string, adminId: string, reason: string, requestId: string): Promise<string>;
-  rejectGroupProposal(id: string, adminId: string, reason: string, requestId: string): Promise<void>;
-  approveActivity(id: string, adminId: string, reason: string | null, requestId: string): Promise<number>;
+  listGroupProposals(
+    status: string | null,
+    limit: number,
+    cursor: Cursor | null,
+  ): Promise<GroupProposalRow[]>;
+  approveGroupProposal(
+    id: string,
+    adminId: string,
+    reason: string,
+    requestId: string,
+  ): Promise<string>;
+  rejectGroupProposal(
+    id: string,
+    adminId: string,
+    reason: string,
+    requestId: string,
+  ): Promise<void>;
+  approveActivity(
+    id: string,
+    adminId: string,
+    reason: string | null,
+    requestId: string,
+  ): Promise<number>;
   rejectActivity(id: string, adminId: string, reason: string, requestId: string): Promise<number>;
   addGroupManager(m: NewGroupManager, adminId: string, requestId: string): Promise<string>;
   // audit / abuse / turnstile
@@ -254,7 +287,12 @@ export interface Repo {
     request_id: string;
     reason?: string | null;
   }): Promise<void>;
-  recordAbuse(e: { subject_hash: string | null; route: string; event_type: string; block_code: string | null }): Promise<void>;
+  recordAbuse(e: {
+    subject_hash: string | null;
+    route: string;
+    event_type: string;
+    block_code: string | null;
+  }): Promise<void>;
   listSecurityEvents(limit: number, cursor: Cursor | null): Promise<SecurityEventRow[]>;
   consumeTurnstileToken(tokenHash: string, ttlSeconds: number): Promise<boolean>;
 }

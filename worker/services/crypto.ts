@@ -42,7 +42,10 @@ export function encodeCursor(value: Record<string, string>): string {
   return base64UrlEncode(enc.encode(JSON.stringify(value)));
 }
 
-export function decodeCursor(cursor: string | undefined, keys: string[]): Record<string, string> | null {
+export function decodeCursor(
+  cursor: string | undefined,
+  keys: string[],
+): Record<string, string> | null {
   if (!cursor) return null;
   try {
     const parsed: unknown = JSON.parse(base64UrlDecodeToString(cursor));

@@ -89,12 +89,10 @@ export const ActivityInput = z.object({
 export type ActivityInput = z.infer<typeof ActivityInput>;
 
 /** Partial update. No defaults here: only keys present in the body are applied. */
-export const ActivityPatch = ActivityInput.omit({ public_contact_opt_in: true })
-  .partial()
-  .extend({
-    public_contact_opt_in: z.boolean().optional(),
-    version: z.number().int().nonnegative(),
-  });
+export const ActivityPatch = ActivityInput.omit({ public_contact_opt_in: true }).partial().extend({
+  public_contact_opt_in: z.boolean().optional(),
+  version: z.number().int().nonnegative(),
+});
 export type ActivityPatch = z.infer<typeof ActivityPatch>;
 
 export const MyActivity = PublicActivity.omit({ status: true }).extend({

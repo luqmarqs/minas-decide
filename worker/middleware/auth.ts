@@ -62,7 +62,13 @@ export async function isAdminWithMfa(c: Context<AppBindings>, user: AuthUser): P
   if (user.aal === 'aal2') return true;
   if (isLocal(c.env)) {
     // Explicit, logged bypass. APP_ENV=local only — impossible in staging/production.
-    console.warn(JSON.stringify({ level: 'warn', event: 'ADMIN_MFA_BYPASS_LOCAL', request_id: c.get('requestId') }));
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        event: 'ADMIN_MFA_BYPASS_LOCAL',
+        request_id: c.get('requestId'),
+      }),
+    );
     return true;
   }
   return false;

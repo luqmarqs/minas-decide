@@ -9,13 +9,31 @@ import { homedir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 
 const root = process.cwd();
-const scanDirs = ['src', 'worker', 'shared', 'public', 'dist', 'e2e', 'supabase/migrations', '.github'];
-const scanFiles = ['wrangler.jsonc', '.env.example', '.dev.vars.example', 'package.json', 'index.html'];
+const scanDirs = [
+  'src',
+  'worker',
+  'shared',
+  'public',
+  'dist',
+  'e2e',
+  'supabase/migrations',
+  '.github',
+];
+const scanFiles = [
+  'wrangler.jsonc',
+  '.env.example',
+  '.dev.vars.example',
+  'package.json',
+  'index.html',
+];
 const allowedDirs = ['scripts/import-electoral'];
 
 const patterns: { label: string; re: RegExp }[] = [
   { label: 'SOURCE project name', re: /dashboard-eleicoes-2026/i },
-  { label: 'SOURCE env var', re: /SUPABASE_SOURCE_|ELECTORAL_SOURCE_DATABASE_URL=\S*(postgres|supabase)/i },
+  {
+    label: 'SOURCE env var',
+    re: /SUPABASE_SOURCE_|ELECTORAL_SOURCE_DATABASE_URL=\S*(postgres|supabase)/i,
+  },
   { label: 'SOURCE table names (meta_*)', re: /\bmeta_(anuncios|localidades|observacoes|cache)\b/ },
   { label: 'service role in VITE var', re: /VITE_[A-Z_]*SERVICE_ROLE/ },
   { label: 'postgres connection string', re: /postgres(ql)?:\/\/[^\s"'`]+@/i },

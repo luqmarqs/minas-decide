@@ -35,7 +35,13 @@ import type { SiteverifyResult, TurnstileVerifier } from '../services/turnstile.
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
-function territory(id: string, type: TerritoryRow['type'], name: string, parent: string | null, muni: string | null): TerritoryRow {
+function territory(
+  id: string,
+  type: TerritoryRow['type'],
+  name: string,
+  parent: string | null,
+  muni: string | null,
+): TerritoryRow {
   return {
     id,
     type,
@@ -94,7 +100,9 @@ export class FakeRepo implements Repo {
 
   // ---------------------------------------------------------------- territories
   async searchTerritories(q: string, limit: number) {
-    return this.territories.filter((t) => t.type !== 'state' && t.normalized_name.includes(q)).slice(0, limit * 4);
+    return this.territories
+      .filter((t) => t.type !== 'state' && t.normalized_name.includes(q))
+      .slice(0, limit * 4);
   }
   async getTerritories(ids: string[]) {
     return this.territories.filter((t) => ids.includes(t.id));
@@ -187,19 +195,32 @@ export class FakeRepo implements Repo {
     return this.activities
       .filter((a) => a.status === 'published' || a.status === 'cancelled')
       .filter((a) => a.starts_at >= q.from && (!q.to || a.starts_at <= q.to))
-      .filter((a) => !q.territory_id || q.territory_id === 'mg' || a.territory_id.startsWith(q.territory_id))
+      .filter(
+        (a) =>
+          !q.territory_id || q.territory_id === 'mg' || a.territory_id.startsWith(q.territory_id),
+      )
       .filter(
         (a) =>
           !q.bbox ||
-          (a.location_lon >= q.bbox[0] && a.location_lon <= q.bbox[2] && a.location_lat >= q.bbox[1] && a.location_lat <= q.bbox[3]),
+          (a.location_lon >= q.bbox[0] &&
+            a.location_lon <= q.bbox[2] &&
+            a.location_lat >= q.bbox[1] &&
+            a.location_lat <= q.bbox[3]),
       )
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at) || a.id.localeCompare(b.id))
-      .filter((a) => !q.cursor || a.starts_at > q.cursor.at || (a.starts_at === q.cursor.at && a.id > q.cursor.id))
+      .filter(
+        (a) =>
+          !q.cursor ||
+          a.starts_at > q.cursor.at ||
+          (a.starts_at === q.cursor.at && a.id > q.cursor.id),
+      )
       .slice(0, q.limit + 1)
       .map((a) => this.toPublic(a));
   }
   async getPublicActivity(id: string) {
-    const a = this.activities.find((x) => x.id === id && (x.status === 'published' || x.status === 'cancelled'));
+    const a = this.activities.find(
+      (x) => x.id === id && (x.status === 'published' || x.status === 'cancelled'),
+    );
     return a ? this.toPublic(a) : null;
   }
   async getActivity(id: string) {
@@ -297,9 +318,11 @@ export class FakeRepo implements Repo {
     const p = this.profiles.get(id);
     if (!p) return null;
     if (patch.display_name !== undefined) p.display_name = patch.display_name;
-    if (patch.selected_territory_id !== undefined) p.selected_territory_id = patch.selected_territory_id;
+    if (patch.selected_territory_id !== undefined)
+      p.selected_territory_id = patch.selected_territory_id;
     if (patch.email_state !== undefined) p.email_verification_state = patch.email_state;
-    if (patch.contact_opt_in !== undefined) p.contact_opt_in_at = patch.contact_opt_in ? iso(this.clock()) : null;
+    if (patch.contact_opt_in !== undefined)
+      p.contact_opt_in_at = patch.contact_opt_in ? iso(this.clock()) : null;
     return p;
   }
   async emailInUse(email: string, exclude: string) {
@@ -340,7 +363,12 @@ export class FakeRepo implements Repo {
     p.review_reason = reason;
     this.audit.push({ actor: adminId, action: 'group_proposal.reject', entity_id: id });
   }
-  private moderate(id: string, adminId: string, to: 'published' | 'rejected', reason: string | null) {
+  private moderate(
+    id: string,
+    adminId: string,
+    to: 'published' | 'rejected',
+    reason: string | null,
+  ) {
     if (!this.admins.has(adminId)) throw fail('FORBIDDEN');
     const a = this.activities.find((x) => x.id === id);
     if (!a) throw fail('NOT_FOUND');
@@ -369,8 +397,19 @@ export class FakeRepo implements Repo {
   async recordAudit(e: { actor: string | null; action: string; entity_id: string | null }) {
     this.audit.push({ actor: e.actor, action: e.action, entity_id: e.entity_id });
   }
-  async recordAbuse(e: { subject_hash: string | null; route: string; event_type: string; block_code: string | null }) {
-    this.abuse.push({ id: this.uuid(), created_at: iso(this.clock()), route: e.route, event_type: e.event_type, block_code: e.block_code });
+  async recordAbuse(e: {
+    subject_hash: string | null;
+    route: string;
+    event_type: string;
+    block_code: string | null;
+  }) {
+    this.abuse.push({
+      id: this.uuid(),
+      created_at: iso(this.clock()),
+      route: e.route,
+      event_type: e.event_type,
+      block_code: e.block_code,
+    });
   }
   async listSecurityEvents(limit: number) {
     return this.abuse.slice(0, limit + 1);
@@ -461,7 +500,9 @@ export class FakeAuth implements AuthGateway {
   }
   async sendMagicLink(email: string) {
     this.magicLinks.push(email);
-    return this.magicLinkOk ? { ok: true, code: null } : { ok: false, code: 'over_email_send_rate_limit' };
+    return this.magicLinkOk
+      ? { ok: true, code: null }
+      : { ok: false, code: 'over_email_send_rate_limit' };
   }
 }
 
@@ -470,7 +511,13 @@ export class FakeTurnstile implements TurnstileVerifier {
   calls = 0;
   async verify({ token }: { token: string }): Promise<SiteverifyResult> {
     this.calls += 1;
-    if (token.startsWith('bad')) return { success: false, hostname: null, action: null, errorCodes: ['invalid-input-response'] };
+    if (token.startsWith('bad'))
+      return {
+        success: false,
+        hostname: null,
+        action: null,
+        errorCodes: ['invalid-input-response'],
+      };
     return {
       success: true,
       hostname: token.startsWith('wronghost') ? 'evil.example' : 'localhost',
@@ -507,7 +554,10 @@ export function setup(envOver: Partial<Env> = {}) {
   const env = testEnv(envOver);
   let tokenSeq = 0;
 
-  const request = (path: string, init: RequestInit & { json?: unknown; token?: string; cookie?: string } = {}) => {
+  const request = (
+    path: string,
+    init: RequestInit & { json?: unknown; token?: string; cookie?: string } = {},
+  ) => {
     const headers = new Headers(init.headers);
     if (init.json !== undefined) {
       headers.set('Content-Type', 'application/json');
@@ -524,18 +574,37 @@ export function setup(envOver: Partial<Env> = {}) {
   const users = {
     anonymous(id = repo.uuid()) {
       const token = `tok-anon-${++tokenSeq}-padding-padding`;
-      return { token, user: auth.add(token, { id, is_anonymous: true, jwt_is_anonymous: true, amr_methods: ['anonymous'] }) };
+      return {
+        token,
+        user: auth.add(token, {
+          id,
+          is_anonymous: true,
+          jwt_is_anonymous: true,
+          amr_methods: ['anonymous'],
+        }),
+      };
     },
     verified(id = repo.uuid(), email = `org${tokenSeq + 1}@example.org`) {
       const token = `tok-verified-${++tokenSeq}-padding-padding`;
       repo.verified.add(id);
-      return { token, user: auth.add(token, { id, email, email_confirmed: true, amr_methods: ['otp'] }) };
+      return {
+        token,
+        user: auth.add(token, { id, email, email_confirmed: true, amr_methods: ['otp'] }),
+      };
     },
     admin(aal: 'aal1' | 'aal2' = 'aal2', id = repo.uuid()) {
       const token = `tok-admin-${++tokenSeq}-padding-padding`;
       repo.admins.add(id);
       repo.verified.add(id);
-      return { token, user: auth.add(token, { id, email: `admin${tokenSeq}@example.org`, email_confirmed: true, aal }) };
+      return {
+        token,
+        user: auth.add(token, {
+          id,
+          email: `admin${tokenSeq}@example.org`,
+          email_confirmed: true,
+          aal,
+        }),
+      };
     },
   };
 

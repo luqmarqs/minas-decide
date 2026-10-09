@@ -20,14 +20,21 @@ const TYPE_ORDER = { state: 0, municipality: 1, neighborhood: 2 } as const;
 
 territories.get('/territories/search', cachePublic(60), async (c) => {
   const { q, limit } = parse(SearchQuery, c.req.query());
-  const needle = normalizeText(q).replace(/[^a-z0-9 ]/g, '').trim();
-  if (needle.length < 2) throw fail('VALIDATION_ERROR', undefined, { q: 'Digite ao menos 2 letras.' });
+  const needle = normalizeText(q)
+    .replace(/[^a-z0-9 ]/g, '')
+    .trim();
+  if (needle.length < 2)
+    throw fail('VALIDATION_ERROR', undefined, { q: 'Digite ao menos 2 letras.' });
   const rows = await c.get('deps').repo.searchTerritories(needle, limit);
   const items = rows
     .sort((a, b) => {
       const pa = a.normalized_name.startsWith(needle) ? 0 : 1;
       const pb = b.normalized_name.startsWith(needle) ? 0 : 1;
-      return pa - pb || TYPE_ORDER[a.type] - TYPE_ORDER[b.type] || a.normalized_name.localeCompare(b.normalized_name);
+      return (
+        pa - pb ||
+        TYPE_ORDER[a.type] - TYPE_ORDER[b.type] ||
+        a.normalized_name.localeCompare(b.normalized_name)
+      );
     })
     .slice(0, limit)
     .map(toSearchItem);
@@ -43,7 +50,9 @@ function territoryIdParam(raw: string | undefined): string {
 territories.get('/territories/:id', cachePublic(60), async (c) => {
   const id = territoryIdParam(c.req.param('id'));
   const { repo } = c.get('deps');
-  const lineage = [...new Set(['mg', municipalityIdOf(id), id].filter((x): x is string => Boolean(x)))];
+  const lineage = [
+    ...new Set(['mg', municipalityIdOf(id), id].filter((x): x is string => Boolean(x))),
+  ];
   const rows = await repo.getTerritories(lineage);
   const self = rows.find((r) => r.id === id);
   if (!self) throw fail('NOT_FOUND');

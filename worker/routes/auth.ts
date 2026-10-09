@@ -21,11 +21,21 @@ authRoutes.post('/auth/send-link', noStore, rateLimit('send_link'), async (c) =>
   await requireTurnstile(c, input.turnstile_token, 'send_link', 'send_link');
   const res = await c.get('deps').auth.sendMagicLink(input.email, returnUrl(c.env.PUBLIC_ORIGIN));
   if (!res.ok) {
-    console.warn(JSON.stringify({ level: 'warn', event: 'magic_link_not_sent', code: res.code, request_id: c.get('requestId') }));
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        event: 'magic_link_not_sent',
+        code: res.code,
+        request_id: c.get('requestId'),
+      }),
+    );
   }
   return ok(
     c,
-    { status: 'sent_if_exists', message: 'Se houver uma conta com este e-mail, enviamos um link de acesso.' },
+    {
+      status: 'sent_if_exists',
+      message: 'Se houver uma conta com este e-mail, enviamos um link de acesso.',
+    },
     202,
   );
 });
@@ -49,7 +59,10 @@ authRoutes.post('/auth/confirm-email', noStore, requireSession, async (c) => {
   const { auth, repo } = c.get('deps');
   if (!user.email || !user.email_confirmed) throw fail('EMAIL_NOT_VERIFIED');
   if (!user.amr_methods.some((m) => EMAIL_PROOF_METHODS.has(m))) {
-    throw fail('EMAIL_NOT_VERIFIED', 'Abra o link enviado ao seu e-mail neste dispositivo para confirmar.');
+    throw fail(
+      'EMAIL_NOT_VERIFIED',
+      'Abra o link enviado ao seu e-mail neste dispositivo para confirmar.',
+    );
   }
   if (user.is_anonymous) {
     if (!(await auth.promoteVerified(user.id, user.email))) throw fail('INTERNAL_ERROR');

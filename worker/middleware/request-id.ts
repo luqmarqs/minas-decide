@@ -7,7 +7,9 @@ import type { AppBindings, Deps } from '../env.ts';
  * headers and emits ONE structured log line per request:
  * {request_id, route, method, status, ms, rate_limited} — no PII, no tokens, no bodies.
  */
-export function requestContext(getDeps: (env: AppBindings['Bindings']) => Deps): MiddlewareHandler<AppBindings> {
+export function requestContext(
+  getDeps: (env: AppBindings['Bindings']) => Deps,
+): MiddlewareHandler<AppBindings> {
   return async (c, next) => {
     const deps = getDeps(c.env);
     const requestId = crypto.randomUUID();

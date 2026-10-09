@@ -23,7 +23,11 @@ export interface SiteverifyResult {
 }
 
 export interface TurnstileVerifier {
-  verify(input: { secret: string; token: string; remoteIp: string | null }): Promise<SiteverifyResult>;
+  verify(input: {
+    secret: string;
+    token: string;
+    remoteIp: string | null;
+  }): Promise<SiteverifyResult>;
 }
 
 export function createSiteverifyClient(fetchImpl: typeof fetch = fetch): TurnstileVerifier {
@@ -35,7 +39,13 @@ export function createSiteverifyClient(fetchImpl: typeof fetch = fetch): Turnsti
       if (remoteIp && remoteIp !== 'local') form.append('remoteip', remoteIp);
       try {
         const res = await fetchImpl(SITEVERIFY_URL, { method: 'POST', body: form });
-        if (!res.ok) return { success: false, hostname: null, action: null, errorCodes: [`http_${res.status}`] };
+        if (!res.ok)
+          return {
+            success: false,
+            hostname: null,
+            action: null,
+            errorCodes: [`http_${res.status}`],
+          };
         const body = (await res.json()) as {
           success?: unknown;
           hostname?: unknown;

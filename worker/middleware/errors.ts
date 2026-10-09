@@ -6,7 +6,12 @@ import { HTTP_STATUS_BY_CODE, type ApiErrorCode } from '../../shared/contracts/a
 import type { AppBindings } from '../env.ts';
 import { AppError, DEFAULT_MESSAGES } from '../errors.ts';
 
-export function errorBody(c: Context<AppBindings>, code: ApiErrorCode, message: string, fields?: Record<string, string>) {
+export function errorBody(
+  c: Context<AppBindings>,
+  code: ApiErrorCode,
+  message: string,
+  fields?: Record<string, string>,
+) {
   return {
     error: { code, message, ...(fields && Object.keys(fields).length ? { fields } : {}) },
     meta: { request_id: c.get('requestId') ?? 'unknown' },
@@ -35,7 +40,8 @@ export function zodFields(err: ZodError): Record<string, string> {
 /** Single error mapper: AppError -> its code; ZodError -> VALIDATION_ERROR; else INTERNAL_ERROR. */
 export const onError: ErrorHandler<AppBindings> = (err, c) => {
   if (err instanceof AppError) return respondError(c, err.code, err.message, err.fields);
-  if (err instanceof ZodError) return respondError(c, 'VALIDATION_ERROR', undefined, zodFields(err));
+  if (err instanceof ZodError)
+    return respondError(c, 'VALIDATION_ERROR', undefined, zodFields(err));
   // Never leak stack/SQL. Log only the error class name.
   console.error(
     JSON.stringify({

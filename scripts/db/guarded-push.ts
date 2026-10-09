@@ -32,5 +32,9 @@ console.log(`db:push → TARGET (${ref.slice(0, 5)}…) :: supabase ${args.join(
 try {
   execFileSync('supabase', args, { stdio: 'inherit', shell: process.platform === 'win32' });
 } catch (err) {
-  process.exit(typeof (err as { status?: number }).status === 'number' ? (err as { status: number }).status : 1);
+  process.exit(
+    typeof (err as { status?: number }).status === 'number'
+      ? (err as { status: number }).status
+      : 1,
+  );
 }

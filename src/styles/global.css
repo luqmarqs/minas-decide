@@ -117,3 +117,56 @@
     transition-timing-function: var(--easing-emphasized);
   }
 }
+
+/* ---- motion keyframes (durations come from tokens; 0ms under reduced motion) ---- */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* ---- MapLibre controls aligned with tokens ---- */
+.maplibregl-ctrl-group {
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-raised);
+}
+.maplibregl-ctrl-group button {
+  width: 40px;
+  height: 40px;
+}
+.maplibregl-ctrl button:focus-visible,
+.maplibregl-canvas:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+.maplibregl-cooperative-gesture-screen {
+  font-family: var(--font-body);
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Keep MapLibre controls clear of the desktop side panel. */
+.mm-map-has-panel .maplibregl-ctrl-bottom-right {
+  right: calc(var(--panel-width) + 1.5rem);
+}

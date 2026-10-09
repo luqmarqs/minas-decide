@@ -95,12 +95,20 @@ describe('groups (T12, T14, T26)', () => {
     repo.addGroup('mg-3140001', 'active');
     repo.addGroup('mg-3106200-centro', 'pending');
     const fallback = PublicGroupsResponse.parse(
-      ((await (await request('/api/v1/groups?territory_id=mg-3140001-centro')).json()) as { data: unknown }).data,
+      (
+        (await (await request('/api/v1/groups?territory_id=mg-3140001-centro')).json()) as {
+          data: unknown;
+        }
+      ).data,
     );
     expect(fallback.fallback).toBe('municipality');
     expect(fallback.items).toHaveLength(1);
     const none = PublicGroupsResponse.parse(
-      ((await (await request('/api/v1/groups?territory_id=mg-3106200-centro')).json()) as { data: unknown }).data,
+      (
+        (await (await request('/api/v1/groups?territory_id=mg-3106200-centro')).json()) as {
+          data: unknown;
+        }
+      ).data,
     );
     expect(none).toEqual({ items: [], fallback: 'none' });
     repo.addGroup('mg-3140001-centro', 'active');
@@ -117,13 +125,22 @@ describe('groups (T12, T14, T26)', () => {
   it('T14: public group payload has exactly the public projection — no manager/proposer data', async () => {
     const { request, repo, users } = setup();
     const admin = users.admin();
-    const created = await body(await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal() }));
-    await request(`/api/v1/admin/groups/${String(created.data?.id)}/approve`, { method: 'POST', token: admin.token });
+    const created = await body(
+      await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal() }),
+    );
+    await request(`/api/v1/admin/groups/${String(created.data?.id)}/approve`, {
+      method: 'POST',
+      token: admin.token,
+    });
     const groupId = repo.groups[0]!.id;
     await request(`/api/v1/admin/groups/${groupId}/managers`, {
       method: 'POST',
       token: admin.token,
-      json: { name: 'Responsável Secreto', email: 'resp.secreto@example.org', phone: '31988887777' },
+      json: {
+        name: 'Responsável Secreto',
+        email: 'resp.secreto@example.org',
+        phone: '31988887777',
+      },
     });
     const res = await request('/api/v1/groups?territory_id=mg-3140001-centro');
     const text = await res.text();
@@ -131,14 +148,24 @@ describe('groups (T12, T14, T26)', () => {
     expect(Object.keys(json.data.items[0]!).sort()).toEqual(
       ['display_name', 'id', 'join_url', 'status', 'territory_id', 'updated_at'].sort(),
     );
-    for (const secret of ['ana.proponente', '99999', 'Ana Proponente', 'Responsável Secreto', 'resp.secreto', '88887777']) {
+    for (const secret of [
+      'ana.proponente',
+      '99999',
+      'Ana Proponente',
+      'Responsável Secreto',
+      'resp.secreto',
+      '88887777',
+    ]) {
       expect(text).not.toContain(secret);
     }
   });
 
   it('T12: proposal stays pending and its link is not public', async () => {
     const { request } = setup();
-    const res = await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal() });
+    const res = await request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal(),
+    });
     expect(res.status).toBe(201);
     expect(res.headers.get('Cache-Control')).toBe('no-store');
     expect((await body(res)).data).toMatchObject({ status: 'pending' });
@@ -148,8 +175,14 @@ describe('groups (T12, T14, T26)', () => {
 
   it('proposal re-submit (same idempotency key) does not duplicate', async () => {
     const { request, repo } = setup();
-    const a = await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal({ idempotency_key: 'key-12345678' }) });
-    const b = await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal({ idempotency_key: 'key-12345678' }) });
+    const a = await request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal({ idempotency_key: 'key-12345678' }),
+    });
+    const b = await request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal({ idempotency_key: 'key-12345678' }),
+    });
     expect(a.status).toBe(201);
     expect(b.status).toBe(200);
     expect((await body(a)).data?.id).toBe((await body(b)).data?.id);
@@ -158,8 +191,15 @@ describe('groups (T12, T14, T26)', () => {
 
   it('T26: non-WhatsApp URL is rejected with a field error', async () => {
     const { request, repo } = setup();
-    for (const url of ['https://bit.ly/abc', 'https://wa.me/5531999998888', 'javascript:alert(1)']) {
-      const res = await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal({ join_url_proposed: url }) });
+    for (const url of [
+      'https://bit.ly/abc',
+      'https://wa.me/5531999998888',
+      'javascript:alert(1)',
+    ]) {
+      const res = await request('/api/v1/groups/proposals', {
+        method: 'POST',
+        json: validProposal({ join_url_proposed: url }),
+      });
       expect(res.status).toBe(400);
       expect((await body(res)).error?.fields?.join_url_proposed).toBeDefined();
     }
@@ -168,9 +208,15 @@ describe('groups (T12, T14, T26)', () => {
 
   it('invalid phone and unknown territory are field errors', async () => {
     const { request } = setup();
-    const phone = await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal({ proposer_phone: '3133334444' }) });
+    const phone = await request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal({ proposer_phone: '3133334444' }),
+    });
     expect((await body(phone)).error?.fields?.proposer_phone).toBeDefined();
-    const terr = await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal({ territory_id: 'mg-9999999' }) });
+    const terr = await request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal({ territory_id: 'mg-9999999' }),
+    });
     expect((await body(terr)).error?.fields?.territory_id).toBeDefined();
   });
 
@@ -178,10 +224,18 @@ describe('groups (T12, T14, T26)', () => {
     const { request, repo } = setup();
     const headers = { 'CF-Connecting-IP': '203.0.113.7' };
     for (let i = 0; i < 5; i++) {
-      const r = await request('/api/v1/groups/proposals', { method: 'POST', headers, json: validProposal({ idempotency_key: `k-${i}-123456` }) });
+      const r = await request('/api/v1/groups/proposals', {
+        method: 'POST',
+        headers,
+        json: validProposal({ idempotency_key: `k-${i}-123456` }),
+      });
       expect(r.status).toBe(201);
     }
-    const blocked = await request('/api/v1/groups/proposals', { method: 'POST', headers, json: validProposal() });
+    const blocked = await request('/api/v1/groups/proposals', {
+      method: 'POST',
+      headers,
+      json: validProposal(),
+    });
     expect(blocked.status).toBe(429);
     expect(blocked.headers.get('Retry-After')).toMatch(/^\d+$/);
     expect((await body(blocked)).error?.code).toBe('RATE_LIMITED');
@@ -200,7 +254,10 @@ describe('groups (T12, T14, T26)', () => {
 describe('turnstile (T04, T17)', () => {
   it('invalid token -> TURNSTILE_FAILED, nothing stored', async () => {
     const { request, repo } = setup();
-    const res = await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal({ turnstile_token: 'bad-token' }) });
+    const res = await request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal({ turnstile_token: 'bad-token' }),
+    });
     expect(res.status).toBe(400);
     expect((await body(res)).error?.code).toBe('TURNSTILE_FAILED');
     expect(repo.proposals).toHaveLength(0);
@@ -209,9 +266,15 @@ describe('turnstile (T04, T17)', () => {
 
   it('T17: a token can be used only once', async () => {
     const { request, turnstile } = setup();
-    const first = await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal({ turnstile_token: 'same-token', idempotency_key: 'a-12345678' }) });
+    const first = await request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal({ turnstile_token: 'same-token', idempotency_key: 'a-12345678' }),
+    });
     expect(first.status).toBe(201);
-    const second = await request('/api/v1/groups/proposals', { method: 'POST', json: validProposal({ turnstile_token: 'same-token', idempotency_key: 'b-12345678' }) });
+    const second = await request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal({ turnstile_token: 'same-token', idempotency_key: 'b-12345678' }),
+    });
     expect(second.status).toBe(400);
     expect((await body(second)).error?.code).toBe('TURNSTILE_FAILED');
     expect(turnstile.calls).toBe(1); // reuse is caught before calling Siteverify again
@@ -219,16 +282,28 @@ describe('turnstile (T04, T17)', () => {
 
   it('wrong hostname is rejected for real secrets but ignored for the Cloudflare test secret', async () => {
     const real = setup();
-    const r1 = await real.request('/api/v1/groups/proposals', { method: 'POST', json: validProposal({ turnstile_token: 'wronghost-1' }) });
+    const r1 = await real.request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal({ turnstile_token: 'wronghost-1' }),
+    });
     expect((await body(r1)).error?.code).toBe('TURNSTILE_FAILED');
     const testKey = setup({ TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA' });
-    const r2 = await testKey.request('/api/v1/groups/proposals', { method: 'POST', json: validProposal({ turnstile_token: 'wronghost-2' }) });
+    const r2 = await testKey.request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal({ turnstile_token: 'wronghost-2' }),
+    });
     expect(r2.status).toBe(201);
   });
 
   it('the Cloudflare test secret is refused in production', async () => {
-    const prod = setup({ TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA', APP_ENV: 'production' });
-    const res = await prod.request('/api/v1/groups/proposals', { method: 'POST', json: validProposal() });
+    const prod = setup({
+      TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
+      APP_ENV: 'production',
+    });
+    const res = await prod.request('/api/v1/groups/proposals', {
+      method: 'POST',
+      json: validProposal(),
+    });
     expect((await body(res)).error?.code).toBe('TURNSTILE_FAILED');
   });
 });
@@ -286,7 +361,14 @@ describe('structured logging', () => {
     }
     const parsed = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
     expect(parsed.map((p) => p.route)).toEqual(['/api/v1/territories/search', '/api/v1/me']);
-    expect(Object.keys(parsed[0]!).sort()).toEqual(['method', 'ms', 'rate_limited', 'request_id', 'route', 'status']);
+    expect(Object.keys(parsed[0]!).sort()).toEqual([
+      'method',
+      'ms',
+      'rate_limited',
+      'request_id',
+      'route',
+      'status',
+    ]);
     expect(lines.join('\n')).not.toMatch(/tok-anon|mariana|Bearer/);
   });
 });

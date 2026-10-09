@@ -47,7 +47,8 @@ admin.get('/admin/queue', async (c) => {
     return ok(c, {
       kind: 'groups' as const,
       items: page.map(toAdminProposal),
-      next_cursor: rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
+      next_cursor:
+        rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
     });
   }
   const status = parse(ActivityStatus, q.status ?? 'pending_review');
@@ -57,7 +58,8 @@ admin.get('/admin/queue', async (c) => {
   return ok(c, {
     kind: 'activities' as const,
     items: page.map(toAdminActivity),
-    next_cursor: rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
+    next_cursor:
+      rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
   });
 });
 
@@ -83,14 +85,18 @@ admin.post('/admin/groups/:id/reject', async (c) => {
 admin.post('/admin/activities/:id/approve', async (c) => {
   const id = uuidParam(c);
   const { reason } = OptionalDecision.parse(await readJson(c, true));
-  const version = await c.get('deps').repo.approveActivity(id, c.get('user')!.id, reason ?? null, c.get('requestId'));
+  const version = await c
+    .get('deps')
+    .repo.approveActivity(id, c.get('user')!.id, reason ?? null, c.get('requestId'));
   return ok(c, { id, status: 'published' as const, version });
 });
 
 admin.post('/admin/activities/:id/reject', async (c) => {
   const id = uuidParam(c);
   const { reason } = await parseBody(c, ModerationDecision);
-  const version = await c.get('deps').repo.rejectActivity(id, c.get('user')!.id, reason, c.get('requestId'));
+  const version = await c
+    .get('deps')
+    .repo.rejectActivity(id, c.get('user')!.id, reason, c.get('requestId'));
   return ok(c, { id, status: 'rejected' as const, version });
 });
 
@@ -98,10 +104,14 @@ admin.patch('/admin/groups/:id', async (c) => {
   const id = uuidParam(c);
   const input = await parseBody(c, AdminGroupPatch);
   if (input.join_url !== undefined && !isWhatsAppInviteUrl(input.join_url)) {
-    throw fail('VALIDATION_ERROR', undefined, { join_url: 'Informe um link de convite oficial do WhatsApp.' });
+    throw fail('VALIDATION_ERROR', undefined, {
+      join_url: 'Informe um link de convite oficial do WhatsApp.',
+    });
   }
   const patch: GroupPatch = {
-    ...(input.display_name !== undefined ? { display_name: sanitizePlainText(input.display_name, 80) } : {}),
+    ...(input.display_name !== undefined
+      ? { display_name: sanitizePlainText(input.display_name, 80) }
+      : {}),
     ...(input.join_url !== undefined ? { join_url: input.join_url } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}),
   };
@@ -167,6 +177,7 @@ admin.get('/admin/security-events', async (c) => {
       event_type: e.event_type,
       block_code: e.block_code,
     })),
-    next_cursor: rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
+    next_cursor:
+      rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
   });
 });

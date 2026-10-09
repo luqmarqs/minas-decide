@@ -44,7 +44,11 @@ const CLIENT_OPTS = {
 } as const;
 
 export function serviceClient(env: Env): Db {
-  return createClient<Database>(env.SUPABASE_TARGET_URL, env.SUPABASE_TARGET_SERVICE_ROLE_KEY, CLIENT_OPTS);
+  return createClient<Database>(
+    env.SUPABASE_TARGET_URL,
+    env.SUPABASE_TARGET_SERVICE_ROLE_KEY,
+    CLIENT_OPTS,
+  );
 }
 
 function anonClient(env: Env): Db {
@@ -70,7 +74,13 @@ export function mapPgError(error: NonNullable<PgError>, context: string): AppErr
     case '23503':
       return fail('VALIDATION_ERROR', undefined, { territory_id: 'Território inexistente.' });
     default:
-      console.error(JSON.stringify({ level: 'error', where: `repo.${context}`, pg_code: error.code ?? 'unknown' }));
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          where: `repo.${context}`,
+          pg_code: error.code ?? 'unknown',
+        }),
+      );
       return fail('INTERNAL_ERROR');
   }
 }
@@ -106,7 +116,10 @@ export class SupabaseRepo implements Repo {
   }
 
   /** Untyped RPC helper: generated types mark nullable args as non-null. */
-  private async rpc<T>(fn: keyof Database['public']['Functions'], args: Record<string, unknown>): Promise<T> {
+  private async rpc<T>(
+    fn: keyof Database['public']['Functions'],
+    args: Record<string, unknown>,
+  ): Promise<T> {
     const call = this.db.rpc as unknown as (
       f: string,
       a: Record<string, unknown>,
@@ -135,7 +148,10 @@ export class SupabaseRepo implements Repo {
   }
 
   async countChildren(id: string): Promise<number> {
-    const res = await this.db.from('territories').select('id', { count: 'exact', head: true }).eq('parent_id', id);
+    const res = await this.db
+      .from('territories')
+      .select('id', { count: 'exact', head: true })
+      .eq('parent_id', id);
     if (res.error) throw mapPgError(res.error, 'countChildren');
     return res.count ?? 0;
   }
@@ -151,7 +167,9 @@ export class SupabaseRepo implements Repo {
     return check(res, 'listActiveGroups') as PublicGroupRow[];
   }
 
-  async createGroupProposal(p: NewGroupProposal): Promise<{ id: string; status: string; created: boolean }> {
+  async createGroupProposal(
+    p: NewGroupProposal,
+  ): Promise<{ id: string; status: string; created: boolean }> {
     return this.rpc('svc_create_group_proposal', {
       p_territory_id: p.territory_id,
       p_name: p.name,
@@ -178,13 +196,17 @@ export class SupabaseRepo implements Repo {
 
   // ------------------------------------------------------------------ activities
   async listPublicActivities(q: PublicActivityQuery): Promise<PublicActivityRow[]> {
-    let query = this.db.from('activities_public').select(PUBLIC_ACTIVITY_COLS).gte('starts_at', safeIso(q.from));
+    let query = this.db
+      .from('activities_public')
+      .select(PUBLIC_ACTIVITY_COLS)
+      .gte('starts_at', safeIso(q.from));
     if (q.to) query = query.lte('starts_at', safeIso(q.to));
     if (q.territory_id) {
       // territory or any descendant (ids are hierarchical: mg-<ibge7>-<slug>)
       // municipality ids have a fixed 7-digit code, so the prefix only matches itself and its
       // neighborhoods; neighborhoods have no children -> exact match.
-      if (/^mg-\d{7}$/.test(q.territory_id)) query = query.like('territory_id', `${q.territory_id}%`);
+      if (/^mg-\d{7}$/.test(q.territory_id))
+        query = query.like('territory_id', `${q.territory_id}%`);
       else if (q.territory_id !== 'mg') query = query.eq('territory_id', q.territory_id);
     }
     if (q.bbox) {
@@ -200,30 +222,50 @@ export class SupabaseRepo implements Repo {
       const id = safeUuid(q.cursor.id);
       query = query.or(`starts_at.gt.${at},and(starts_at.eq.${at},id.gt.${id})`);
     }
-    const res = await query.order('starts_at').order('id').limit(q.limit + 1);
+    const res = await query
+      .order('starts_at')
+      .order('id')
+      .limit(q.limit + 1);
     return check(res, 'listPublicActivities') as PublicActivityRow[];
   }
 
   async getPublicActivity(id: string): Promise<PublicActivityRow | null> {
-    const res = await this.db.from('activities_public').select(PUBLIC_ACTIVITY_COLS).eq('id', safeUuid(id)).maybeSingle();
+    const res = await this.db
+      .from('activities_public')
+      .select(PUBLIC_ACTIVITY_COLS)
+      .eq('id', safeUuid(id))
+      .maybeSingle();
     return check(res, 'getPublicActivity') as PublicActivityRow | null;
   }
 
   async getActivity(id: string): Promise<ActivityRow | null> {
-    const res = await this.db.from('activities').select(ACTIVITY_COLS).eq('id', safeUuid(id)).maybeSingle();
+    const res = await this.db
+      .from('activities')
+      .select(ACTIVITY_COLS)
+      .eq('id', safeUuid(id))
+      .maybeSingle();
     return check(res, 'getActivity') as ActivityRow | null;
   }
 
   async createActivity(creatorId: string, a: ActivityWrite): Promise<ActivityRow> {
     const res = await this.db
       .from('activities')
-      .insert({ ...a, creator_user_id: creatorId, status: 'pending_review', timezone: 'America/Sao_Paulo' })
+      .insert({
+        ...a,
+        creator_user_id: creatorId,
+        status: 'pending_review',
+        timezone: 'America/Sao_Paulo',
+      })
       .select(ACTIVITY_COLS)
       .single();
     return check(res, 'createActivity') as ActivityRow;
   }
 
-  async updateActivity(id: string, expectedVersion: number, patch: ActivityUpdate): Promise<ActivityRow | null> {
+  async updateActivity(
+    id: string,
+    expectedVersion: number,
+    patch: ActivityUpdate,
+  ): Promise<ActivityRow | null> {
     const res = await this.db
       .from('activities')
       .update({ ...patch, version: expectedVersion + 1 })
@@ -234,31 +276,51 @@ export class SupabaseRepo implements Repo {
     return check(res, 'updateActivity') as ActivityRow | null;
   }
 
-  async listMyActivities(creatorId: string, limit: number, cursor: Cursor | null): Promise<ActivityRow[]> {
-    let query = this.db.from('activities').select(ACTIVITY_COLS).eq('creator_user_id', safeUuid(creatorId));
+  async listMyActivities(
+    creatorId: string,
+    limit: number,
+    cursor: Cursor | null,
+  ): Promise<ActivityRow[]> {
+    let query = this.db
+      .from('activities')
+      .select(ACTIVITY_COLS)
+      .eq('creator_user_id', safeUuid(creatorId));
     if (cursor) {
       const at = safeIso(cursor.at);
       const id = safeUuid(cursor.id);
       query = query.or(`created_at.lt.${at},and(created_at.eq.${at},id.lt.${id})`);
     }
-    const res = await query.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(limit + 1);
+    const res = await query
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(limit + 1);
     return check(res, 'listMyActivities') as ActivityRow[];
   }
 
-  async listActivitiesByStatus(status: string, limit: number, cursor: Cursor | null): Promise<ActivityRow[]> {
+  async listActivitiesByStatus(
+    status: string,
+    limit: number,
+    cursor: Cursor | null,
+  ): Promise<ActivityRow[]> {
     let query = this.db.from('activities').select(ACTIVITY_COLS).eq('status', status);
     if (cursor) {
       const at = safeIso(cursor.at);
       const id = safeUuid(cursor.id);
       query = query.or(`created_at.lt.${at},and(created_at.eq.${at},id.lt.${id})`);
     }
-    const res = await query.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(limit + 1);
+    const res = await query
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(limit + 1);
     return check(res, 'listActivitiesByStatus') as ActivityRow[];
   }
 
   async rsvpCounts(ids: string[]): Promise<Record<string, number>> {
     if (ids.length === 0) return {};
-    const res = await this.db.from('activities_public').select('id,rsvp_count').in('id', ids.map(safeUuid));
+    const res = await this.db
+      .from('activities_public')
+      .select('id,rsvp_count')
+      .in('id', ids.map(safeUuid));
     const rows = check(res, 'rsvpCounts') as { id: string; rsvp_count: number | null }[];
     return Object.fromEntries(rows.map((r) => [r.id, r.rsvp_count ?? 0]));
   }
@@ -323,7 +385,11 @@ export class SupabaseRepo implements Repo {
   }
 
   // ------------------------------------------------------------------ moderation
-  listGroupProposals(status: string | null, limit: number, cursor: Cursor | null): Promise<GroupProposalRow[]> {
+  listGroupProposals(
+    status: string | null,
+    limit: number,
+    cursor: Cursor | null,
+  ): Promise<GroupProposalRow[]> {
     return this.rpc('svc_list_group_proposals', {
       p_status: status,
       p_limit: limit + 1,
@@ -332,20 +398,55 @@ export class SupabaseRepo implements Repo {
     });
   }
 
-  approveGroupProposal(id: string, adminId: string, reason: string, requestId: string): Promise<string> {
-    return this.rpc('svc_approve_group_proposal', { p_id: id, p_admin: adminId, p_reason: reason, p_request_id: requestId });
+  approveGroupProposal(
+    id: string,
+    adminId: string,
+    reason: string,
+    requestId: string,
+  ): Promise<string> {
+    return this.rpc('svc_approve_group_proposal', {
+      p_id: id,
+      p_admin: adminId,
+      p_reason: reason,
+      p_request_id: requestId,
+    });
   }
 
-  async rejectGroupProposal(id: string, adminId: string, reason: string, requestId: string): Promise<void> {
-    await this.rpc('svc_reject_group_proposal', { p_id: id, p_admin: adminId, p_reason: reason, p_request_id: requestId });
+  async rejectGroupProposal(
+    id: string,
+    adminId: string,
+    reason: string,
+    requestId: string,
+  ): Promise<void> {
+    await this.rpc('svc_reject_group_proposal', {
+      p_id: id,
+      p_admin: adminId,
+      p_reason: reason,
+      p_request_id: requestId,
+    });
   }
 
-  approveActivity(id: string, adminId: string, reason: string | null, requestId: string): Promise<number> {
-    return this.rpc('svc_approve_activity', { p_id: id, p_admin: adminId, p_reason: reason, p_request_id: requestId });
+  approveActivity(
+    id: string,
+    adminId: string,
+    reason: string | null,
+    requestId: string,
+  ): Promise<number> {
+    return this.rpc('svc_approve_activity', {
+      p_id: id,
+      p_admin: adminId,
+      p_reason: reason,
+      p_request_id: requestId,
+    });
   }
 
   rejectActivity(id: string, adminId: string, reason: string, requestId: string): Promise<number> {
-    return this.rpc('svc_reject_activity', { p_id: id, p_admin: adminId, p_reason: reason, p_request_id: requestId });
+    return this.rpc('svc_reject_activity', {
+      p_id: id,
+      p_admin: adminId,
+      p_reason: reason,
+      p_request_id: requestId,
+    });
   }
 
   addGroupManager(m: NewGroupManager, adminId: string, requestId: string): Promise<string> {
@@ -379,7 +480,12 @@ export class SupabaseRepo implements Repo {
     });
   }
 
-  async recordAbuse(e: { subject_hash: string | null; route: string; event_type: string; block_code: string | null }): Promise<void> {
+  async recordAbuse(e: {
+    subject_hash: string | null;
+    route: string;
+    event_type: string;
+    block_code: string | null;
+  }): Promise<void> {
     await this.rpc('svc_record_abuse', {
       p_subject_hash: e.subject_hash,
       p_route: e.route,
@@ -397,7 +503,10 @@ export class SupabaseRepo implements Repo {
   }
 
   consumeTurnstileToken(tokenHash: string, ttlSeconds: number): Promise<boolean> {
-    return this.rpc('svc_consume_turnstile_token', { p_hash: tokenHash, p_ttl_seconds: ttlSeconds });
+    return this.rpc('svc_consume_turnstile_token', {
+      p_hash: tokenHash,
+      p_ttl_seconds: ttlSeconds,
+    });
   }
 }
 
@@ -413,7 +522,9 @@ export class SupabaseAuthGateway implements AuthGateway {
     const jwtAnon = claims.is_anonymous === true;
     const amr = Array.isArray(claims.amr)
       ? claims.amr
-          .map((m: unknown) => (m && typeof m === 'object' ? (m as { method?: unknown }).method : m))
+          .map((m: unknown) =>
+            m && typeof m === 'object' ? (m as { method?: unknown }).method : m,
+          )
           .filter((m): m is string => typeof m === 'string')
       : [];
     return {
@@ -428,7 +539,10 @@ export class SupabaseAuthGateway implements AuthGateway {
   }
 
   async linkEmail(userId: string, email: string): Promise<LinkEmailResult> {
-    const { error } = await serviceClient(this.env).auth.admin.updateUserById(userId, { email, email_confirm: false });
+    const { error } = await serviceClient(this.env).auth.admin.updateUserById(userId, {
+      email,
+      email_confirm: false,
+    });
     return error ? { ok: false, reason: 'error' } : { ok: true };
   }
 
@@ -445,11 +559,16 @@ export class SupabaseAuthGateway implements AuthGateway {
     return !error;
   }
 
-  async sendMagicLink(email: string, redirectTo: string): Promise<{ ok: boolean; code: string | null }> {
+  async sendMagicLink(
+    email: string,
+    redirectTo: string,
+  ): Promise<{ ok: boolean; code: string | null }> {
     const { error } = await anonClient(this.env).auth.signInWithOtp({
       email,
       options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
     });
-    return error ? { ok: false, code: error.code ?? String(error.status ?? 'unknown') } : { ok: true, code: null };
+    return error
+      ? { ok: false, code: error.code ?? String(error.status ?? 'unknown') }
+      : { ok: true, code: null };
   }
 }
