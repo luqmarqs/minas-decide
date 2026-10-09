@@ -329,3 +329,30 @@ Deep link `?t=` no mobile abre o sheet no estado meio sem rolar ao mapa; fila do
 
 **Ressalvas honestas:** cores partidárias existem apenas na camada de margem e na narrativa (D25); a camada de mobilização é priorização territorial agregada, rotulada como não-inferência; o `BottomSheet` (vaul) esconde a página de leitores de tela no mobile — contornado, mas precisa de correção definitiva; o agente enviou uma vez o e-mail do proprietário no `User-Agent` de uma consulta ao Nominatim (sem outros dados; não se repete); as atividades `[EXEMPLO]` ficam publicadas até serem arquivadas; **responsável legal pelo conteúdo de campanha continua pendente e bloqueia divulgação**; cadastro real com Turnstile em navegador humano ainda não testado pelo proprietário; SMTP próprio pendente (P-SEC-3).
 
+---
+
+# ADENDO — RODADA 4: AUTENTICAÇÃO NO CLERK (2026-10-09)
+
+**Decisão do proprietário:** trocar a autenticação ("vamos trocar o auth"), depois de retirar o MFA ("complicação desnecessária"). **Registro:** ADR `docs/adr/0005-clerk-auth.md`; decisões D35 (sem MFA), D36 (Clerk), D37 (senha desabilitada na instância). **Commits:** `9645f79` (admin sem MFA), `06e6062` (ADR), `b79e397` (backend), `4bcb454` (frontend + deploy), `3cd2f39`/`77f9243` (docs e limpeza de contratos). **Staging:** https://minas-em-movimento-staging.luq-marqs.workers.dev com o Clerk em produção de teste (instância `dev`, host `funky-cheetah-9841.clerk.accounts.dev`).
+
+A seção 6 deste relatório (sessão provisória do Supabase Auth, magic link, `confirm-email`, revisão de perfil, aal2) descreve o fluxo **anterior** e fica como histórico. O fluxo vigente é:
+
+| Etapa | Antes (Supabase Auth) | Agora (Clerk, ADR 0005) |
+|---|---|---|
+| Cadastro | sessão anônima → perfil `pending` → magic link → promoção | formulário próprio em `/participar`: Turnstile + dados → **código por e-mail do Clerk** (e-mail verificado **antes** de existir sessão) → `POST /registrations` com Bearer do Clerk cria o perfil já `verified` |
+| Login | `/auth/send-link` (magic link, neutro) | `/entrar`: código por e-mail, sem senha (`auth_password.enabled=false`, D37) |
+| Verificação no Worker | JWT do Supabase (`is_anonymous`, `amr`, `aal`) | `@clerk/backend` `verifyToken` (JWKS da instância) + e-mail primário verificado consultado na Backend API do Clerk; ids `user_…` (contrato `ClerkUserId`) |
+| Banco | `profiles.user_id uuid` com FK para `auth.users`; cliente com `anon`/`authenticated` sob RLS | migration `0012_clerk_user_ids.sql`: ids `text`, sem FK para `auth.users`, **grants de `anon`/`authenticated` revogados** — o navegador não fala mais com o Supabase (supabase-js removido do bundle) |
+| Admin | `app_private.admins` + aal2 (TOTP) | `app_private.admins` + e-mail verificado no Clerk; sem MFA (D35, risco aceito); `luq.marqs@gmail.com` criado no Clerk e marcado admin por `scripts/db/bootstrap-admin.ts` |
+| Rotas removidas | — | `POST /auth/send-link`, `POST /auth/confirm-email` (404 em staging); `/autenticacao/retorno` redireciona para `/entrar` sem sair do site |
+| Contratos | `SendLink*`, `ConfirmEmailResponse`, `profile_review_required` | removidos; `MeResponse.profile_review_required`/`is_anonymous` sempre `false` (mantidos opcionais por compatibilidade) |
+| CSP | hosts do Supabase | `funky-cheetah-9841.clerk.accounts.dev`, `*.clerk.accounts.dev`, `*.clerk.com`, `img.clerk.com`; Supabase retirado |
+| Segredos | `SUPABASE_*` no Worker | + `CLERK_SECRET_KEY` (só Worker) e `CLERK_PUBLISHABLE_KEY`/`VITE_CLERK_PUBLISHABLE_KEY` (pública); chaves `test` em `.env.local`/`.dev.vars`/`.env.staging` (ignorados pelo git) e como secrets de staging |
+
+**Como foi configurado (reproduzível):** `clerk` CLI autenticada pelo proprietário; `clerk init` travou e deixou scaffold parcial (removido); integração manual com `@clerk/clerk-react@5.61.3` (variante headless) e `@clerk/backend@3.23.1`; instância ajustada com `clerk config patch` (senha off, código por e-mail, nome opcional, anti-bot mantido). O `.dev.vars.example` estava ignorado pelo git e foi liberado com `!.dev.vars.example`.
+
+**Evidência de testes:** worker + contratos **146/146** após a limpeza (antes: 139 worker); testes ao vivo contra TARGET dev **57** (inclui `supabase/tests/clerk-live.test.ts` com usuários e tokens de teste do Clerk criados/apagados por `scripts/db/clerk-test-users.ts`); unitários de front (`clerk-auth.test.tsx`, `participar.test.tsx`) verdes no `npm run ci`; smoke em staging: `/api/v1/health` 200, `/auth/send-link` 404, `/me` 401 sem token, `/entrar` carrega o Clerk com **0 violações de CSP** (`docs/screenshots/clerk/staging-entrar.png`). O e2e do passo do código roda só com `CLERK_TESTING_TOKEN` (o anti-bot do Clerk bloqueia navegador automatizado; e-mails `+clerk_test` não disparam e-mail real).
+
+**O que não foi testado por mim:** cadastro e login com caixa de entrada real (código recebido por e-mail) — **pendente do proprietário** em `/participar` e `/entrar` no staging. O erro "Não encontrado" visto pelo proprietário no RSVP ocorreu durante a aplicação da migration 0012 no banco dev compartilhado e não se repetiu depois.
+
+**Pendências que ficam:** instância `live` do Clerk com domínio próprio para produção (D37; `STAGING_PLAYBOOK.md` §1b); webhook `user.deleted` → `svc_erase_user_data` (hoje a exclusão no Clerk não apaga o perfil no banco); SMTP só para avisos futuros (o Clerk envia os códigos); auditoria QA-3 do novo fluxo (resultado no próximo adendo).
