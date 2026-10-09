@@ -63,24 +63,3 @@ export const MePatch = z.object({
   /** @deprecated ignored since Clerk (ADR 0005) */
   profile_reviewed: z.literal(true).optional(),
 });
-
-/** @deprecated removed with Clerk (ADR 0005); kept until the frontend migration lands */
-export const SendLinkInput = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
-  turnstile_token: z.string().min(1).max(2048),
-});
-
-/** Neutral response (202): never reveals whether the e-mail exists. */
-export const SendLinkResponse = z.object({
-  status: z.literal('sent_if_exists'),
-  message: z.string(),
-});
-export type SendLinkResponse = z.infer<typeof SendLinkResponse>;
-
-/** POST /auth/confirm-email — promotes a provisional (anonymous) identity after
- *  the e-mail was confirmed through an OTP/magic-link session. Returns the
- *  updated `MeResponse`; the client must call `refreshSession()` afterwards. */
-export const ConfirmEmailResponse = MeResponse.extend({
-  requires_session_refresh: z.literal(true),
-});
-export type ConfirmEmailResponse = z.infer<typeof ConfirmEmailResponse>;

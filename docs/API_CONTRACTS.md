@@ -69,7 +69,7 @@ Admin negado gera um `abuse_event` (`admin_denied`, sem IP bruto).
 
 ## Mudanças de contrato desejadas (não aplicadas em `shared/contracts`)
 
-0. **(BE-5, bloqueante para o front)** `RegistrationResult.profile_id` e `MeResponse.user_id` são `z.string().uuid()`, mas o id agora é do Clerk (`user_…`): trocar por `z.string().regex(/^user_[A-Za-z0-9]+$/)`. Remover `SendLinkInput`, `SendLinkResponse`, `ConfirmEmailResponse`; `MePatch.profile_reviewed` e `MeResponse.profile_review_required` (sempre `false`); `RegistrationResult.session_state` → só `'verified'` e `email_verification_state` → só `'verified'`; `MeResponse.is_anonymous` → `z.literal(false)` (ou remover).
+0. ~~(BE-5)~~ **feito**: ids `user_…` (`ClerkUserId`); `SendLinkInput`/`SendLinkResponse`/`ConfirmEmailResponse` removidos; `RegistrationResult` só `'verified'`; `profile_review_required` e `is_anonymous` sempre `false` (mantidos opcionais por compatibilidade até a próxima quebra de versão).
 
 1. `ActivityPatch = ActivityInput.partial()`: no Zod 4, `public_contact_opt_in.default(false)` continua valendo dentro do `partial()`, e todo PATCH chega com `public_contact_opt_in:false`. O Worker contorna isso aplicando só as chaves presentes no JSON bruto. Sugestão: construir o patch a partir de um schema sem `default`.
 2. ~~`POST /auth/confirm-email`~~ removida (BE-5).

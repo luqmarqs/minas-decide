@@ -3,7 +3,7 @@
 Este documento organiza os fatos técnicos verdadeiros do sistema para que a revisão jurídica produza a Política de Privacidade e os Termos. Os textos em `/privacidade` e `/termos` continuam marcados como rascunho até essa revisão. Pontos entre colchetes exigem decisão do controlador.
 
 ## 1. Agentes
-- **Controlador:** [organização responsável — a definir]. **Operador(es):** Supabase (banco, região São Paulo), **Clerk** (autenticação e envio de códigos de verificação por e-mail; EUA — avaliar transferência internacional), Cloudflare (hospedagem/CDN/Turnstile), [provedor SMTP — a definir], OpenFreeMap (tiles do mapa; recebe IP ao carregar o mapa).
+- **Controlador:** [organização responsável — a definir]. **Operador(es):** Supabase (banco, região São Paulo), **Clerk** (autenticação e envio de códigos de verificação por e-mail; EUA — avaliar transferência internacional), Cloudflare (hospedagem/CDN/Turnstile), [provedor SMTP para avisos — a definir], OpenFreeMap (tiles do mapa; recebe IP ao carregar o mapa).
 - **Encarregado (DPO) e canal do titular:** [e-mail — a definir]; o rodapé e `/privacidade` apontam para ele.
 
 ## 2. Dados tratados, finalidade, base legal (proposta) e retenção
@@ -29,10 +29,10 @@ Acesso, correção (nome, telefone, território editáveis em `/me`), exclusão 
 Supabase (São Paulo) — dados ficam no Brasil; Cloudflare — tráfego pela borda global (avaliar cláusula de transferência); SMTP [a definir]; OpenFreeMap (apenas IP/tiles). Nenhum dado é vendido ou compartilhado para publicidade.
 
 ## 5. Segurança (fatos)
-RLS e grants mínimos; dados privados em schema não exposto; PII nunca em respostas públicas; segredos fora do código; CSP; auditoria de moderação; MFA para administradores; revelação de contato de proponente auditada.
+RLS e grants mínimos; dados privados em schema não exposto; PII nunca em respostas públicas; segredos fora do código; CSP; auditoria de moderação; administradores autenticados pelo Clerk com e-mail verificado e lista de admins no servidor (MFA não exigido — decisão D35); revelação de contato de proponente auditada.
 
 ## 6. Cookies e armazenamento local
-`mm_device` (HttpOnly, 1 ano, antifraude de RSVP); sessão Supabase (localStorage); rascunhos de formulário (localStorage, 7 dias); preferências de UI. Sem cookies de publicidade; sem analytics que capturem formulários.
+`mm_device` (HttpOnly, 1 ano, antifraude de RSVP); sessão do Clerk (cookie `__client`/`__session` do domínio do Clerk e token em memória; o Clerk recebe e-mail, IP e user-agent do titular para autenticação); rascunhos de formulário (localStorage, 7 dias); preferências de UI. Sem cookies de publicidade; sem analytics que capturem formulários.
 
 ## 7. Pendências para o jurídico
 1. Base legal definitiva e eventual tratamento como dado sensível (art. 11).
