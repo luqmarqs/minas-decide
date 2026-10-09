@@ -2,7 +2,7 @@
   "schema_version": 1,
   "release_id": "mg-2026r1-20261008",
   "status": "validated",
-  "generated_at": "2026-10-09T17:01:33.038Z",
+  "generated_at": "2026-10-09T18:33:38.039Z",
   "years": [
     2022,
     2026
@@ -23,7 +23,7 @@
     "candidaturas",
     "votos_cand"
   ],
-  "pipeline_commit": "4b79e9f",
+  "pipeline_commit": "cac11fb",
   "territories_count": 6931,
   "records_count": 333462,
   "indicator_types": [
@@ -4330,6 +4330,11 @@
       "bytes": 17089
     },
     {
+      "path": "mg-2026r1-20261008/layers/2026-r1-blank_null.json",
+      "sha256": "e974c2bd3d10658bcccf830e497fbf684763860325842565091a0ce644ede43d",
+      "bytes": 17093
+    },
+    {
       "path": "mg-2026r1-20261008/layers/2026-r1-votes-100014.json",
       "sha256": "9e3f7271eabe08c5c4f07d9868e955b94b9ded404010f5c727b08cd3df8d648b",
       "bytes": 17094
@@ -4551,7 +4556,7 @@
     },
     {
       "path": "mg-2026r1-20261008/highlights.json",
-      "sha256": "0cc20240d20049319d366599b50610f26789f5ba43555f8fda501ab1688d15e8",
+      "sha256": "13ed7ed3de0c6991c0f4a0f732b5f738295f1781ebbe33f045b0cbcb05d5f809",
       "bytes": 14348
     },
     {

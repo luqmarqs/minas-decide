@@ -144,6 +144,8 @@ export const MapLayerCode = z.enum([
   'president_margin',
   /** mobilization layer: abstention rate shown only where Lula led (2026 r1); null elsewhere */
   'mobilization',
+  /** blank + null votes as a share of turnout (president basis) */
+  'blank_null',
   'activities',
   'pois',
 ]);

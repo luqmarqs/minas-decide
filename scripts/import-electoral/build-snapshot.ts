@@ -714,6 +714,11 @@ const layer = (
 };
 layer('abstention', 'rate', null, (m) => m.turnout?.abstention_rate ?? null);
 layer('turnout', 'rate', null, (m) => m.turnout?.turnout_rate ?? null);
+layer('blank_null', 'rate', null, (m) =>
+  m.turnout && m.turnout.turnout > 0
+    ? (m.turnout.blank + m.turnout.null_votes) / m.turnout.turnout
+    : null,
+);
 for (const c of candidateIndex.items.filter((c) => c.has_layer)) {
   layer(
     'votes',
