@@ -333,7 +333,7 @@ emit('candidates.json', candidateIndex);
 
 // layers (municipality level)
 const munIds = municipios.map((m) => `mg-${m.cd_ibge}`);
-const layer = (name: string, unit: MapLayerValues['unit'], candidateId: string | null, pick: (m: TerritoryMetrics) => number | null) => {
+const layer = (name: MapLayerValues['layer'], unit: MapLayerValues['unit'], candidateId: string | null, pick: (m: TerritoryMetrics) => number | null) => {
   const values: Record<string, number> = {};
   let lo = Infinity, hi = -Infinity;
   for (const id of munIds) {
@@ -343,7 +343,7 @@ const layer = (name: string, unit: MapLayerValues['unit'], candidateId: string |
     lo = Math.min(lo, v); hi = Math.max(hi, v);
   }
   if (!Number.isFinite(lo)) { lo = 0; hi = 0; }
-  emit(`layers/${YEAR}-r${ROUND}-${name}${candidateId ? `-${candidateId}` : ''}.json`, { layer: name.split('-')[0], year: YEAR, round: ROUND, unit, candidate_id: candidateId, values, domain: [round4(lo), round4(hi)] } satisfies MapLayerValues);
+  emit(`layers/${YEAR}-r${ROUND}-${name}${candidateId ? `-${candidateId}` : ''}.json`, { layer: name, year: YEAR, round: ROUND, unit, candidate_id: candidateId, values, domain: [round4(lo), round4(hi)] } satisfies MapLayerValues);
 };
 layer('abstention', 'rate', null, (m) => m.turnout?.abstention_rate ?? null);
 layer('turnout', 'rate', null, (m) => m.turnout?.turnout_rate ?? null);
