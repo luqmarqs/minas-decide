@@ -30,7 +30,7 @@ export default function ObrigadoPage() {
       title={fromForm ? 'Cadastro recebido' : 'Grupo da sua região'}
       lead={
         fromForm
-          ? 'Seu cadastro foi registrado pelo servidor. Veja abaixo o grupo de WhatsApp da sua região.'
+          ? 'Você agora faz parte da mobilização da campanha de Lula em Minas. Seu cadastro foi registrado pelo servidor; veja abaixo o grupo de WhatsApp da sua região.'
           : undefined
       }
     >
@@ -92,7 +92,7 @@ export default function ObrigadoPage() {
             Voltar ao território
           </ButtonLink>
           <ButtonLink to="/criar-atividade" variant="ghost">
-            Organizar uma atividade
+            Propor atividade da campanha
           </ButtonLink>
         </div>
       </div>

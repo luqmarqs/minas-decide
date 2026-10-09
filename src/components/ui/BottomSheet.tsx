@@ -1,5 +1,5 @@
 import { Drawer } from 'vaul';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Icon } from './Icon';
 
@@ -38,6 +38,7 @@ export function BottomSheet({
   modal = false,
   headerExtra,
 }: BottomSheetProps) {
+  useKeepPageAccessible(open && !modal);
   return (
     <Drawer.Root
       open={open}
@@ -91,4 +92,32 @@ export function BottomSheet({
       </Drawer.Portal>
     </Drawer.Root>
   );
+}
+
+/**
+ * vaul always renders a *modal* Radix Dialog underneath (its modal prop only changes
+ * vaul's own behaviour), so Radix hides the rest of the page from assistive technology with
+ * aria-hidden (data-aria-hidden markers). For our non-modal sheet the map, its layer
+ * controls and the activity popover must stay reachable: undo those markers outside the
+ * drawer while it is open (rodada 3 finding; Radix restores nothing else on close).
+ */
+function useKeepPageAccessible(active: boolean) {
+  useEffect(() => {
+    if (!active || typeof MutationObserver === 'undefined') return;
+    const reveal = () => {
+      for (const el of document.querySelectorAll('[data-aria-hidden]')) {
+        if (el.closest('[data-vaul-drawer]')) continue;
+        el.removeAttribute('aria-hidden');
+        el.removeAttribute('data-aria-hidden');
+      }
+    };
+    reveal();
+    const mo = new MutationObserver(reveal);
+    mo.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-aria-hidden'],
+    });
+    return () => mo.disconnect();
+  }, [active]);
 }

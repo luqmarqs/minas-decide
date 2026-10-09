@@ -4,7 +4,9 @@
  * - municipalities: IBGE polygons (lazy fetched GeoJSON) coloured through
  *   GeoJSON properties (bucketed in the worker; feature-state only for hover); centroid circles if the mesh fails;
  * - neighborhoods: points (no invented polygons) for the selected municipality;
- * - activities: clustered GeoJSON source (WebGL, no DOM markers);
+ * - activities: clustered GeoJSON source (WebGL, no DOM markers), drawn as a sun with halo
+ *   ABOVE any statistical layer (rodada 3: an overlay, on by default);
+ * - points of interest (terminals/stations, OSM): clustered overlay, off by default;
  * - colours from --map-* tokens; camera moves use --duration-map (0 when reduced motion);
  * - cooperativeGestures so the page scroll is never hijacked.
  */
@@ -25,12 +27,21 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import type { PublicActivity } from '@shared/contracts/activities.ts';
 import type { MapLayerCode, MapLayerValues } from '@shared/contracts/metrics.ts';
-import { municipalityIdOf } from '@shared/contracts/snapshot.ts';
+import { municipalityIdOf, type PoiFile } from '@shared/contracts/snapshot.ts';
 import { cssDurationMs, prefersReducedMotion } from '@/lib/media';
 import type { TerritoryIndex } from './hooks';
 import { formatLayerValue, LAYERS } from './layers';
 import { readMapPalette, safeDomain, type MapPalette } from './palette';
-import { BASEMAP_STYLE_URLS, fillExpression, trimBasemapStyle } from './mapExpressions';
+import {
+  ACTIVITY_LAYER_IDS,
+  BASEMAP_STYLE_URLS,
+  fillExpression,
+  marginRamp,
+  overlayVisibility,
+  POI_LAYER_IDS,
+  trimBasemapStyle,
+} from './mapExpressions';
+import { drawPoiIcon, drawSunIcon, ICON_POI, ICON_SUN } from './mapIcons';
 
 setWorkerUrl(maplibreWorkerUrl);
 
@@ -73,6 +84,7 @@ const SRC_MUNI = 'mm-municipalities';
 const SRC_MUNI_PTS = 'mm-municipality-points';
 const SRC_NEIGH = 'mm-neighborhoods';
 const SRC_ACT = 'mm-activities';
+const SRC_POI = 'mm-pois';
 
 export type BasemapProblem = 'style' | 'tiles';
 
@@ -84,8 +96,14 @@ export interface MapCanvasProps {
   /** Values for neighborhoods of the selected municipality (territory_id → value). */
   neighborhoodValues: Record<string, number> | null;
   activities: PublicActivity[];
+  /** Activities overlay switch (on by default; independent of the statistical layer). */
+  showActivities?: boolean;
+  /** Points of interest (OSM terminals/stations) and their switch. */
+  pois?: PoiFile['items'] | null;
+  showPois?: boolean;
   onSelect: (id: string | null) => void;
   onActivitySelect: (id: string) => void;
+  onPoiSelect?: (id: string) => void;
   onFatalError: () => void;
   onBasemapProblem: (p: BasemapProblem) => void;
   /** Extra right padding (desktop side panel) and bottom padding (mobile sheet). */
@@ -162,10 +180,12 @@ function neighborhoodColor(
   layer: MapLayerCode,
   values: MapLayerValues | null | undefined,
 ): ExpressionSpecification | string {
-  if (layer === 'activities' || !values) return p.none;
+  if (LAYERS[layer].scale === 'none' || !values) return p.none;
   const diverging = LAYERS[layer].scale === 'diverging';
   const [a, b] = safeDomain(values.domain, diverging);
   const v: ExpressionSpecification = ['to-number', ['get', 'v'], 0];
+  if (LAYERS[layer].palette === 'partisan')
+    return ['case', ['has', 'v'], marginRamp(p, v, b), p.none];
   const ramp: ExpressionSpecification = diverging
     ? ['interpolate', ['linear'], v, a, p.diverging[0], 0, p.diverging[1], b, p.diverging[2]]
     : [
@@ -276,6 +296,13 @@ export default function MapCanvas(props: MapCanvasProps) {
         map.addSource(SRC_MUNI, { type: 'geojson', data: empty, promoteId: 'codarea' });
         map.addSource(SRC_MUNI_PTS, { type: 'geojson', data: empty, promoteId: 'codarea' });
         map.addSource(SRC_NEIGH, { type: 'geojson', data: empty, promoteId: 'id' });
+        map.addSource(SRC_POI, {
+          type: 'geojson',
+          data: empty,
+          cluster: true,
+          clusterRadius: 40,
+          clusterMaxZoom: 11,
+        });
         map.addSource(SRC_ACT, {
           type: 'geojson',
           data: empty,
@@ -366,6 +393,71 @@ export default function MapCanvas(props: MapCanvasProps) {
             ],
           },
         });
+        // ---- overlays: POIs (below) and activities (always on top) ----
+        const ratio = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+        const sunImg = drawSunIcon(palette, ratio);
+        const poiImg = drawPoiIcon(palette, ratio);
+        if (sunImg) map.addImage(ICON_SUN, sunImg, { pixelRatio: ratio });
+        if (poiImg) map.addImage(ICON_POI, poiImg, { pixelRatio: ratio });
+
+        map.addLayer({
+          id: 'mm-poi-clusters',
+          type: 'circle',
+          source: SRC_POI,
+          filter: ['has', 'point_count'],
+          layout: { visibility: 'none' },
+          paint: {
+            'circle-color': palette.poiBg,
+            'circle-radius': ['step', ['get', 'point_count'], 12, 10, 15, 50, 19],
+            'circle-stroke-color': palette.poi,
+            'circle-stroke-width': 1.5,
+          },
+        });
+        if (hasGlyphs) {
+          map.addLayer({
+            id: 'mm-poi-count',
+            type: 'symbol',
+            source: SRC_POI,
+            filter: ['has', 'point_count'],
+            layout: {
+              visibility: 'none',
+              'text-field': ['get', 'point_count_abbreviated'],
+              'text-font': ['Noto Sans Bold'],
+              'text-size': 11,
+              'text-allow-overlap': true,
+            },
+            paint: { 'text-color': palette.poi },
+          });
+        }
+        if (poiImg) {
+          map.addLayer({
+            id: 'mm-poi-points',
+            type: 'symbol',
+            source: SRC_POI,
+            filter: ['!', ['has', 'point_count']],
+            layout: {
+              visibility: 'none',
+              'icon-image': ICON_POI,
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true,
+            },
+          });
+        } else {
+          map.addLayer({
+            id: 'mm-poi-points',
+            type: 'circle',
+            source: SRC_POI,
+            filter: ['!', ['has', 'point_count']],
+            layout: { visibility: 'none' },
+            paint: {
+              'circle-color': palette.poiBg,
+              'circle-radius': 6,
+              'circle-stroke-color': palette.poi,
+              'circle-stroke-width': 2,
+            },
+          });
+        }
+
         map.addLayer({
           id: 'mm-act-clusters',
           type: 'circle',
@@ -374,10 +466,10 @@ export default function MapCanvas(props: MapCanvasProps) {
           layout: { visibility: 'none' },
           paint: {
             'circle-color': palette.activity,
-            'circle-opacity': 0.9,
-            'circle-radius': ['step', ['get', 'point_count'], 14, 10, 18, 50, 24],
-            'circle-stroke-color': palette.surface,
-            'circle-stroke-width': 2,
+            'circle-opacity': 0.95,
+            'circle-radius': ['step', ['get', 'point_count'], 15, 10, 19, 50, 25],
+            'circle-stroke-color': palette.activityHalo,
+            'circle-stroke-width': 6,
           },
         });
         if (hasGlyphs) {
@@ -396,19 +488,34 @@ export default function MapCanvas(props: MapCanvasProps) {
             paint: { 'text-color': palette.surface },
           });
         }
-        map.addLayer({
-          id: 'mm-act-points',
-          type: 'circle',
-          source: SRC_ACT,
-          filter: ['!', ['has', 'point_count']],
-          layout: { visibility: 'none' },
-          paint: {
-            'circle-color': palette.activity,
-            'circle-radius': 7,
-            'circle-stroke-color': palette.surface,
-            'circle-stroke-width': 2,
-          },
-        });
+        if (sunImg) {
+          map.addLayer({
+            id: 'mm-act-points',
+            type: 'symbol',
+            source: SRC_ACT,
+            filter: ['!', ['has', 'point_count']],
+            layout: {
+              visibility: 'none',
+              'icon-image': ICON_SUN,
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true,
+            },
+          });
+        } else {
+          map.addLayer({
+            id: 'mm-act-points',
+            type: 'circle',
+            source: SRC_ACT,
+            filter: ['!', ['has', 'point_count']],
+            layout: { visibility: 'none' },
+            paint: {
+              'circle-color': palette.activity,
+              'circle-radius': 7,
+              'circle-stroke-color': palette.activityHalo,
+              'circle-stroke-width': 6,
+            },
+          });
+        }
 
         // ---- interaction ----
         const setHoverState = (source: string, id: string | number | undefined) => {
@@ -438,7 +545,7 @@ export default function MapCanvas(props: MapCanvasProps) {
             y: e.point.y,
             title: `${entry.name}/MG`,
             value:
-              p.layer === 'activities'
+              LAYERS[p.layer].scale === 'none'
                 ? ''
                 : `${LAYERS[p.layer].short}: ${formatLayerValue(p.layer, v)}`,
           });
@@ -450,12 +557,15 @@ export default function MapCanvas(props: MapCanvasProps) {
         };
         const muniClick = (e: MapLayerMouseEvent) => {
           const p = propsRef.current;
-          if (p.layer === 'activities') {
-            const act = map!.queryRenderedFeatures(e.point, {
-              layers: ['mm-act-points', 'mm-act-clusters'],
-            });
-            if (act.length) return;
-          }
+          // Overlay markers sit on top of the choropleth: their own handlers win.
+          const overlayIds = [...ACTIVITY_LAYER_IDS, ...POI_LAYER_IDS].filter((id) =>
+            map!.getLayer(id),
+          );
+          if (
+            overlayIds.length &&
+            map!.queryRenderedFeatures(e.point, { layers: overlayIds }).length
+          )
+            return;
           const neigh = map!.queryRenderedFeatures(e.point, { layers: ['mm-neigh'] });
           if (neigh.length) return;
           const code = e.features?.[0]?.properties?.codarea as string | undefined;
@@ -481,7 +591,7 @@ export default function MapCanvas(props: MapCanvasProps) {
             y: e.point.y,
             title: `${entry.name} (bairro aprox.)`,
             value:
-              p.layer === 'activities'
+              LAYERS[p.layer].scale === 'none'
                 ? ''
                 : `${LAYERS[p.layer].short}: ${formatLayerValue(p.layer, v ?? null)}`,
           });
@@ -492,23 +602,53 @@ export default function MapCanvas(props: MapCanvasProps) {
           if (id) propsRef.current.onSelect(id);
         });
 
-        map.on('click', 'mm-act-clusters', async (e) => {
+        const expandCluster = async (sourceId: string, e: MapLayerMouseEvent) => {
           const f = e.features?.[0];
           const clusterId = f?.properties?.cluster_id as number | undefined;
-          const src = map!.getSource<GeoJSONSource>(SRC_ACT);
+          const src = map!.getSource<GeoJSONSource>(sourceId);
           if (clusterId === undefined || !src || f?.geometry.type !== 'Point') return;
           const zoom = await src.getClusterExpansionZoom(clusterId);
           map!.easeTo({
             center: f.geometry.coordinates as [number, number],
             zoom,
-            duration: cssDurationMs('--duration-map', 500),
+            duration: prefersReducedMotion() ? 0 : cssDurationMs('--duration-map', 500),
           });
+        };
+        const activityOnTop = (e: MapLayerMouseEvent) =>
+          map!.queryRenderedFeatures(e.point, { layers: ['mm-act-points', 'mm-act-clusters'] })
+            .length > 0;
+        map.on('click', 'mm-act-clusters', (e) => void expandCluster(SRC_ACT, e));
+        map.on('click', 'mm-poi-clusters', (e) => {
+          if (!activityOnTop(e)) void expandCluster(SRC_POI, e);
         });
         map.on('click', 'mm-act-points', (e) => {
           const id = e.features?.[0]?.properties?.id as string | undefined;
           if (id) propsRef.current.onActivitySelect(id);
         });
-        for (const id of ['mm-act-clusters', 'mm-act-points']) {
+        map.on('click', 'mm-poi-points', (e) => {
+          if (activityOnTop(e)) return;
+          const id = e.features?.[0]?.properties?.id as string | undefined;
+          if (id) propsRef.current.onPoiSelect?.(id);
+        });
+        // Test/diagnostic hook (no PII): zoom and screen position of visible activity points.
+        map.on('idle', () => {
+          const el = containerRef.current;
+          if (!el || !map) return;
+          el.dataset.zoom = map.getZoom().toFixed(2);
+          const pts = map.getLayer('mm-act-points')
+            ? map.queryRenderedFeatures({ layers: ['mm-act-points'] })
+            : [];
+          el.dataset.activityPoints = JSON.stringify(
+            pts.slice(0, 20).flatMap((f) => {
+              if (f.geometry.type !== 'Point') return [];
+              const pt = map!.project(f.geometry.coordinates as [number, number]);
+              return [
+                { id: String(f.properties?.id ?? ''), x: Math.round(pt.x), y: Math.round(pt.y) },
+              ];
+            }),
+          );
+        });
+        for (const id of [...ACTIVITY_LAYER_IDS, ...POI_LAYER_IDS]) {
           map.on('mouseenter', id, () => (map!.getCanvas().style.cursor = 'pointer'));
           map.on('mouseleave', id, () => (map!.getCanvas().style.cursor = ''));
         }
@@ -555,7 +695,7 @@ export default function MapCanvas(props: MapCanvasProps) {
     if (!ready || !map) return;
     const palette = readMapPalette();
     const valueOf = (code: string): number | undefined => {
-      if (layer === 'activities') return undefined;
+      if (LAYERS[layer].scale === 'none') return undefined;
       const v = layerValues?.values[`mg-${code}`];
       return v === null || v === undefined ? undefined : v;
     };
@@ -592,13 +732,41 @@ export default function MapCanvas(props: MapCanvasProps) {
     );
     const expr = fillExpression(palette, layer, layerValues);
     map.setPaintProperty('mm-muni-fill', 'fill-color', expr);
-    map.setPaintProperty('mm-muni-fill', 'fill-opacity', layer === 'activities' ? 0.35 : 0.8);
+    map.setPaintProperty(
+      'mm-muni-fill',
+      'fill-opacity',
+      LAYERS[layer].scale === 'none' ? 0.35 : 0.8,
+    );
     map.setPaintProperty('mm-muni-circles', 'circle-color', expr);
-    const actVis = layer === 'activities' ? 'visible' : 'none';
-    for (const id of ['mm-act-clusters', 'mm-act-count', 'mm-act-points']) {
-      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', actVis);
-    }
   }, [ready, geoState, layer, layerValues, index]);
+
+  // ---- overlays: visibility is independent of the statistical layer --------------
+  const showActivities = props.showActivities ?? true;
+  const showPois = props.showPois ?? false;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    for (const id of ACTIVITY_LAYER_IDS) {
+      if (map.getLayer(id))
+        map.setLayoutProperty(id, 'visibility', overlayVisibility(showActivities));
+    }
+    for (const id of POI_LAYER_IDS) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', overlayVisibility(showPois));
+    }
+  }, [ready, showActivities, showPois]);
+
+  // ---- points of interest ----------------------------------------------------------
+  const { pois } = props;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    const features: GeoFeature<GeoPoint>[] = (pois ?? []).map((p) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: p.coordinates },
+      properties: { id: p.id },
+    }));
+    map.getSource<GeoJSONSource>(SRC_POI)?.setData({ type: 'FeatureCollection', features });
+  }, [ready, pois]);
 
   // ---- selection: outline + neighborhood points ------------------------------
   const { selectedId, neighborhoodValues } = props;

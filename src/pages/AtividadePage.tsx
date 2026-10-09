@@ -3,14 +3,13 @@ import { Link, useParams } from 'react-router';
 import { ACTIVITY_TYPE_LABEL_PT, type PublicActivity } from '@shared/contracts/activities.ts';
 import { PageShell } from '@/components/layouts/PageShell';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { LoadingBlock } from '@/components/ui/Skeleton';
 import { ErrorState, Note } from '@/components/ui/States';
-import { useToast } from '@/components/ui/toastContext';
 import { ApiClientError, messageForError } from '@/lib/api';
 import { formatActivityWhen } from '@/lib/format';
-import { absoluteUrl, SHARE_FEEDBACK, shareOrCopy } from '@/lib/share';
+import { absoluteUrl, activityShareText } from '@/lib/share';
+import { WhatsAppShare } from '@/components/ui/WhatsAppShare';
 import { useActivity } from '@/features/activities/api';
 import { RSVPButton } from '@/features/activities/RSVPButton';
 import { DeferredMapShell } from '@/features/electoral-map/DeferredMapShell';
@@ -41,7 +40,6 @@ export default function AtividadePage() {
   const { id } = useParams();
   const q = useActivity(id);
   const { index } = useTerritoryIndex();
-  const toast = useToast();
   const [now] = useState(() => Date.now());
 
   if (q.isLoading) {
@@ -157,7 +155,7 @@ export default function AtividadePage() {
             className="rounded-card border border-border bg-surface-raised p-4"
           >
             <h2 id="rsvp-title" className="mb-3 text-xl">
-              Vai participar?
+              Vai somar com a campanha?
             </h2>
             <RSVPButton
               activityId={a.id}
@@ -187,24 +185,15 @@ export default function AtividadePage() {
           ) : null}
 
           <div>
-            <Button
+            <WhatsAppShare
               variant="secondary"
-              iconBefore={<Icon name="share" size={18} />}
-              onClick={async () => {
-                const outcome = await shareOrCopy({
-                  title: a.title,
-                  url: absoluteUrl(`/atividade/${a.id}`),
-                });
-                if (outcome === 'copied' || outcome === 'failed') {
-                  toast.show({
-                    title: SHARE_FEEDBACK[outcome],
-                    variant: outcome === 'failed' ? 'error' : 'success',
-                  });
-                }
-              }}
-            >
-              Compartilhar
-            </Button>
+              size="md"
+              copyUrl={absoluteUrl(`/atividade/${a.id}`)}
+              text={activityShareText({
+                ...a,
+                placeLabel: territory ? territoryLabel(territory) : null,
+              })}
+            />
           </div>
         </div>
 
@@ -222,6 +211,8 @@ export default function AtividadePage() {
                   round: 1,
                   candidateId: null,
                   view: 'mapa',
+                  activities: true,
+                  pois: false,
                 }}
                 onStateChange={() => {}}
               />

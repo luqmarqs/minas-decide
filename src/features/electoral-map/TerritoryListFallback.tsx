@@ -92,11 +92,14 @@ export function TerritoryListFallback({
                 Bairros de {index.byId.get(selectedMuni!)?.name} (aproximados)
               </h3>
               <TerritoryRows
-                rows={children.map((c) => ({
-                  id: c.id,
-                  name: c.name,
-                  value: neighborhoodValues?.[c.id] ?? null,
-                }))}
+                rows={rankRows(
+                  layer,
+                  children.map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    value: neighborhoodValues?.[c.id] ?? null,
+                  })),
+                )}
                 layer={layer}
                 domain={domain}
                 diverging={diverging}
@@ -111,11 +114,14 @@ export function TerritoryListFallback({
               <span className="font-normal text-muted">({meta.unit})</span>
             </h3>
             <TerritoryRows
-              rows={index.municipalities.map((m) => ({
-                id: m.id,
-                name: m.name,
-                value: layerValues?.values[m.id] ?? null,
-              }))}
+              rows={rankRows(
+                layer,
+                index.municipalities.map((m) => ({
+                  id: m.id,
+                  name: m.name,
+                  value: layerValues?.values[m.id] ?? null,
+                })),
+              )}
               layer={layer}
               domain={domain}
               diverging={diverging}
@@ -159,7 +165,14 @@ function TerritoryRows({
           >
             <span
               className="inline-block size-3.5 shrink-0 rounded-sm border border-border-strong"
-              style={{ background: swatchVar(r.value, domain, diverging) }}
+              style={{
+                background: swatchVar(
+                  r.value,
+                  domain,
+                  diverging,
+                  LAYERS[layer].palette === 'partisan',
+                ),
+              }}
               aria-hidden="true"
             />
             <span className="min-w-0 flex-1 truncate">{r.name}</span>
@@ -171,4 +184,14 @@ function TerritoryRows({
       ))}
     </ul>
   );
+}
+
+/**
+ * Mobilization (D27) in list mode: same derived values as the map, ordered by abstention
+ * (highest first) with territories outside the cut at the end; other layers keep the
+ * alphabetical order.
+ */
+function rankRows<T extends { value: number | null }>(layer: MapLayerCode, rows: T[]): T[] {
+  if (layer !== 'mobilization') return rows;
+  return [...rows].sort((a, b) => (b.value ?? -1) - (a.value ?? -1));
 }

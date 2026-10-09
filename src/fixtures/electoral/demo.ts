@@ -18,6 +18,8 @@ import type {
   ComparisonPoint,
   MapLayerValues,
   OfficeCode,
+  PresidentialComparison,
+  PresidentialComparisonEntry,
   SnapshotManifest,
   TerritoryMetrics,
   TurnoutMetrics,
@@ -27,6 +29,7 @@ import {
   layerFilePath,
   metricsFilePath,
   type CandidateIndex,
+  type Highlights,
   type Methodology,
   type MunicipalityMetricsFile,
 } from '@shared/contracts/snapshot.ts';
@@ -249,6 +252,53 @@ function sumRaw(list: Raw[]): Raw {
   return out;
 }
 
+/**
+ * SYNTHETIC presidential comparison: the "lula" / "bolsonaro" keys are only the contract's
+ * slots; the names shown are "Candidatura A/B (demo)" and every number is invented.
+ */
+function demoPresidentComparison(
+  raw: Raw,
+  history: Raw,
+  precision: PresidentialComparison['precision'],
+): PresidentialComparison {
+  const slots = [
+    { key: 'lula', id: 'demo-president-a', name: 'Candidatura A (demo)', number: 901 },
+    { key: 'bolsonaro', id: 'demo-president-b', name: 'Candidatura B (demo)', number: 902 },
+  ] as const;
+  const valid26 = raw.validByOffice.president ?? null;
+  const valid22 = history.validByOffice.president ?? null;
+  const entries: PresidentialComparisonEntry[] = slots.map((c) => {
+    const v26 = raw.votes.president?.[c.id] ?? null;
+    const v22 = history.votes.president?.[c.id] ?? null;
+    const s26 = v26 !== null && valid26 ? v26 / valid26 : null;
+    const s22 = v22 !== null && valid22 ? v22 / valid22 : null;
+    return {
+      key: c.key,
+      ballot_name_2022: c.name,
+      ballot_name_2026: c.name,
+      number_2022: c.number,
+      number_2026: c.number,
+      votes_2022_r1: v22,
+      valid_2022_r1: valid22,
+      share_2022_r1: s22,
+      // The demo has no 2022 2nd round: shown as "sem dado" on purpose.
+      votes_2022_r2: null,
+      valid_2022_r2: null,
+      share_2022_r2: null,
+      votes_2026_r1: v26,
+      valid_2026_r1: valid26,
+      share_2026_r1: s26,
+      delta_pp_r1: s26 !== null && s22 !== null ? Math.round((s26 - s22) * 10000) / 100 : null,
+      delta_votes_r1: v26 !== null && v22 !== null ? v26 - v22 : null,
+    };
+  });
+  return {
+    precision,
+    entries,
+    note: 'DADOS DEMONSTRATIVOS: comparação sintética entre "Candidatura A" e "Candidatura B"; nenhum número é real.',
+  };
+}
+
 function toMetrics(
   territoryId: string,
   year: number,
@@ -324,6 +374,14 @@ function toMetrics(
     results,
     valid_by_office: raw.validByOffice,
     comparison_2022: comparison,
+    president_comparison:
+      history && year === 2026 && round === 1
+        ? demoPresidentComparison(
+            raw,
+            history,
+            territoryId.split('-').length > 2 ? 'approximate' : 'exact',
+          )
+        : null,
     warnings,
   };
 }
@@ -338,6 +396,8 @@ export interface DemoSnapshotData {
   metrics: Record<string, MunicipalityMetricsFile>;
   /** keyed by relative path `layerFilePath(...)` */
   layers: Record<string, MapLayerValues>;
+  /** SYNTHETIC "por que Minas decide" numbers (labelled DEMO in the UI). */
+  highlights: Highlights;
 }
 
 function bairroCentroid(muni: DemoMunicipality, i: number, n: number): [number, number] {
@@ -522,6 +582,47 @@ export function buildDemoSnapshot(): DemoSnapshotData {
       }
     }
     if (year === 2026 && round === 1) {
+      // Margin layers (A − B, p.p.) for 2026 r1 and 2022 r1; the demo has no 2022 r2 file.
+      for (const [y, field] of [
+        [2026, 'share_2026_r1'],
+        [2022, 'share_2022_r1'],
+      ] as const) {
+        const values: Record<string, number> = {};
+        for (const m of ms) {
+          const e = m.president_comparison?.entries;
+          const a = e?.find((x) => x.key === 'lula')?.[field];
+          const b = e?.find((x) => x.key === 'bolsonaro')?.[field];
+          if (a != null && b != null) values[m.territory_id] = Math.round((a - b) * 10000) / 100;
+        }
+        addLayer({
+          layer: 'president_margin',
+          year: y,
+          round: 1,
+          unit: 'pp',
+          candidate_id: null,
+          values,
+          domain: domainOf(Object.values(values), true),
+        });
+      }
+      for (const key of ['lula', 'bolsonaro'] as const) {
+        const values: Record<string, number> = {};
+        for (const m of ms) {
+          const d = m.president_comparison?.entries.find((e) => e.key === key)?.delta_pp_r1;
+          if (d !== null && d !== undefined) values[m.territory_id] = d;
+        }
+        addLayer(
+          {
+            layer: 'president_comparison',
+            year,
+            round,
+            unit: 'pp',
+            candidate_id: key,
+            values,
+            domain: domainOf(Object.values(values), true),
+          },
+          key,
+        );
+      }
       for (const office of ['president', 'governor'] as const) {
         for (const c of candidatesFor(office, 2026, 1).filter((x) => x.hasHistory)) {
           const values: Record<string, number> = {};
@@ -630,6 +731,70 @@ export function buildDemoSnapshot(): DemoSnapshotData {
     warnings: [],
   };
 
-  memo = { manifest, index, methodology, candidates, metrics, layers };
+  const state26 = stateSelf.find((m) => m.year === 2026 && m.round === 1)!;
+  const st = state26.turnout!;
+  const demoSource = 'DEMONSTRAÇÃO — número sintético gerado no aplicativo, sem fonte real';
+  const pc = state26.president_comparison?.entries ?? [];
+  const a = pc.find((e) => e.key === 'lula');
+  const b = pc.find((e) => e.key === 'bolsonaro');
+  const highlights: Highlights = {
+    generated_at: DEMO_GENERATED_AT,
+    items: [
+      {
+        id: 'mg_eligible_2026',
+        label: 'Eleitorado apto (demonstração)',
+        value: st.eligible,
+        unit: 'people',
+        compare_value: null,
+        compare_label: null,
+        note: null,
+        source: demoSource,
+      },
+      {
+        id: 'mg_municipalities',
+        label: 'Municípios na demonstração',
+        value: DEMO_MUNICIPALITIES.length,
+        unit: 'count',
+        compare_value: null,
+        compare_label: null,
+        note: null,
+        source: demoSource,
+      },
+      {
+        id: 'mg_2026_r1_margin_votes',
+        label: 'Diferença Candidatura A − B (1º turno, demonstração)',
+        value: (a?.votes_2026_r1 ?? 0) - (b?.votes_2026_r1 ?? 0),
+        unit: 'votes',
+        compare_value:
+          a?.share_2026_r1 != null && b?.share_2026_r1 != null
+            ? Math.round((a.share_2026_r1 - b.share_2026_r1) * 10000) / 100
+            : null,
+        compare_label: 'p.p. dos válidos',
+        note: null,
+        source: demoSource,
+      },
+      {
+        id: 'mg_turnout_2026_r1',
+        label: 'Comparecimento (demonstração)',
+        value: st.turnout,
+        unit: 'people',
+        compare_value: Math.round(st.turnout_rate * 10000) / 100,
+        compare_label: '% do eleitorado apto',
+        note: null,
+        source: demoSource,
+      },
+    ],
+    why_minas: [
+      {
+        title: 'Demonstração',
+        text: 'Estes números são sintéticos e servem apenas para mostrar a interface enquanto o snapshot oficial não está disponível.',
+        value: null,
+        unit: null,
+        source: demoSource,
+      },
+    ],
+  };
+
+  memo = { manifest, index, methodology, candidates, metrics, layers, highlights };
   return memo;
 }

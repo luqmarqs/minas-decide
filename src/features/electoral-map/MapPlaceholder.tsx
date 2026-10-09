@@ -3,6 +3,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
 import { LAYERS } from './layers';
 import { MapAttribution } from './MapAttribution';
+import { MARGIN_GRADIENT } from './palette';
 
 export interface MapPlaceholderProps {
   layer: MapLayerCode;
@@ -46,9 +47,12 @@ export function MapPlaceholder({ layer, variant = 'full', className }: MapPlaceh
                   <div
                     className="mt-2 h-3 rounded-pill opacity-70"
                     style={{
-                      backgroundImage: diverging
-                        ? 'linear-gradient(to right, var(--map-diverging-neg), var(--map-diverging-zero), var(--map-diverging-pos))'
-                        : 'linear-gradient(to right, var(--map-fill-low), var(--map-fill-mid-low), var(--map-fill-mid), var(--map-fill-mid-high), var(--map-fill-high))',
+                      backgroundImage:
+                        meta.palette === 'partisan'
+                          ? MARGIN_GRADIENT
+                          : diverging
+                            ? 'linear-gradient(to right, var(--map-diverging-neg), var(--map-diverging-zero), var(--map-diverging-pos))'
+                            : 'linear-gradient(to right, var(--map-fill-low), var(--map-fill-mid-low), var(--map-fill-mid), var(--map-fill-mid-high), var(--map-fill-high))',
                     }}
                   />
                 )}

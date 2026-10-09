@@ -18,6 +18,8 @@ describe('map URL state (T24)', () => {
       round: 1,
       candidateId: 'demo-governor-a',
       view: 'mapa',
+      activities: true,
+      pois: false,
     });
     expect(qs).toContain('camada=votacao');
   });

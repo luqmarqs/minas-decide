@@ -16,7 +16,7 @@ describe('home first paint (P-PERF-1)', () => {
     const fetchMock = stubFetch();
     renderWithApp(<HomePage />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      'Minas Gerais, território por território',
+      'Minas decide. Minas decide Lula.',
     );
     expect(screen.getByRole('combobox', { name: /Cidade ou bairro/ })).toBeInTheDocument();
     expect(screen.getByTestId('map-placeholder')).toBeInTheDocument();

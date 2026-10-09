@@ -26,6 +26,9 @@ const PATHS = {
     'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm13 9v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8',
   undo: 'M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',
   arrowLeft: 'M19 12H5m6-6-6 6 6 6',
+  // Same glyph as the map POI icon (features/electoral-map/mapIcons.ts).
+  bus: 'M7 3h10a3 3 0 0 1 3 3v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a3 3 0 0 1 3-3Zm-3 8h16M4 7h16M7.5 18v2.5M16.5 18v2.5M8 14.5h.01M16 14.5h.01',
+  clock: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
 } as const;
 
 export type IconName = keyof typeof PATHS;

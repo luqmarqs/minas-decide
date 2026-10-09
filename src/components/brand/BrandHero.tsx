@@ -7,6 +7,8 @@ export interface BrandHeroProps {
   notice?: ReactNode;
   /** Territorial search. */
   search: ReactNode;
+  /** Calls to action (campaign participation). */
+  actions?: ReactNode;
 }
 
 /**
@@ -15,7 +17,7 @@ export interface BrandHeroProps {
  * olive band that continues the artwork's lower edge, search below, ochre horizon
  * as divider. Always a dark "island" (tokens remapped in .brand-hero). No motion.
  */
-export function BrandHero({ titleId, notice, search }: BrandHeroProps) {
+export function BrandHero({ titleId, notice, search, actions }: BrandHeroProps) {
   return (
     <section className="brand-hero" aria-labelledby={titleId}>
       <div className="xl:flex xl:flex-row-reverse xl:items-stretch">
@@ -39,18 +41,20 @@ export function BrandHero({ titleId, notice, search }: BrandHeroProps) {
         </div>
         <div className="relative z-[3] -mt-8 px-(--gutter) pb-6 sm:-mt-10 lg:px-6 xl:mt-0 xl:flex xl:min-w-0 xl:flex-1 xl:flex-col xl:justify-center xl:py-8 xl:pr-10">
           <h1 id={titleId} className="leading-[1.02] uppercase">
-            <span className="brand-display block text-[2.15rem] sm:text-5xl xl:text-[3.4rem]">
-              Minas Gerais,
+            <span className="brand-display block text-[2.4rem] sm:text-5xl xl:text-[3.6rem]">
+              Minas decide.
             </span>{' '}
-            <span className="brand-outline mt-1 block text-[1.45rem] leading-[1.15] sm:text-[2.1rem] xl:text-[2.35rem]">
-              território por território
+            <span className="brand-outline mt-1 block text-[1.6rem] leading-[1.15] sm:text-[2.3rem] xl:text-[2.6rem]">
+              Minas decide Lula.
             </span>
           </h1>
           <p className="mt-3 max-w-xl text-secondary">
-            Veja participação e votação por cidade e bairro, e encontre atividades presenciais perto
-            de você.
+            Venha fazer a campanha de Lula em Minas Gerais: encontre uma atividade perto de você,
+            marque “Eu vou” ou organize uma ação no seu bairro. E veja, cidade por cidade, como
+            Minas votou.
           </p>
           {notice ? <div className="mt-2">{notice}</div> : null}
+          {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
           <div className="mt-4 w-full max-w-md">{search}</div>
         </div>
       </div>

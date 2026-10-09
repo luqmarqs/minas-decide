@@ -8,12 +8,18 @@ import { cssVar } from '@/lib/media';
 export interface MapPalette {
   sequential: [string, string, string, string, string];
   diverging: [string, string, string];
+  /** D25 exception (president_margin only): Bolsonaro → soft → zero → soft → Lula. */
+  margin: [string, string, string, string, string];
   none: string;
   stroke: string;
   selected: string;
   /** Casing under the selected outline (transparent unless a theme needs it). */
   selectedCasing: string;
   activity: string;
+  activityHalo: string;
+  /** POI glyph (ink in light, cream in dark) and its disc. */
+  poi: string;
+  poiBg: string;
   surface: string;
   surfaceAlt: string;
   textPrimary: string;
@@ -26,6 +32,16 @@ export const SEQUENTIAL_VARS = [
   '--map-fill-mid-high',
   '--map-fill-high',
 ] as const;
+export const MARGIN_VARS = [
+  '--map-bolsonaro',
+  '--map-bolsonaro-soft',
+  '--map-margin-zero',
+  '--map-lula-soft',
+  '--map-lula',
+] as const;
+/** CSS gradient of the partisan margin scale (legend, story maps). */
+export const MARGIN_GRADIENT = `linear-gradient(to right, ${MARGIN_VARS.map((v) => `var(${v})`).join(', ')})`;
+
 export const DIVERGING_VARS = [
   '--map-diverging-neg',
   '--map-diverging-zero',
@@ -47,11 +63,21 @@ export function readMapPalette(): MapPalette {
       cssVar('--map-diverging-zero', 'rgb(236,231,222)'),
       cssVar('--map-diverging-pos', 'rgb(47,109,83)'),
     ],
+    margin: [
+      cssVar('--map-bolsonaro', 'rgb(31,78,138)'),
+      cssVar('--map-bolsonaro-soft', 'rgb(195,212,236)'),
+      cssVar('--map-margin-zero', 'rgb(243,239,233)'),
+      cssVar('--map-lula-soft', 'rgb(240,198,191)'),
+      cssVar('--map-lula', 'rgb(176,58,46)'),
+    ],
     none: cssVar('--map-fill-none', 'rgb(216,210,198)'),
     stroke: cssVar('--map-stroke', 'rgb(27,26,22)'),
     selected: cssVar('--map-selected', 'rgb(194,119,26)'),
     selectedCasing: cssVar('--map-selected-casing', 'rgba(0,0,0,0)'),
     activity: cssVar('--map-activity', 'rgb(194,119,26)'),
+    activityHalo: cssVar('--map-activity-halo', 'rgba(6,104,138,0.25)'),
+    poi: cssVar('--map-poi', 'rgb(32,32,32)'),
+    poiBg: cssVar('--map-poi-bg', 'rgb(246,236,228)'),
     surface: cssVar('--color-surface', 'rgb(246,243,238)'),
     surfaceAlt: cssVar('--color-surface-alt', 'rgb(236,231,222)'),
     textPrimary: cssVar('--color-text-primary', 'rgb(27,26,22)'),
@@ -85,12 +111,25 @@ export function swatchVar(
   v: number | null | undefined,
   domain: [number, number],
   diverging: boolean,
+  partisan = false,
 ): string {
   if (v === null || v === undefined) return 'var(--map-fill-none)';
+  if (partisan) return `var(${marginVar(v, domain)})`;
   if (diverging) {
     const m = Math.max(Math.abs(domain[0]), Math.abs(domain[1]));
     if (Math.abs(v) < m * 0.1) return 'var(--map-diverging-zero)';
     return v < 0 ? 'var(--map-diverging-neg)' : 'var(--map-diverging-pos)';
   }
   return `var(${SEQUENTIAL_VARS[bucketIndex(v, domain)]})`;
+}
+
+/** Token of a margin value (p.p., + = Lula, − = Bolsonaro) in 5 symmetric bands. */
+export function marginVar(v: number, domain: [number, number]): (typeof MARGIN_VARS)[number] {
+  const m = Math.max(Math.abs(domain[0]), Math.abs(domain[1]), 0.1);
+  const t = v / m;
+  if (t <= -0.5) return MARGIN_VARS[0];
+  if (t < -0.05) return MARGIN_VARS[1];
+  if (t <= 0.05) return MARGIN_VARS[2];
+  if (t < 0.5) return MARGIN_VARS[3];
+  return MARGIN_VARS[4];
 }

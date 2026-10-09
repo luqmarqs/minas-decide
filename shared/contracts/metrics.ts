@@ -142,6 +142,8 @@ export const MapLayerCode = z.enum([
   'president_comparison',
   /** narrative layer: Lula share − Bolsonaro share (p.p.) per territory, for a given year/round */
   'president_margin',
+  /** mobilization layer: abstention rate shown only where Lula led (2026 r1); null elsewhere */
+  'mobilization',
   'activities',
   'pois',
 ]);

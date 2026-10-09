@@ -55,6 +55,16 @@
   --map-selected-casing: #202020; /* amarelo sozinho tem < 3:1 sobre o basemap claro */
   --map-activity: #06688a;
   --map-activity-halo: rgb(6 104 138 / 0.25);
+  /* Terminais/estações (camada de POIs): monocromático tinta/creme, nunca cor de marca. */
+  --map-poi: #202020;
+  --map-poi-bg: #f6ece4;
+  /* EXCEÇÃO D25 (decisão do proprietário): cores partidárias SÓ na camada narrativa
+     president_margin (margem Lula − Bolsonaro). Nenhuma outra escala de dados usa estas cores. */
+  --map-lula: #b03a2e;
+  --map-lula-soft: #f0c6bf;
+  --map-bolsonaro: #1f4e8a;
+  --map-bolsonaro-soft: #c3d4ec;
+  --map-margin-zero: #f3efe9;
 
   /* ---- cores cruas da arte oficial (hero, divisória, lockup, selos de marca) ---- */
   --brand-sky: #067fa8;
@@ -184,6 +194,13 @@
     --map-selected-casing: #1e1f1c;
     --map-activity: #5fb8d9; /* céu claro: o azul-escuro some no basemap escuro */
     --map-activity-halo: rgb(95 184 217 / 0.3);
+    --map-poi: #ebd6ca;
+    --map-poi-bg: #1e1f1c;
+    --map-lula: #e46b5d;
+    --map-lula-soft: #5b2a25;
+    --map-bolsonaro: #6f9fe0;
+    --map-bolsonaro-soft: #233a5e;
+    --map-margin-zero: #2a2820;
   }
 }
 
@@ -231,6 +248,13 @@
   --map-selected-casing: #1e1f1c;
   --map-activity: #5fb8d9; /* céu claro: o azul-escuro some no basemap escuro */
   --map-activity-halo: rgb(95 184 217 / 0.3);
+  --map-poi: #ebd6ca;
+  --map-poi-bg: #1e1f1c;
+  --map-lula: #e46b5d;
+  --map-lula-soft: #5b2a25;
+  --map-bolsonaro: #6f9fe0;
+  --map-bolsonaro-soft: #233a5e;
+  --map-margin-zero: #2a2820;
 }
 
 /* ==========================================================================

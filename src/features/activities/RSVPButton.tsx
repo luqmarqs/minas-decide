@@ -11,6 +11,8 @@ export interface RSVPButtonProps {
   initialCount: number;
   /** When set, the button is disabled and this reason is shown. */
   disabledReason?: string | null;
+  /** Map popover: smaller button and a one-line explanation (same semantics). */
+  compact?: boolean;
 }
 
 const LOW_COUNT_THRESHOLD = 5;
@@ -20,7 +22,12 @@ const LOW_COUNT_THRESHOLD = 5;
  * server confirms; the state change is announced in a polite live region.
  * It records an INTENTION, not attendance.
  */
-export function RSVPButton({ activityId, initialCount, disabledReason }: RSVPButtonProps) {
+export function RSVPButton({
+  activityId,
+  initialCount,
+  disabledReason,
+  compact = false,
+}: RSVPButtonProps) {
   const [going, setGoing] = useState<boolean>(() => readRsvpHint(activityId));
   const [count, setCount] = useState(initialCount);
   const [announcement, setAnnouncement] = useState('');
@@ -52,7 +59,10 @@ export function RSVPButton({ activityId, initialCount, disabledReason }: RSVPBut
   const disabled = !!disabledReason;
 
   return (
-    <div className="flex flex-col gap-3" aria-busy={pending || undefined}>
+    <div
+      className={compact ? 'flex flex-col gap-2' : 'flex flex-col gap-3'}
+      aria-busy={pending || undefined}
+    >
       {going ? (
         <div className="flex flex-wrap items-center gap-3">
           <p className="inline-flex items-center gap-2 font-semibold text-success">
@@ -73,7 +83,7 @@ export function RSVPButton({ activityId, initialCount, disabledReason }: RSVPBut
         </div>
       ) : (
         <Button
-          size="lg"
+          size={compact ? 'md' : 'lg'}
           className="mm-rsvp-cta w-full sm:w-auto"
           loading={pending}
           loadingText="Registrando…"
@@ -86,15 +96,21 @@ export function RSVPButton({ activityId, initialCount, disabledReason }: RSVPBut
 
       {disabledReason ? <p className="text-sm text-muted">{disabledReason}</p> : null}
 
-      <p className="text-sm text-secondary">
+      <p className={compact ? 'text-xs text-secondary' : 'text-sm text-secondary'}>
         {count < LOW_COUNT_THRESHOLD
           ? 'Menos de 5 pessoas marcaram “Eu vou” até agora.'
           : `Cerca de ${formatInt(count)} pessoas marcaram “Eu vou”.`}
       </p>
-      <p className="text-sm text-muted">
-        “Eu vou” registra sua <strong>intenção</strong> de participar — não é inscrição nem
-        confirmação de presença, e não exige login. A marcação fica associada a este navegador.
-      </p>
+      {compact ? (
+        <p className="text-xs text-muted">
+          Registra sua <strong>intenção</strong> de participar, sem login. Não é inscrição.
+        </p>
+      ) : (
+        <p className="text-sm text-muted">
+          “Eu vou” registra sua <strong>intenção</strong> de participar — não é inscrição nem
+          confirmação de presença, e não exige login. A marcação fica associada a este navegador.
+        </p>
+      )}
 
       {error ? (
         <p

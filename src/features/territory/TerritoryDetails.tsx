@@ -1,26 +1,29 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router';
 import type { TerritoryMetrics } from '@shared/contracts/metrics.ts';
 import { municipalityIdOf } from '@shared/contracts/snapshot.ts';
 import type { TerritoryIndexEntry } from '@shared/contracts/territory.ts';
 import { Badge } from '@/components/ui/Badge';
-import { Button, ButtonLink } from '@/components/ui/Button';
+import { ButtonLink } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { LoadingBlock } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState, Note } from '@/components/ui/States';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { useToast } from '@/components/ui/toastContext';
+import { WhatsAppShare } from '@/components/ui/WhatsAppShare';
 import { cn } from '@/lib/cn';
 import { plural } from '@/lib/format';
-import { absoluteUrl, SHARE_FEEDBACK, shareOrCopy } from '@/lib/share';
-import { useMunicipalityMetrics, useTerritoryIndex } from '@/features/electoral-map/hooks';
-import { pickMetrics } from '@/features/electoral-map/layers';
+import { absoluteUrl, territoryShareText } from '@/lib/share';
+import { useMunicipalityMetrics, usePois, useTerritoryIndex } from '@/features/electoral-map/hooks';
+import { pickMetrics, pickPresidentComparison } from '@/features/electoral-map/layers';
+import { POI_CATEGORY_LABEL, poisOfMunicipality } from '@/features/electoral-map/poi';
+import { PoiMarker } from '@/features/electoral-map/PoiMarker';
 import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshotStatus';
 import { mapQuery } from '@/features/electoral-map/useMapUrlState';
 import { ActivityAgenda } from '@/features/activities/ActivityAgenda';
 import { DataQualityNote } from './DataQualityNote';
 import { GroupCard } from './GroupCard';
-import { ComparisonBlock, ResultsBlock, TurnoutCards } from './MetricBlocks';
+import { ResultsBlock, TurnoutCards } from './MetricBlocks';
+import { MobilizationBlock } from './MobilizationBlock';
+import { PresidentialComparisonBlock } from './PresidentialComparisonBlock';
 import { TERRITORY_TYPE_LABEL, territoryLabel } from './search';
 
 export interface TerritoryDetailsProps {
@@ -106,34 +109,29 @@ function ShareTerritoryButton({
   entry,
   year,
   round,
+  rows,
 }: {
   entry: TerritoryIndexEntry;
   year: number;
   round: number;
+  rows: TerritoryMetrics[] | undefined;
 }) {
-  const toast = useToast();
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      iconBefore={<Icon name="share" size={18} />}
-      onClick={async () => {
-        const url = absoluteUrl(`/${mapQuery({ territoryId: entry.id, year, round })}`);
-        const outcome = await shareOrCopy({
-          title: `${territoryLabel(entry)} — Minas Decide`,
-          url,
-        });
-        if (outcome !== 'cancelled' && outcome !== 'shared') {
-          toast.show({
-            title: SHARE_FEEDBACK[outcome],
-            variant: outcome === 'failed' ? 'error' : 'success',
-          });
-        }
-      }}
-    >
-      Compartilhar
-    </Button>
-  );
+  const url = absoluteUrl(`/${mapQuery({ territoryId: entry.id, year, round })}`);
+  // Numbers of the 2026 1st round from the snapshot; missing parts are omitted.
+  const m26 = pickMetrics(rows, 2026, 1);
+  const pc = pickPresidentComparison(rows);
+  const share = (k: 'lula' | 'bolsonaro') =>
+    pc && pc.precision !== 'unavailable'
+      ? (pc.entries.find((e) => e.key === k)?.share_2026_r1 ?? null)
+      : null;
+  const text = territoryShareText({
+    name: territoryLabel(entry),
+    url,
+    abstentionRate: m26?.turnout?.abstention_rate ?? null,
+    lulaShare: share('lula'),
+    bolsonaroShare: share('bolsonaro'),
+  });
+  return <WhatsAppShare text={text} copyUrl={url} variant="ghost" />;
 }
 
 export function TerritoryDetails({
@@ -162,6 +160,9 @@ export function TerritoryDetails({
     if (!file || !entry) return undefined;
     return entry.type === 'neighborhood' ? file.children[entry.id] : file.self;
   }, [metricsQ.data, entry]);
+
+  // Terminals list only on the territory page (the map panel stays short).
+  const poisQ = usePois({ enabled: dataEnabled && variant === 'page' && !!entry });
 
   const combos = useMemo(() => {
     const list = (rows ?? []).map((m) => ({ year: m.year, round: m.round }));
@@ -229,7 +230,7 @@ export function TerritoryDetails({
           </p>
         )}
         <div className="flex flex-wrap gap-1">
-          <ShareTerritoryButton entry={entry} year={year} round={round} />
+          <ShareTerritoryButton entry={entry} year={year} round={round} rows={rows} />
           {variant === 'panel' && entry.type !== 'state' ? (
             <ButtonLink
               to={`/territorio/${entry.id}${mapQuery({ year, round })}`}
@@ -279,9 +280,26 @@ export function TerritoryDetails({
         )}
       </Section>
 
-      {metrics && metrics.comparison_2022.length ? (
-        <Section title="2022 × 2026">
-          <ComparisonBlock points={metrics.comparison_2022} />
+      {/* Rodada 3: tracked-candidate history (comparison_2022) is no longer highlighted. */}
+      {!metricsQ.error && rows ? (
+        <Section title="Lula × Bolsonaro: 2022 → 2026">
+          <PresidentialComparisonBlock
+            comparison={pickPresidentComparison(rows)}
+            releaseId={snapshot.releaseId}
+            demo={status === 'demo'}
+          />
+        </Section>
+      ) : null}
+
+      {entry.type !== 'neighborhood' && !metricsQ.error ? (
+        <Section title="Onde a abstenção pesa mais">
+          <MobilizationBlock
+            entry={entry}
+            index={index}
+            municipalityFile={metricsQ.data}
+            releaseId={snapshot.releaseId}
+            onSelectTerritory={onSelectTerritory}
+          />
         </Section>
       ) : null}
 
@@ -311,6 +329,16 @@ export function TerritoryDetails({
         </Section>
       ) : null}
 
+      {variant === 'page' && entry.type !== 'state' && muniId && muniId !== 'mg' ? (
+        <PoiSection
+          municipalityId={muniId}
+          municipalityName={entry.type === 'neighborhood' ? entry.municipality_name : entry.name}
+          loading={poisQ.isLoading}
+          failed={!!poisQ.error}
+          items={poisQ.data?.items ?? null}
+        />
+      ) : null}
+
       <DataQualityNote entry={entry} metrics={metrics} releaseId={snapshot.releaseId} />
 
       {entry.type !== 'state' ? (
@@ -329,13 +357,60 @@ export function TerritoryDetails({
             compact
             emptyTitle={`Nenhuma atividade publicada em ${entry.name}`}
             emptyAction={
-              <Link to="/criar-atividade" className="text-sm font-semibold underline">
-                Organizar uma atividade
-              </Link>
+              <ButtonLink to="/criar-atividade" variant="secondary" size="sm">
+                Propor atividade
+              </ButtonLink>
             }
           />
         </Section>
       ) : null}
     </div>
+  );
+}
+
+function PoiSection({
+  municipalityId,
+  municipalityName,
+  loading,
+  failed,
+  items,
+}: {
+  municipalityId: string;
+  municipalityName: string | null | undefined;
+  loading: boolean;
+  failed: boolean;
+  items: Parameters<typeof poisOfMunicipality>[0];
+}) {
+  if (loading || failed || !items) return null;
+  const list = poisOfMunicipality(items, municipalityId);
+  if (!list.length) return null;
+  return (
+    <Section title="Terminais e estações no município">
+      <p className="text-sm text-secondary">
+        Locais de grande circulação em {municipalityName ?? 'este município'}, úteis para planejar
+        panfletagens. Não são dados eleitorais.
+      </p>
+      <ul className="grid gap-1 sm:grid-cols-2">
+        {list.map((p) => (
+          <li key={p.id} className="flex min-h-11 items-center gap-2 rounded-sm px-1">
+            <PoiMarker size={11} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{p.name}</span>
+              <span className="block text-xs text-muted">{POI_CATEGORY_LABEL[p.category]}</span>
+            </span>
+            <a
+              href={p.osm_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm underline"
+              aria-label={`${p.name} no OpenStreetMap (openstreetmap.org)`}
+            >
+              OSM <Icon name="external" size={14} />
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-muted">Fonte: © OpenStreetMap contributors (ODbL).</p>
+    </Section>
   );
 }

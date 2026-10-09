@@ -116,8 +116,8 @@ export default function CriarAtividadePage() {
 
   return (
     <PageShell
-      title="Organizar uma atividade"
-      lead="Panfletagem, encontro, caminhada… A atividade é revisada antes de aparecer no mapa."
+      title="Propor uma atividade da campanha"
+      lead="Panfletagem, encontro, caminhada… mobilize sua região pela campanha de Lula. A atividade é revisada antes de aparecer no mapa."
     >
       {body}
     </PageShell>

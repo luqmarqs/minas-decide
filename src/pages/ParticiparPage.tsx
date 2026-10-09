@@ -16,8 +16,8 @@ export default function ParticiparPage() {
 
   return (
     <PageShell
-      title="Participar"
-      lead="Cadastro rápido com nome, e-mail, WhatsApp e território. Depois mostramos o grupo aprovado da sua região."
+      title="Participar da campanha"
+      lead="Faça parte da campanha de Lula em Minas Gerais. Cadastro rápido com nome, e-mail, WhatsApp e território; depois mostramos o grupo da campanha na sua região."
     >
       {session.status === 'loading' ? (
         <LoadingBlock label="Verificando sua sessão…" lines={2} />
@@ -39,7 +39,7 @@ export default function ParticiparPage() {
               {territory ? 'Ver grupo deste território' : 'Voltar ao mapa'}
             </ButtonLink>
             <ButtonLink to="/criar-atividade" variant="secondary">
-              Organizar uma atividade
+              Propor atividade da campanha
             </ButtonLink>
           </div>
         </div>

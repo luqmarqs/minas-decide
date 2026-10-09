@@ -16,8 +16,10 @@ import {
 import { TerritoryIndexEntry } from '@shared/contracts/territory.ts';
 import {
   CandidateIndex,
+  Highlights,
   Methodology,
   MunicipalityMetricsFile,
+  PoiFile,
   SNAPSHOT_BASE_DEFAULT,
   layerFilePath,
   metricsFilePath,
@@ -44,7 +46,20 @@ export interface SnapshotClient {
   ): Promise<MapLayerValues | null>;
   getMethodology(): Promise<Methodology>;
   getCandidates(): Promise<CandidateIndex>;
+  /**
+   * "Por que Minas decide" key numbers (`<release>/highlights.json`). `null` when the
+   * release has no such file yet; the demo client returns a SYNTHETIC, labelled fixture.
+   */
+  getHighlights(): Promise<Highlights | null>;
+  /**
+   * Points of interest (`pois/terminais-mg.json`, OpenStreetMap/ODbL). Independent of the
+   * electoral release (also read in demo mode); `null` when the file is not published.
+   */
+  getPois(): Promise<PoiFile | null>;
 }
+
+/** Path of the POI file, relative to the snapshot base (not inside a release). */
+export const POI_FILE_PATH = 'pois/terminais-mg.json';
 
 export class SnapshotFileError extends Error {
   constructor(
@@ -122,6 +137,19 @@ async function fetchValidated<S extends z.ZodType>(
   return parsed.data as z.infer<S>;
 }
 
+function poiLoader(fetchImpl: FetchLike, base: string): () => Promise<PoiFile | null> {
+  let p: Promise<PoiFile | null> | null = null;
+  return () => {
+    p ??= fetchValidated(fetchImpl, `${base}/${POI_FILE_PATH}`, POI_FILE_PATH, PoiFile, {
+      nullOn404: true,
+    });
+    p.catch(() => {
+      p = null;
+    });
+    return p;
+  };
+}
+
 function remoteClient(
   fetchImpl: FetchLike,
   base: string,
@@ -173,10 +201,20 @@ function remoteClient(
         const path = `${rel}/candidates.json`;
         return (await fetchValidated(fetchImpl, url(path), path, CandidateIndex))!;
       }),
+    getHighlights: () =>
+      once('highlights', () => {
+        const path = `${rel}/highlights.json`;
+        return fetchValidated(fetchImpl, url(path), path, Highlights, { nullOn404: true });
+      }),
+    getPois: poiLoader(fetchImpl, base),
   };
 }
 
-async function demoClient(reason: string): Promise<SnapshotClient> {
+async function demoClient(
+  reason: string,
+  fetchImpl: FetchLike,
+  base: string,
+): Promise<SnapshotClient> {
   const { buildDemoSnapshot } = await import('@/fixtures/electoral/demo');
   const demo = buildDemoSnapshot();
   const rel = demo.manifest.release_id;
@@ -192,6 +230,9 @@ async function demoClient(reason: string): Promise<SnapshotClient> {
       demo.layers[layerFilePath(rel, year, round, layer, cand)] ?? null,
     getMethodology: async () => demo.methodology,
     getCandidates: async () => demo.candidates,
+    getHighlights: async () => demo.highlights,
+    // POIs are not electoral data: the published OSM file is used when it exists.
+    getPois: poiLoader(fetchImpl, base),
   };
 }
 
@@ -210,14 +251,14 @@ export async function loadSnapshot(opts: LoadSnapshotOptions = {}): Promise<Snap
       'manifest.json',
       SnapshotManifest,
     );
-    if (!manifest) return demoClient('manifest ausente');
+    if (!manifest) return demoClient('manifest ausente', fetchImpl, base);
     return remoteClient(fetchImpl, base, manifest);
   } catch (err) {
     const reason =
       err instanceof SnapshotFileError
         ? `${err.reason}${err.status ? ` ${err.status}` : ''}`
         : 'erro';
-    return demoClient(`manifest indisponível (${reason})`);
+    return demoClient(`manifest indisponível (${reason})`, fetchImpl, base);
   }
 }
 

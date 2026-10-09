@@ -13,8 +13,16 @@ export function AppFooter() {
             Minas Decide
           </h2>
           <p className="mt-2 text-sm">
-            Atlas eleitoral público de Minas Gerais e agenda de atividades presenciais abertas à
-            participação voluntária.
+            Mobilização voluntária da campanha de Lula em Minas Gerais: agenda de atividades
+            presenciais e mapa eleitoral público, cidade por cidade.
+          </p>
+          <p className="mt-2 text-sm">
+            <Link
+              to="/participar"
+              className="inline-flex min-h-11 items-center font-semibold underline-offset-2 hover:underline"
+            >
+              Participar da campanha
+            </Link>
           </p>
         </section>
         <nav aria-labelledby="ft-info">
@@ -75,8 +83,12 @@ export function AppFooter() {
           <h2 id="ft-org" className="font-body text-sm font-semibold tracking-normal text-primary">
             Organização responsável
           </h2>
-          <p className="mt-2 text-sm">
-            [A definir — nome e CNPJ/identificação da organização responsável]
+          <p className="mt-2 text-sm" data-testid="footer-responsavel">
+            <strong className="text-primary">Responsável:</strong> [a definir — nome e CNPJ/CPF]
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Pendência legal: identificação do responsável pelo conteúdo de campanha ainda não
+            informada.
           </p>
           <p className="mt-2 text-sm">Contato: [canal oficial a definir]</p>
         </section>

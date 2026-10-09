@@ -2,6 +2,9 @@
  * URL ⇄ map state (spec §4.7, T24). A shared link restores selection, layer,
  * year/round and candidate; the camera is derived from the selection.
  *   ?t=<territory_id>&camada=<slug>&ano=2026&turno=1&cand=<id>&vista=lista
+ *   &atividades=0 (activities overlay is ON by default) &terminais=1 (POIs are OFF by default)
+ * Legacy links (rodada 2): `camada=atividades` → default layer (activities are always on),
+ * `camada=terminais` → default layer + POIs on, `camada=comparacao` → presidential comparison.
  */
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
@@ -16,6 +19,10 @@ export interface MapUrlState {
   round: number;
   candidateId: string | null;
   view: 'mapa' | 'lista';
+  /** Activities overlay (sun markers): on by default. */
+  activities: boolean;
+  /** Points of interest overlay (terminals and stations, OSM): off by default. */
+  pois: boolean;
 }
 
 export const MAP_DEFAULTS: Omit<MapUrlState, 'territoryId'> = {
@@ -24,6 +31,8 @@ export const MAP_DEFAULTS: Omit<MapUrlState, 'territoryId'> = {
   round: 1,
   candidateId: null,
   view: 'mapa',
+  activities: true,
+  pois: false,
 };
 
 const CAND_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
@@ -33,13 +42,16 @@ export function parseMapParams(sp: URLSearchParams): MapUrlState {
   const year = Number.parseInt(sp.get('ano') ?? '', 10);
   const round = Number.parseInt(sp.get('turno') ?? '', 10);
   const cand = sp.get('cand');
+  const camada = sp.get('camada');
   return {
     territoryId: t && isTerritoryId(t) ? t : null,
-    layer: layerFromSlug(sp.get('camada')) ?? MAP_DEFAULTS.layer,
+    layer: layerFromSlug(camada) ?? MAP_DEFAULTS.layer,
     year: Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : MAP_DEFAULTS.year,
     round: round === 1 || round === 2 ? round : MAP_DEFAULTS.round,
     candidateId: cand && CAND_RE.test(cand) ? cand : null,
     view: sp.get('vista') === 'lista' ? 'lista' : 'mapa',
+    activities: sp.get('atividades') !== '0',
+    pois: sp.get('terminais') === '1' || camada === 'terminais',
   };
 }
 
@@ -58,6 +70,8 @@ export function serializeMapParams(
   if (state.round !== undefined) set('turno', String(state.round), String(MAP_DEFAULTS.round));
   if ('candidateId' in state) set('cand', state.candidateId ?? null);
   if (state.view) set('vista', state.view, MAP_DEFAULTS.view);
+  if (state.activities !== undefined) set('atividades', state.activities ? '1' : '0', '1');
+  if (state.pois !== undefined) set('terminais', state.pois ? '1' : '0', '0');
   return into;
 }
 

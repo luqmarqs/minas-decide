@@ -11,7 +11,7 @@ test('home renders search, map (or list fallback), legend status and attribution
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.getByRole('combobox', { name: /Cidade ou bairro/ })).toBeVisible();
-  await expect(page.getByRole('radio', { name: 'Abstenção' })).toBeChecked();
+  await expect(page.getByRole('radio', { name: 'Abstenção', exact: true })).toBeChecked();
   // Official identity is the default (no query/localStorage needed).
   await expect(page).toHaveTitle(/Minas Decide/);
   await expect(page.locator('html')).toHaveAttribute('data-brand', 'minas-decide');

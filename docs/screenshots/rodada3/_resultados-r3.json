@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-09T18:07:45.705Z",
+  "base": "http://127.0.0.1:8794",
+  "shots": [
+    "docs/screenshots/rodada3/home-hero-desktop1440.png",
+    "docs/screenshots/rodada3/home-narrativa-desktop1440.png",
+    "docs/screenshots/rodada3/home-cards-desktop1440.png",
+    "docs/screenshots/rodada3/mapa-marcadores-atividades-desktop1440.png",
+    "docs/screenshots/rodada3/mapa-popover-atividade-desktop1440.png",
+    "docs/screenshots/rodada3/mapa-terminais-desktop1440.png",
+    "docs/screenshots/rodada3/mapa-margem-2022r2-desktop1440.png",
+    "docs/screenshots/rodada3/mapa-mobilizacao-estado-desktop1440.png",
+    "docs/screenshots/rodada3/territorio-comparativo-desktop1440.png",
+    "docs/screenshots/rodada3/atividade-whatsapp-desktop1440.png",
+    "docs/screenshots/rodada3/home-hero-mobile390.png",
+    "docs/screenshots/rodada3/home-narrativa-mobile390.png",
+    "docs/screenshots/rodada3/home-cards-mobile390.png",
+    "docs/screenshots/rodada3/mapa-marcadores-atividades-mobile390.png",
+    "docs/screenshots/rodada3/mapa-popover-atividade-mobile390.png",
+    "docs/screenshots/rodada3/mapa-terminais-mobile390.png",
+    "docs/screenshots/rodada3/mapa-margem-2022r2-mobile390.png",
+    "docs/screenshots/rodada3/mapa-mobilizacao-estado-mobile390.png",
+    "docs/screenshots/rodada3/territorio-comparativo-mobile390.png",
+    "docs/screenshots/rodada3/atividade-whatsapp-mobile390.png"
+  ],
+  "axe": {
+    "home-desktop1440": [],
+    "popover-desktop1440": [],
+    "mobilizacao-desktop1440": [],
+    "territorio-desktop1440": [],
+    "atividade-desktop1440": [],
+    "home-mobile390": [],
+    "popover-mobile390": [],
+    "mobilizacao-mobile390": [],
+    "territorio-mobile390": [],
+    "atividade-mobile390": []
+  },
+  "popover-desktop1440": true,
+  "popover-mobile390": true
+}

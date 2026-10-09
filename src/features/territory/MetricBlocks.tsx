@@ -3,13 +3,12 @@ import {
   OFFICE_LABEL_PT,
   VOTES_PER_VOTER,
   type CandidateResult,
-  type ComparisonPoint,
   type OfficeCode,
   type TerritoryMetrics,
 } from '@shared/contracts/metrics.ts';
 import { Note } from '@/components/ui/States';
 import { cn } from '@/lib/cn';
-import { formatInt, formatPercent, formatPp, formatSignedInt } from '@/lib/format';
+import { formatInt, formatPercent } from '@/lib/format';
 
 export function MetricCard({
   label,
@@ -143,69 +142,5 @@ export function ResultsBlock({
         );
       })}
     </div>
-  );
-}
-
-export function ComparisonBlock({ points }: { points: ComparisonPoint[] }) {
-  if (!points.length) return null;
-  return (
-    <section aria-label="Comparação 2022 para 2026" className="flex flex-col gap-2">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[20rem] text-sm">
-          <caption className="sr-only">
-            Participação nos votos válidos em 2022 e 2026, diferença em pontos percentuais e em
-            votos
-          </caption>
-          <thead>
-            <tr className="text-left text-xs text-muted">
-              <th scope="col" className="py-1 pr-2 font-semibold">
-                Candidatura
-              </th>
-              <th scope="col" className="py-1 pr-2 text-right font-semibold">
-                2022
-              </th>
-              <th scope="col" className="py-1 pr-2 text-right font-semibold">
-                2026
-              </th>
-              <th scope="col" className="py-1 text-right font-semibold">
-                Variação
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {points.map((p) => {
-              const s22 =
-                p.votes_2022 !== null && p.valid_2022 ? p.votes_2022 / p.valid_2022 : null;
-              const s26 =
-                p.votes_2026 !== null && p.valid_2026 ? p.votes_2026 / p.valid_2026 : null;
-              return (
-                <tr
-                  key={`${p.office}-${p.candidate_id}`}
-                  className="border-t border-border align-top"
-                >
-                  <th scope="row" className="py-1.5 pr-2 text-left font-normal">
-                    {p.ballot_name}
-                    <span className="block text-xs text-muted">{OFFICE_LABEL_PT[p.office]}</span>
-                  </th>
-                  <td className="py-1.5 pr-2 text-right tabular-nums">{formatPercent(s22)}</td>
-                  <td className="py-1.5 pr-2 text-right tabular-nums">{formatPercent(s26)}</td>
-                  <td className="py-1.5 text-right tabular-nums">
-                    <strong>{formatPp(p.delta_pp)}</strong>
-                    <span className="block text-xs text-muted">
-                      {formatSignedInt(p.delta_votes)} votos
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-muted">
-        Diferença da participação nos votos válidos de cada ano, em pontos percentuais. Só aparecem
-        candidaturas com histórico em 2022.{' '}
-        <strong>A variação não implica transferência de votos</strong> entre candidaturas.
-      </p>
-    </section>
   );
 }

@@ -9,10 +9,28 @@ import { ErrorState } from '@/components/ui/States';
 import { cn } from '@/lib/cn';
 import { DARK_QUERY, DESKTOP_QUERY, useMediaQuery } from '@/lib/media';
 import { hasWebGL } from '@/lib/webgl';
-import { ActivityCard } from '@/features/activities/ActivityCard';
+import { ActivityPopover } from '@/features/activities/ActivityPopover';
 import { useActivities } from '@/features/activities/api';
-import { useCandidates, useLayerValues, useMunicipalityMetrics, useTerritoryIndex } from './hooks';
-import { LAYERS, pickMetrics, valueForLayer } from './layers';
+import {
+  useCandidates,
+  useLayerValues,
+  useMunicipalityMetrics,
+  usePois,
+  useTerritoryIndex,
+} from './hooks';
+import {
+  LAYERS,
+  MARGIN_ROUNDS,
+  marginFromComparison,
+  marginRoundOf,
+  pickMetrics,
+  pickPresidentComparison,
+  PRESIDENT_KEYS,
+  PRESIDENT_LABEL,
+  valueForLayer,
+} from './layers';
+import { deriveMobilizationLayer, MOBILIZATION_SIDE_LABEL, sideOf } from './mobilization';
+import { PoiPopover } from './PoiPopover';
 import type { BasemapProblem } from './MapCanvas';
 import { MapLayerSelector } from './MapLayerSelector';
 import { MapLegend, StatusBadge } from './MapLegend';
@@ -58,17 +76,38 @@ export function MapShell({
   const [mapFailed, setMapFailed] = useState(false);
   const [basemapProblem, setBasemapProblem] = useState<BasemapProblem | null>(null);
   const [activityId, setActivityId] = useState<string | null>(null);
+  const [poiId, setPoiId] = useState<string | null>(null);
 
   const { index, snapshot, isLoading, error, refetch } = useTerritoryIndex();
-  const candidatesQ = useCandidates({ enabled: LAYERS[state.layer].needsCandidate });
-  const latestYear = snapshot ? Math.max(...snapshot.manifest.years) : state.year;
-
   const layer: MapLayerCode = state.layer;
   const meta = LAYERS[layer];
-  const layerYear = layer === 'comparison' ? latestYear : state.year;
-  const layerRound = layer === 'comparison' ? 1 : state.round;
+  const president = layer === 'president_comparison';
+  const mobilization = layer === 'mobilization';
+  const candidatesQ = useCandidates({
+    enabled: meta.needsCandidate && !president && !mobilization,
+  });
+  const latestYear = snapshot ? Math.max(...snapshot.manifest.years) : state.year;
+  // The presidential comparison is always 2026 (1st round) against 2022.
+  const fixedYear = layer === 'comparison' || president || mobilization;
+  const marginRound = marginRoundOf(state.year, state.round);
+  const layerYear =
+    layer === 'president_margin' ? marginRound.year : fixedYear ? latestYear : state.year;
+  const layerRound = layer === 'president_margin' ? marginRound.round : fixedYear ? 1 : state.round;
 
   const candidateOptions = useMemo(() => {
+    if (mobilization)
+      return (['lula', 'bolsonaro'] as const).map((k) => ({
+        value: k,
+        label: MOBILIZATION_SIDE_LABEL[k],
+      }));
+    if (president) {
+      // Demo snapshot: the slots are synthetic "Candidatura A/B", never real names.
+      const demo = snapshot?.mode === 'demo' || snapshot?.status === 'demo';
+      return PRESIDENT_KEYS.map((k, i) => ({
+        value: k,
+        label: demo ? `Candidatura ${i === 0 ? 'A' : 'B'} (demo)` : PRESIDENT_LABEL[k],
+      }));
+    }
     const items = candidatesQ.data?.items ?? [];
     const officeRank = {
       governor: 0,
@@ -92,7 +131,7 @@ export function MapShell({
         value: c.candidate_id,
         label: `${c.ballot_name} (${c.party}) · ${OFFICE_LABEL_PT[c.office]}`,
       }));
-  }, [candidatesQ.data, layer, layerYear, latestYear]);
+  }, [candidatesQ.data, layer, layerYear, latestYear, president, mobilization, snapshot]);
 
   const candidateId = meta.needsCandidate
     ? candidateOptions.some((o) => o.value === state.candidateId)
@@ -102,6 +141,18 @@ export function MapShell({
   const candidateLabel = candidateOptions.find((o) => o.value === candidateId)?.label ?? null;
 
   const layerQ = useLayerValues(layer, layerYear, layerRound, candidateId);
+  // D27: mobilization = abstention (2026 r1) where the chosen side led (margin layer).
+  const mobAbstQ = useLayerValues('abstention', 2026, 1, null, { enabled: mobilization });
+  const mobMarginQ = useLayerValues('president_margin', 2026, 1, null, { enabled: mobilization });
+  const mobilizationValues = useMemo(
+    () =>
+      mobilization
+        ? deriveMobilizationLayer(mobAbstQ.data, mobMarginQ.data, sideOf(candidateId))
+        : null,
+    [mobilization, mobAbstQ.data, mobMarginQ.data, candidateId],
+  );
+  const layerData = mobilization ? mobilizationValues : layerQ.data;
+  const layerLoading = mobilization ? mobAbstQ.isLoading || mobMarginQ.isLoading : layerQ.isLoading;
   const selectedMuni = state.territoryId ? municipalityIdOf(state.territoryId) : null;
   const muniMetricsQ = useMunicipalityMetrics(
     selectedMuni && selectedMuni !== 'mg' ? selectedMuni : null,
@@ -111,7 +162,10 @@ export function MapShell({
     if (!file) return null;
     const out: Record<string, number> = {};
     for (const [id, rows] of Object.entries(file.children)) {
-      const v = valueForLayer(pickMetrics(rows, layerYear, layerRound), layer, candidateId);
+      const v =
+        layer === 'president_margin'
+          ? marginFromComparison(pickPresidentComparison(rows), layerYear, layerRound)
+          : valueForLayer(pickMetrics(rows, layerYear, layerRound), layer, candidateId);
       if (v !== null) out[id] = v;
     }
     return out;
@@ -119,7 +173,14 @@ export function MapShell({
 
   const activitiesQ = useActivities({});
   const activities = activitiesOverride ?? activitiesQ.data?.items ?? [];
-  const selectedActivity = activityId ? activities.find((a) => a.id === activityId) : undefined;
+  const showActivities = state.activities ?? true;
+  const showPois = variant === 'full' && (state.pois ?? false);
+  const selectedActivity =
+    activityId && showActivities ? activities.find((a) => a.id === activityId) : undefined;
+  const mappedActivities = activities.filter((a) => a.coordinates && a.status === 'published');
+  const poisQ = usePois({ enabled: showPois });
+  const pois = poisQ.data?.items ?? null;
+  const selectedPoi = poiId && showPois ? pois?.find((x) => x.id === poiId) : undefined;
 
   const yearRoundOptions = useMemo(() => {
     const years = [...(snapshot?.manifest.years ?? [state.year])].sort((a, b) => b - a);
@@ -139,6 +200,7 @@ export function MapShell({
 
   const select = (id: string | null) => {
     setActivityId(null);
+    setPoiId(null);
     onStateChange({ territoryId: id }, { push: true });
   };
 
@@ -148,6 +210,25 @@ export function MapShell({
   // the page scrolled the map up), so the camera frames the territory in the visible part.
   const mapBoxRef = useRef<HTMLDivElement>(null);
   const [sheetOverlap, setSheetOverlap] = useState(0);
+  // Mobile: the layer selector (chips, sub-selection, overlay switches) can be ~250 px tall;
+  // measure it so the camera never frames the territory (or a marker) behind it.
+  const selectorRef = useRef<HTMLDivElement>(null);
+  const [selectorHeight, setSelectorHeight] = useState(MOBILE_TOP_PAD);
+  useEffect(() => {
+    const el = selectorRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      const h = Math.round(el.getBoundingClientRect().height);
+      if (h > 0) setSelectorHeight(h + 16);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  const topPad = variant === 'full' && !desktop ? Math.max(MOBILE_TOP_PAD, selectorHeight) : 72;
+  const topPadRef = useRef(topPad);
+  useEffect(() => {
+    topPadRef.current = topPad;
+  });
   const sheetCase = !desktop && variant === 'full' && !!panel && !!state.territoryId;
   useEffect(() => {
     if (!sheetCase) return;
@@ -158,14 +239,24 @@ export function MapShell({
       const sheetTop = sheet?.top ?? window.innerHeight * (1 - SHEET_HALF);
       const overlap = Math.round(box.bottom - sheetTop);
       // Keep at least ~120 px of map for the territory itself.
-      setSheetOverlap(Math.max(0, Math.min(overlap, box.height - MOBILE_TOP_PAD - 120)));
+      setSheetOverlap(Math.max(0, Math.min(overlap, box.height - topPadRef.current - 120)));
     };
-    const t = setTimeout(measure, 500);
-    return () => clearTimeout(t);
+    let t = setTimeout(measure, 500);
+    // Deep links open the sheet before the map is scrolled into view: re-measure (debounced)
+    // after the page scrolls so the camera re-frames in the part of the map left visible.
+    const onScroll = () => {
+      clearTimeout(t);
+      t = setTimeout(measure, 250);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('scroll', onScroll);
+    };
   }, [sheetCase, state.territoryId]);
   const padding = {
-    // Mobile: the layer selector covers ~140 px at the top of the map.
-    top: variant === 'full' && !desktop ? MOBILE_TOP_PAD : 72,
+    // Mobile: the measured height of the layer selector at the top of the map.
+    top: topPad,
     right: showPanelSpace ? 420 : 0,
     // Mobile: only the part of the map actually covered by the half-open sheet.
     bottom: sheetCase ? sheetOverlap : 0,
@@ -174,16 +265,21 @@ export function MapShell({
   const legend = snapshot ? (
     <MapLegend
       layer={layer}
-      values={layerQ.data}
-      loading={layerQ.isLoading}
+      values={layerData}
+      loading={layerLoading}
       status={snapshot.status}
       releaseId={snapshot.releaseId}
       year={layerYear}
       round={layerRound}
       candidateLabel={candidateLabel}
-      activityCount={activities.filter((a) => a.coordinates && a.status === 'published').length}
+      showActivities={showActivities}
+      activityCount={mappedActivities.length}
       activitiesUnavailable={!!activitiesQ.error && !activitiesOverride}
       activitiesDemo={activitiesQ.data?.demo}
+      showPois={showPois}
+      poiCount={pois?.length ?? null}
+      poiLoading={poisQ.isLoading}
+      poiUnavailable={!!poisQ.error || poisQ.data === null}
       defaultCollapsed={!desktop || variant === 'context'}
     />
   ) : null;
@@ -212,7 +308,7 @@ export function MapShell({
       <TerritoryListFallback
         index={index}
         layer={layer}
-        layerValues={layerQ.data}
+        layerValues={layerData}
         neighborhoodValues={neighborhoodValues}
         selectedId={state.territoryId}
         onSelect={select}
@@ -242,11 +338,21 @@ export function MapShell({
           index={index}
           selectedId={state.territoryId}
           layer={layer}
-          layerValues={layerQ.data}
+          layerValues={layerData}
           neighborhoodValues={neighborhoodValues}
           activities={activities}
+          showActivities={showActivities}
+          pois={pois}
+          showPois={showPois}
           onSelect={select}
-          onActivitySelect={setActivityId}
+          onActivitySelect={(id) => {
+            setPoiId(null);
+            setActivityId(id);
+          }}
+          onPoiSelect={(id) => {
+            setActivityId(null);
+            setPoiId(id);
+          }}
           onFatalError={() => setMapFailed(true)}
           onBasemapProblem={setBasemapProblem}
           padding={padding}
@@ -273,12 +379,19 @@ export function MapShell({
               showPanelSpace && 'right-(--panel-width) pr-6',
             )}
           >
-            <div className="pointer-events-auto flex w-fit max-w-full flex-col gap-2 rounded-md border border-border bg-surface-raised/95 p-2 shadow-raised backdrop-blur-sm">
+            <div
+              ref={selectorRef}
+              className="pointer-events-auto flex w-fit max-w-full flex-col gap-2 rounded-md border border-border bg-surface-raised/95 p-2 shadow-raised backdrop-blur-sm"
+            >
               <MapLayerSelector
                 layer={layer}
                 onLayerChange={(l) => onStateChange({ layer: l })}
-                yearRound={`${state.year}-${state.round}`}
+                yearRound={`${layerYear}-${layerRound}`}
                 yearRoundOptions={yearRoundOptions}
+                marginOptions={MARGIN_ROUNDS.map((r) => ({
+                  value: `${r.year}-${r.round}`,
+                  label: r.label,
+                }))}
                 onYearRoundChange={(v) => {
                   const [y, r] = v.split('-').map(Number);
                   if (y && r) onStateChange({ year: y, round: r });
@@ -286,6 +399,18 @@ export function MapShell({
                 candidateId={candidateId}
                 candidateOptions={candidateOptions}
                 onCandidateChange={(id) => onStateChange({ candidateId: id })}
+                overlays={{
+                  activities: showActivities,
+                  onActivitiesChange: (on) => {
+                    if (!on) setActivityId(null);
+                    onStateChange({ activities: on });
+                  },
+                  pois: showPois,
+                  onPoisChange: (on) => {
+                    if (!on) setPoiId(null);
+                    onStateChange({ pois: on });
+                  },
+                }}
                 trailing={
                   webglOk && !mapFailed ? (
                     <div className="flex flex-wrap items-center gap-2">
@@ -325,23 +450,33 @@ export function MapShell({
           </div>
         ) : null}
 
-        {selectedActivity ? (
-          <div className="absolute inset-x-2 bottom-2 z-(--z-panel) sm:right-auto sm:left-3 sm:w-96">
-            <div className="relative">
-              <ActivityCard
+        {selectedActivity || selectedPoi ? (
+          <div
+            className={cn(
+              'absolute inset-x-2 z-(--z-panel) max-h-[calc(100%-1rem)] overflow-y-auto sm:right-auto sm:left-3 sm:w-96',
+              // Mobile with the territory sheet open: show it at the top, above the sheet.
+              sheetCase ? 'top-2' : 'bottom-2',
+            )}
+          >
+            {selectedActivity ? (
+              <ActivityPopover
+                key={selectedActivity.id}
                 activity={selectedActivity}
                 demo={activitiesQ.data?.demo}
-                className="shadow-raised"
+                onClose={() => setActivityId(null)}
               />
-              <button
-                type="button"
-                className="absolute top-1 right-1 z-10 grid size-11 place-items-center rounded-md text-secondary hover:bg-surface-alt"
-                aria-label="Fechar atividade"
-                onClick={() => setActivityId(null)}
-              >
-                <Icon name="close" size={18} />
-              </button>
-            </div>
+            ) : selectedPoi ? (
+              <PoiPopover
+                key={selectedPoi.id}
+                poi={selectedPoi}
+                municipalityName={
+                  selectedPoi.municipality_id
+                    ? (index?.byId.get(selectedPoi.municipality_id)?.name ?? null)
+                    : null
+                }
+                onClose={() => setPoiId(null)}
+              />
+            ) : null}
           </div>
         ) : null}
 
@@ -358,7 +493,7 @@ export function MapShell({
           <StatusBadge status={snapshot.status} />
           <span>
             {meta.label}
-            {layer === 'activities' ? '' : ` · ${meta.unit}`} · snapshot{' '}
+            {meta.scale === 'none' ? '' : ` · ${meta.unit}`} · snapshot{' '}
             <span className="font-mono">{snapshot.releaseId}</span>
           </span>
         </p>

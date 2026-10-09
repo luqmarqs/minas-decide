@@ -12,6 +12,8 @@ export const snapshotKeys = {
     ['snapshot', rel, 'layer', y, r, l, c] as const,
   methodology: (rel: string) => ['snapshot', rel, 'methodology'] as const,
   candidates: (rel: string) => ['snapshot', rel, 'candidates'] as const,
+  highlights: (rel: string) => ['snapshot', rel, 'highlights'] as const,
+  pois: (rel: string) => ['snapshot', rel, 'pois'] as const,
 };
 
 /**
@@ -101,13 +103,17 @@ export function useLayerValues(
   year: number,
   round: number,
   candidateId: string | null,
+  { enabled = true }: LazyDataOptions = {},
 ) {
   const { data: client } = useSnapshot();
-  const needsCandidate = layer === 'votes' || layer === 'comparison';
+  const needsCandidate =
+    layer === 'votes' || layer === 'comparison' || layer === 'president_comparison';
+  // Overlays have no layer file; 'mobilization' is derived in the browser (D27).
+  const overlay = layer === 'activities' || layer === 'pois' || layer === 'mobilization';
   return useQuery({
     queryKey: snapshotKeys.layer(client?.releaseId ?? 'none', year, round, layer, candidateId),
     queryFn: () => client!.getLayer(year, round, layer, needsCandidate ? candidateId : null),
-    enabled: !!client && layer !== 'activities' && (!needsCandidate || !!candidateId),
+    enabled: !!client && enabled && !overlay && (!needsCandidate || !!candidateId),
     staleTime: Infinity,
   });
 }
@@ -130,5 +136,28 @@ export function useCandidates({ enabled = true }: LazyDataOptions = {}) {
     queryFn: () => client!.getCandidates(),
     enabled: !!client && enabled,
     staleTime: Infinity,
+  });
+}
+
+/** "Por que Minas decide" numbers. `data === null` = not published in this release. */
+export function useHighlights({ enabled = true }: LazyDataOptions = {}) {
+  const { data: client } = useSnapshot({ enabled });
+  return useQuery({
+    queryKey: snapshotKeys.highlights(client?.releaseId ?? 'none'),
+    queryFn: () => client!.getHighlights(),
+    enabled: !!client && enabled,
+    staleTime: Infinity,
+  });
+}
+
+/** Terminals/stations (OSM). Only fetched when the overlay or a list needs it. */
+export function usePois({ enabled = true }: LazyDataOptions = {}) {
+  const { data: client } = useSnapshot({ enabled });
+  return useQuery({
+    queryKey: snapshotKeys.pois(client?.releaseId ?? 'none'),
+    queryFn: () => client!.getPois(),
+    enabled: !!client && enabled,
+    staleTime: Infinity,
+    retry: false,
   });
 }

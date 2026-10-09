@@ -14,7 +14,9 @@ test('home paints hero + placeholder first, then starts the map after load/idle'
   await page.goto('/', { waitUntil: 'commit' });
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   // The map (MapLibre chunk / list fallback) replaces the placeholder after idle.
-  await expect(page.getByRole('radio', { name: 'Abstenção' })).toBeChecked({ timeout: 20_000 });
+  await expect(page.getByRole('radio', { name: 'Abstenção', exact: true })).toBeChecked({
+    timeout: 20_000,
+  });
   await expect(page.getByTestId('map-placeholder')).toHaveCount(0);
   expect(early.length).toBeGreaterThan(0);
 });

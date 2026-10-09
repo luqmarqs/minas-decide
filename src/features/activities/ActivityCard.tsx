@@ -5,6 +5,7 @@ import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
 import { formatDateShort, formatTime } from '@/lib/format';
 import { ActivityMarker } from './ActivityMarker';
+import { ActivityShare } from './ActivityShare';
 
 export interface ActivityCardProps {
   activity: PublicActivity;
@@ -59,6 +60,10 @@ export function ActivityCard({ activity, demo, compact, className }: ActivityCar
             <Icon name="pin" size={16} className="mt-0.5 shrink-0" />
             <span className="min-w-0 break-words">{activity.location_public}</span>
           </p>
+        ) : null}
+        {!compact && !demo && !cancelled ? (
+          // Above the card's stretched link so it stays clickable.
+          <ActivityShare activity={activity} className="relative z-10 mt-2" />
         ) : null}
       </div>
     </article>

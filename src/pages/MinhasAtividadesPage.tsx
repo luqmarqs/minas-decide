@@ -106,7 +106,7 @@ function MyActivityList({ userId }: { userId: string }) {
     return (
       <EmptyState
         title="Você ainda não propôs atividades"
-        action={<ButtonLink to="/criar-atividade">Organizar uma atividade</ButtonLink>}
+        action={<ButtonLink to="/criar-atividade">Propor atividade da campanha</ButtonLink>}
       />
     );
   }

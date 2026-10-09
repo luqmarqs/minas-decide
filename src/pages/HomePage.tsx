@@ -6,12 +6,16 @@ import { ButtonLink } from '@/components/ui/Button';
 import { LoadingBlock } from '@/components/ui/Skeleton';
 import { useBrandActive } from '@/lib/brand';
 import { useAfterIdle } from '@/lib/idle';
-import { DESKTOP_QUERY, prefersReducedMotion } from '@/lib/media';
+import { prefersReducedMotion } from '@/lib/media';
 import { DeferredMapShell } from '@/features/electoral-map/DeferredMapShell';
 import { useSnapshot } from '@/features/electoral-map/hooks';
 import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshotStatus';
 import { useMapUrlState } from '@/features/electoral-map/useMapUrlState';
 import { TerritorySearch } from '@/features/territory/TerritorySearch';
+import { WhyMinasStrip } from '@/features/highlights/WhyMinasStrip';
+import { StoryIntro } from '@/features/story/StoryIntro';
+import { WhatsAppShare } from '@/components/ui/WhatsAppShare';
+import { homeShareText } from '@/lib/share';
 
 // Heavy parts (Zod contracts, API client, details panel, vaul) load after idle.
 const TerritoryPanel = lazy(() =>
@@ -31,7 +35,10 @@ function AgendaPlaceholder() {
 
 const SEARCH_ID = 'busca-territorio';
 
-/** Home (spec §12.5): identity+CTA → short message → search → map+layers → panel → agenda → footer. */
+/**
+ * Home (spec §12.5 + rodada 3): campaign hero (CTA + search) → "Por que Minas decide" key
+ * numbers → map+layers (activities always on) → panel → agenda → footer.
+ */
 export default function HomePage() {
   const [state, update] = useMapUrlState();
   // Passive: the snapshot is fetched by the map after idle, not before first paint.
@@ -45,6 +52,7 @@ export default function HomePage() {
   useEffect(() => {
     if (location.hash === '#busca') document.getElementById(SEARCH_ID)?.focus();
     if (location.hash === '#agenda') document.getElementById('agenda')?.scrollIntoView();
+    if (location.hash === '#mapa') document.getElementById('mapa')?.scrollIntoView();
   }, [location.hash, location.key]);
 
   const search = (
@@ -55,20 +63,20 @@ export default function HomePage() {
       onSelect={(e) => {
         setInteracted(true);
         update({ territoryId: e.id, view: state.view }, { push: true });
-        // Mobile: bring the map up so the half-open sheet leaves it visible (P-UX-2).
-        if (!window.matchMedia?.(DESKTOP_QUERY).matches) {
-          mapSectionRef.current?.scrollIntoView?.({
-            block: 'start',
-            behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-          });
-        }
+        // Bring the map up (the key numbers sit between hero and map): on mobile the
+        // half-open sheet then leaves the map visible above it (P-UX-2); on desktop the
+        // camera flies to the territory with the side panel open.
+        mapSectionRef.current?.scrollIntoView?.({
+          block: 'start',
+          behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+        });
       }}
     />
   );
 
   return (
     <>
-      <title>Minas Decide — atlas eleitoral e agenda de Minas Gerais</title>
+      <title>Minas Decide Lula — campanha, agenda e mapa eleitoral de Minas Gerais</title>
       {/* Desktop: hero + map fill the viewport whatever the hero height (DEMO badge
           included), so the map attribution is never cut (P-UX-4). −1px: header border.
           Official identity (default): the illustrated hero is taller, so the map gets its own
@@ -92,6 +100,17 @@ export default function HomePage() {
               ) : null
             }
             search={search}
+            actions={
+              <>
+                <ButtonLink to="/participar" size="lg">
+                  Quero participar da campanha
+                </ButtonLink>
+                <ButtonLink to="/#agenda" variant="secondary" size="lg">
+                  Ver atividades
+                </ButtonLink>
+                <WhatsAppShare text={homeShareText()} variant="ghost" size="lg" />
+              </>
+            }
           />
         ) : (
           <section
@@ -119,8 +138,13 @@ export default function HomePage() {
           </section>
         )}
 
+        <StoryIntro start={interacted} />
+
+        <WhyMinasStrip start={interacted} />
+
         <section
           ref={mapSectionRef}
+          id="mapa"
           aria-label="Mapa de Minas Gerais"
           className={
             brand
@@ -161,15 +185,15 @@ export default function HomePage() {
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 id="agenda-title" className="text-2xl">
-                Agenda de atividades
+                Agenda da campanha
               </h2>
               <p className="text-secondary">
-                Encontros, caminhadas e mutirões abertos, publicados depois de revisão. Horários de
-                Brasília.
+                Panfletagens, encontros, caminhadas e mutirões da campanha de Lula em Minas,
+                publicados depois de revisão. Horários de Brasília.
               </p>
             </div>
             <ButtonLink to="/criar-atividade" variant="secondary" size="sm">
-              Organizar uma atividade
+              Propor atividade
             </ButtonLink>
           </div>
           <div className="max-w-3xl">
