@@ -6,6 +6,7 @@
  */
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { vi } from 'vitest';
+import { resetClerkRequestForTests, SESSION_HINT_KEY } from '@/lib/session';
 
 export const CLERK_USER_ID = 'user_2testFakeClerkId0001';
 export const CLERK_TOKEN = 'clerk-session-token-test-0123456789';
@@ -132,6 +133,9 @@ export const clerk = {
   validCode: '424242',
   /** Signs a verified user in (as if a session already existed in this browser). */
   signIn(user: Partial<FakeUser> = {}) {
+    // A real browser with a Clerk session has the hint (our flag / `__client_uat` cookie),
+    // which makes the app load the Clerk chunk right away (FE-12).
+    window.localStorage.setItem(SESSION_HINT_KEY, '1');
     state.user = {
       id: user.id ?? CLERK_USER_ID,
       email: user.email ?? 'maria@exemplo.com.br',
@@ -140,6 +144,7 @@ export const clerk = {
     emit();
   },
   signOut() {
+    window.localStorage.removeItem(SESSION_HINT_KEY);
     state.user = null;
     emit();
   },
@@ -159,6 +164,8 @@ export const clerk = {
     clerk.existing.clear();
     clerk.validCode = '424242';
     Object.values(fns).forEach((f) => f.mockClear());
+    window.localStorage.removeItem(SESSION_HINT_KEY);
+    resetClerkRequestForTests();
     emit();
   },
 };

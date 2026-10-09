@@ -30,7 +30,8 @@ function SignedOutActions() {
  * (lazy chunk: GET /me and the contracts load only for people with a session).
  */
 export function SessionMenu() {
-  const session = useSession();
+  // FE-12: the header never loads Clerk by itself (idle/session routes/hint do).
+  const session = useSession({ lazy: true });
   if (session.status !== 'active') return <SignedOutActions />;
   return (
     <Suspense fallback={<SignedOutActions />}>

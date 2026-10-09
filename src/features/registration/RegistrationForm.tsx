@@ -1,4 +1,3 @@
-import { useSignUp } from '@clerk/clerk-react';
 import { useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { RegistrationInput } from '@shared/contracts/registration.ts';
@@ -10,7 +9,7 @@ import type { AuthSession } from '@/lib/auth';
 import { AuthFlowError, clerkErrorCode, clerkErrorMessage, clerkErrorParam } from '@/lib/clerk';
 import { TurnstileWidget, type TurnstileHandle } from '@/lib/turnstile';
 import { CodeActions, CodeStep } from '@/features/auth/CodeStep';
-import { CODE_RE, useEmailCodeSignIn } from '@/features/auth/emailCode';
+import { CODE_RE, readyClerk, useEmailCodeSignIn } from '@/features/auth/emailCode';
 import { CONSENT_VERSION, submitRegistration, type ObrigadoState } from './api';
 import {
   focusFirstError,
@@ -74,7 +73,7 @@ export interface RegistrationFormProps {
  */
 export function RegistrationForm({ initialTerritoryId, session }: RegistrationFormProps) {
   const navigate = useNavigate();
-  const { isLoaded: signUpLoaded, signUp, setActive } = useSignUp();
+  // FE-12: Clerk loads with this form (lazy chunk); each step waits for it (`readyClerk`).
   const signInFlow = useEmailCodeSignIn();
   const [nameInput, setNameInput] = useState<string | null>(null);
   const [emailInput, setEmailInput] = useState('');
@@ -151,7 +150,8 @@ export function RegistrationForm({ initialTerritoryId, session }: RegistrationFo
   }
 
   async function createAccount(addr: string, firstName: string) {
-    if (!signUpLoaded || !signUp) throw new AuthFlowError('not_loaded');
+    const { signUp } = await readyClerk();
+    if (!signUp) throw new AuthFlowError('not_loaded');
     try {
       await signUp.create({ emailAddress: addr, firstName });
     } catch (err) {
@@ -232,7 +232,8 @@ export function RegistrationForm({ initialTerritoryId, session }: RegistrationFo
     setBusy('verify');
     try {
       if (flow === 'signup') {
-        if (!signUpLoaded || !signUp || !setActive) throw new AuthFlowError('not_loaded');
+        const { signUp, setActive } = await readyClerk();
+        if (!signUp || !setActive) throw new AuthFlowError('not_loaded');
         const res = await signUp.attemptEmailAddressVerification({ code });
         if (res.status !== 'complete' || !res.createdSessionId) {
           throw new AuthFlowError('flow_incomplete');
@@ -266,6 +267,7 @@ export function RegistrationForm({ initialTerritoryId, session }: RegistrationFo
 
   async function resendCode(flow: 'signup' | 'signin') {
     if (flow === 'signin') return signInFlow.resend();
+    const { signUp } = await readyClerk();
     if (!signUp) throw new AuthFlowError('not_loaded');
     await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
   }

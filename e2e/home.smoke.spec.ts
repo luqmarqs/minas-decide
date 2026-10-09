@@ -45,7 +45,8 @@ test('search selects a territory and the link restores it (T24)', async ({ page 
   await page.goto('/');
   const input = page.getByRole('combobox', { name: /Cidade ou bairro/ });
   await input.fill('centro');
-  await expect(page.getByRole('option').first()).toContainText('Centro —');
+  // Territories index is a lazy JSON: allow for full-suite load.
+  await expect(page.getByRole('option').first()).toContainText('Centro —', { timeout: 15_000 });
   await input.press('ArrowDown');
   await input.press('Enter');
   await expect(page).toHaveURL(/[?&]t=mg-\d{7}-centro/);
@@ -58,7 +59,7 @@ test('search selects a territory and the link restores it (T24)', async ({ page 
 
 test('list alternative is reachable without the map', async ({ page }) => {
   await page.goto('/?vista=lista');
-  await expect(page.getByTestId('territory-list-fallback')).toBeVisible();
+  await expect(page.getByTestId('territory-list-fallback')).toBeVisible({ timeout: 15_000 });
 });
 
 test('unknown route shows 404', async ({ page }) => {

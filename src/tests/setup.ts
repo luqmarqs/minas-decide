@@ -1,12 +1,18 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach, beforeEach, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { cleanup, configure } from '@testing-library/react';
+import { loadClerkRoot } from '@/lib/session';
 import { clerk } from './clerkFake';
 
 // ADR 0005: Clerk is always "configured" in unit tests (deterministic, independent of a
 // developer's .env.local) and replaced by an in-memory fake — no network, no clerk-js.
 vi.stubEnv('VITE_CLERK_PUBLISHABLE_KEY', 'pk_test_ZmFrZS1pbnN0YW5jZS5jbGVyay5hY2NvdW50cy5kZXYk');
 vi.mock('@clerk/clerk-react', async () => (await import('./clerkFake')).clerkReactMock);
+
+// FE-12: Clerk is a lazy chunk; load it once so mounting it is synchronous in tests.
+beforeAll(async () => {
+  await loadClerkRoot();
+});
 
 beforeEach(() => {
   clerk.reset();

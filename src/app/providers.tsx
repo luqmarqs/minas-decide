@@ -1,31 +1,44 @@
-import { ClerkProvider, useClerk } from '@clerk/clerk-react';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type ReactNode } from 'react';
+import { createElement, useEffect, useState, type ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/Toast';
-import { registerClerk, type ClerkHandle } from '@/lib/session';
-import {
-  clerkAppearance,
-  clerkPtBR,
-  clerkPublishableKey,
-  isClerkConfigured,
-  SIGN_IN_PATH,
-  SIGN_UP_PATH,
-} from '@/lib/clerk';
+import { isClerkConfigured } from '@/lib/clerk';
+import { whenIdle } from '@/lib/idle';
+import { hasSessionHint, requestClerk, useClerkRoot } from '@/lib/session';
 import { createQueryClient } from './queryClient';
-
-/** Hands the live Clerk instance to non-React code (API requests, sign-out). */
-function ClerkBridge() {
-  const clerk = useClerk();
-  useEffect(() => {
-    registerClerk(clerk as unknown as ClerkHandle);
-    return () => registerClerk(null);
-  }, [clerk]);
-  return null;
-}
 
 function fullPageNavigate(to: string, opts?: { replace?: boolean }) {
   if (opts?.replace) window.location.replace(to);
   else window.location.assign(to);
+}
+
+/** Routes that need the session at once (their pages also request Clerk themselves). */
+const SESSION_ROUTES =
+  /^\/(?:entrar|participar|criar-atividade|minhas-atividades|propor-grupo|conta|admin)(?:\/|$)/;
+
+/**
+ * FE-12: Clerk loads right away on session routes or with a previous-session hint;
+ * everywhere else (home, territory, activity…) only once the page is idle, so the first
+ * paint never waits for `@clerk/clerk-react` nor for clerk-js.
+ */
+function useClerkLoading() {
+  useEffect(() => {
+    if (!isClerkConfigured()) return;
+    if (SESSION_ROUTES.test(window.location.pathname) || hasSessionHint()) {
+      requestClerk();
+      return;
+    }
+    return whenIdle(requestClerk, { timeout: 4000 });
+  }, []);
+}
+
+/**
+ * Mounts the lazy Clerk root once requested. Its component identity is stable (one module
+ * export kept by the session store), so it never remounts; `createElement` because the
+ * component comes from the store, not from a static import.
+ */
+function ClerkSlot({ navigate }: { navigate: (to: string, opts?: { replace?: boolean }) => void }) {
+  const root = useClerkRoot();
+  return root ? createElement(root, { navigate }) : null;
 }
 
 export interface ProvidersProps {
@@ -38,32 +51,14 @@ export interface ProvidersProps {
 /** App-wide providers. (Reduced motion is handled by duration tokens in tokens.css.) */
 export function Providers({ children, client, navigate }: ProvidersProps) {
   const [queryClient] = useState(() => client ?? createQueryClient());
-  const [appearance] = useState(() => clerkAppearance());
-  const go = navigate ?? fullPageNavigate;
-  const inner = (
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>{children}</ToastProvider>
-    </QueryClientProvider>
-  );
-  if (!isClerkConfigured()) return inner;
+  useClerkLoading();
   return (
-    <ClerkProvider
-      publishableKey={clerkPublishableKey()}
-      afterSignOutUrl="/"
-      signInUrl={SIGN_IN_PATH}
-      signUpUrl={SIGN_UP_PATH}
-      signInFallbackRedirectUrl="/"
-      signUpFallbackRedirectUrl="/"
-      localization={clerkPtBR}
-      appearance={appearance}
-      telemetry={false}
-      // Custom flows only (no Clerk UI components): the headless build skips the UI bundles.
-      clerkJSVariant="headless"
-      routerPush={(to: string) => go(to)}
-      routerReplace={(to: string) => go(to, { replace: true })}
-    >
-      <ClerkBridge />
-      {inner}
-    </ClerkProvider>
+    <>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>{children}</ToastProvider>
+      </QueryClientProvider>
+      {/* Sibling, not a wrapper: mounting Clerk later never remounts the page. */}
+      <ClerkSlot navigate={navigate ?? fullPageNavigate} />
+    </>
   );
 }

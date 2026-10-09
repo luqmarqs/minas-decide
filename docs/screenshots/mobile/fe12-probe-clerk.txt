@@ -1,0 +1,15 @@
+FE-12 probe (Playwright Pixel 7, CPU 4x via CDP, servidor estático gzip; tempos em ms desde a navegação)
+== antes (dist congelado pré-FE-12)
+[sem sessão] externas nos primeiros 2 s: [{"t":399,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js"},{"t":693,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js"},{"t":901,"host":"","path":"http://127.0.0.1:8797/2605f93b-df53-4bf4-a555-bb2d5f1a7cd9"},{"t":908,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/v1/dev_browser"},{"t":1424,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/v1/environment"},{"t":1424,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/v1/client"},{"t":1734,"host":"","path":"http://127.0.0.1:8797/47751d06-6876-4ca9-b81a-7bc5cacee6f6"},{"t":1832,"host":"challenges.cloudflare.com","path":"/turnstile/v0/api.js"},{"t":1862,"host":"challenges.cloudflare.com","path":"/turnstile/v0/g/4df4a60fa397/api.js"},{"t":1917,"host":"challenges.cloudflare.com","path":"/cdn-cgi/challenge-platform/h/g/turnstile/f/av0/rch/pyg7s/1x"}]
+  ClerkRoot chunk pedido em (ms): []
+  FCP/load (ms, relogio da pagina): {"fcp":696,"load":238}
+  1a requisição Clerk (ms): 399 total clerk: 5
+== depois
+[sem sessão] externas nos primeiros 2 s: [{"t":1729,"host":"challenges.cloudflare.com","path":"/turnstile/v0/api.js"},{"t":1803,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js"},{"t":1814,"host":"challenges.cloudflare.com","path":"/turnstile/v0/g/4df4a60fa397/api.js"},{"t":1859,"host":"challenges.cloudflare.com","path":"/cdn-cgi/challenge-platform/h/g/turnstile/f/av0/rch/r38pi/1x"},{"t":1866,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js"}]
+  ClerkRoot chunk pedido em (ms): [1729]
+  FCP/load (ms, relogio da pagina): {"fcp":752,"load":233}
+  1a requisição Clerk (ms): 1803 total clerk: 5
+[hint] externas nos primeiros 2 s: [{"t":863,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js"},{"t":926,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js"},{"t":1687,"host":"","path":"http://127.0.0.1:8798/258fb860-1fc2-4be9-829c-6d150beb81c3"},{"t":1699,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/v1/dev_browser"},{"t":1946,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/v1/environment"},{"t":1946,"host":"funky-cheetah-9841.clerk.accounts.dev","path":"/v1/client"}]
+  ClerkRoot chunk pedido em (ms): [434]
+  FCP/load (ms, relogio da pagina): {"fcp":792,"load":260}
+  1a requisição Clerk (ms): 863 total clerk: 5

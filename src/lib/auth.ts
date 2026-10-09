@@ -19,6 +19,7 @@ export {
   registerClerk,
   signOut,
   useSession,
+  type UseSessionOptions,
   type AuthSession,
   type ClerkHandle,
   type SessionState,

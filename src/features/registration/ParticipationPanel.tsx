@@ -13,8 +13,18 @@ import { RegistrationForm } from './RegistrationForm';
  * Once the form is on screen it stays mounted: the Clerk session created inside the form
  * (code confirmed) must not swap it for a loading state before POST /registrations.
  */
-export function ParticipationPanel({ territoryId }: { territoryId: string | null }) {
-  const session = useSession();
+export function ParticipationPanel({
+  territoryId,
+  lazySession = false,
+}: {
+  territoryId: string | null;
+  /**
+   * Home (FE-12): show the form at once ("none") unless there is a previous-session hint,
+   * instead of waiting for Clerk; `/participar` waits for the session ("loading").
+   */
+  lazySession?: boolean;
+}) {
+  const session = useSession({ lazy: lazySession });
   const active = session.status === 'active' ? session.session : null;
   const me = useMe(active);
   const [formShown, setFormShown] = useState(false);

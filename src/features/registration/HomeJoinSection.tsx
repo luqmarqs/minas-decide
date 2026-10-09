@@ -55,6 +55,7 @@ export function HomeJoinSection({ territoryId, start }: HomeJoinSectionProps) {
           {ready ? (
             <Suspense fallback={<FormPlaceholder />}>
               <ParticipationPanel
+                lazySession
                 territoryId={territoryId && territoryId !== 'mg' ? territoryId : null}
               />
             </Suspense>
