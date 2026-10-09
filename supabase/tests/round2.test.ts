@@ -19,7 +19,7 @@ const configured =
 const opts = { auth: { persistSession: false, autoRefreshToken: false } };
 const DENIED = [401, 403, 404, 406];
 
-describe.skipIf(!configured)('migration 0010 on TARGET dev', () => {
+describe.skipIf(!configured)('migrations 0010/0011 on TARGET dev', () => {
   const tag = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
   const muni = `mg-99${String(Math.floor(Math.random() * 1e5)).padStart(5, '0')}`;
   const userIds: string[] = [];
@@ -260,13 +260,16 @@ describe.skipIf(!configured)('migration 0010 on TARGET dev', () => {
     });
     expect(rev.data).toMatchObject({ proposal_id: p3.id, proposer_phone: '+5531988880000' });
 
-    const gid = (
+    // 0011 (QA2-03): the RPC returns {group_id, territory_id}
+    const approved = (
       await svc.rpc('svc_approve_group_proposal', {
         p_id: p3.id,
         p_admin: adminId,
         p_reason: 'ok',
       })
-    ).data as string;
+    ).data as { group_id: string; territory_id: string };
+    expect(approved.territory_id).toBe(muni);
+    const gid = approved.group_id;
     const list = await svc.rpc('svc_list_group_proposals', { p_status: 'active', p_limit: 50 });
     const item = (list.data as { id: string; group_id: string | null }[]).find(
       (x) => x.id === p3.id,
@@ -275,5 +278,93 @@ describe.skipIf(!configured)('migration 0010 on TARGET dev', () => {
 
     const erased = await svc.rpc('svc_erase_group_proposals', { p_ids: [p1.id] });
     expect(erased.data).toBe(1);
+  });
+
+  // ------------------------------------------------------------ migration 0011 (BE-3 / QA-2)
+  it('0011 QA2-09: unsuspend restores inactive groups and cancelled activities', async () => {
+    const ins = await svc
+      .from('whatsapp_groups')
+      .insert({
+        territory_id: muni,
+        display_name: 'R2 grupo inativo',
+        join_url: `https://chat.whatsapp.com/R2inact${tag}`,
+        status: 'inactive',
+      })
+      .select('id')
+      .single();
+    const gid = ins.data!.id as string;
+    await svc.rpc('svc_suspend_group', { p_id: gid, p_admin: adminId, p_reason: 'abuso q2' });
+    const un = await svc.rpc('svc_unsuspend_group', {
+      p_id: gid,
+      p_admin: adminId,
+      p_reason: 'revisado q2',
+    });
+    expect((un.data as { status: string }).status).toBe('inactive');
+    const g = await svc
+      .from('whatsapp_groups')
+      .select('status,status_before_suspension')
+      .eq('id', gid)
+      .single();
+    expect(g.data).toEqual({ status: 'inactive', status_before_suspension: null });
+
+    const a = await activity('cancelled');
+    const id = a.data!.id as string;
+    const s = await svc.rpc('svc_suspend_activity', {
+      p_id: id,
+      p_admin: adminId,
+      p_reason: 'denúncia q2',
+    });
+    expect(typeof s.data).toBe('number');
+    const u = await svc.rpc('svc_unsuspend_activity', {
+      p_id: id,
+      p_admin: adminId,
+      p_reason: 'ok q2',
+    });
+    expect(u.data).toMatchObject({ status: 'cancelled' });
+    expect(typeof (u.data as { version: number }).version).toBe('number');
+    const missing = await svc.rpc('svc_unsuspend_activity', {
+      p_id: '00000000-0000-4000-8000-000000000000',
+      p_admin: adminId,
+      p_reason: 'ok q2',
+    });
+    expect(missing.error?.code).toBe('PT404');
+    // the new column is not part of the anon column grants
+    const leak = await anon.from('activities').select('status_before_suspension').limit(1);
+    expect(leak.error).not.toBeNull();
+    const leakG = await anon.from('whatsapp_groups').select('status_before_suspension').limit(1);
+    expect(leakG.error).not.toBeNull();
+  });
+
+  it('0011 QA2-03: reject returns the territory; QA2-01: p_email_contact re-syncs the profile', async () => {
+    const p = (await proposal(null, 'rej')).data as { id: string };
+    const rej = await svc.rpc('svc_reject_group_proposal', {
+      p_id: p.id,
+      p_admin: adminId,
+      p_reason: 'rejeitada q2',
+    });
+    expect(rej.data).toEqual({ proposal_id: p.id, territory_id: muni });
+    const again = await svc.rpc('svc_reject_group_proposal', {
+      p_id: p.id,
+      p_admin: adminId,
+      p_reason: 'de novo q2',
+    });
+    expect(again.error?.code).toBe('PT409');
+
+    const upd = await svc.rpc('svc_update_profile', {
+      p_user: userId,
+      p_email_contact: `mm-qa-r2-novo+${tag}@example.org`,
+    });
+    expect((upd.data as { email_contact: string }).email_contact).toBe(
+      `mm-qa-r2-novo+${tag}@example.org`,
+    );
+    const keep = await svc.rpc('svc_update_profile', { p_user: userId, p_display_name: 'Outro' });
+    expect((keep.data as { email_contact: string }).email_contact).toBe(
+      `mm-qa-r2-novo+${tag}@example.org`,
+    );
+    const denied = await anon.rpc('svc_update_profile', {
+      p_user: userId,
+      p_email_contact: 'x@example.org',
+    });
+    expect(DENIED).toContain(denied.status);
   });
 });

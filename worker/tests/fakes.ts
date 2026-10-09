@@ -80,9 +80,13 @@ export class FakeRepo implements Repo {
     territory('mg-3106200', 'municipality', 'Belo Horizonte', 'mg', 'Belo Horizonte'),
     territory('mg-3106200-centro', 'neighborhood', 'Centro', 'mg-3106200', 'Belo Horizonte'),
   ];
-  groups: (GroupRow & { managers: NewGroupManager[]; source_proposal_id: string | null })[] = [];
+  groups: (GroupRow & {
+    managers: NewGroupManager[];
+    source_proposal_id: string | null;
+    status_before_suspension?: GroupRow['status'] | null;
+  })[] = [];
   proposals: StoredProposal[] = [];
-  activities: ActivityRow[] = [];
+  activities: (ActivityRow & { status_before_suspension?: ActivityRow['status'] | null })[] = [];
   rsvps: Rsvp[] = [];
   profiles = new Map<string, ProfileRow>();
   admins = new Set<string>();
@@ -116,6 +120,9 @@ export class FakeRepo implements Repo {
   }
   async countChildren(id: string) {
     return this.territories.filter((t) => t.parent_id === id).length;
+  }
+  async listChildIds(id: string) {
+    return this.territories.filter((t) => t.parent_id === id).map((t) => t.id);
   }
 
   // ---------------------------------------------------------------- groups
@@ -342,6 +349,7 @@ export class FakeRepo implements Repo {
     if (patch.phone !== undefined) p.phone_e164 = patch.phone;
     if (patch.review_required !== undefined)
       p.review_required_at = patch.review_required ? iso(this.clock()) : null;
+    if (patch.email_contact !== undefined) p.email_contact = patch.email_contact;
     return p;
   }
   async emailInUse(email: string, exclude: string) {
@@ -371,7 +379,7 @@ export class FakeRepo implements Repo {
     Object.assign(g, { join_url: p.join_url_proposed, display_name: p.name_proposed });
     p.group_id = g.id;
     this.audit.push({ actor: adminId, action: 'group_proposal.approve', entity_id: id });
-    return g.id;
+    return { group_id: g.id, territory_id: g.territory_id };
   }
   async rejectGroupProposal(id: string, adminId: string, reason: string) {
     if (!this.admins.has(adminId)) throw fail('FORBIDDEN');
@@ -381,6 +389,7 @@ export class FakeRepo implements Repo {
     p.status = 'rejected';
     p.review_reason = reason;
     this.audit.push({ actor: adminId, action: 'group_proposal.reject', entity_id: id });
+    return { territory_id: p.territory_id };
   }
   private moderate(
     id: string,
@@ -424,7 +433,13 @@ export class FakeRepo implements Repo {
     if (!g) throw fail('NOT_FOUND');
     const allowed = suspend ? ['active', 'inactive'] : ['suspended'];
     if (!allowed.includes(g.status)) throw fail('CONFLICT');
-    g.status = suspend ? 'suspended' : 'active';
+    if (suspend) {
+      g.status_before_suspension = g.status;
+      g.status = 'suspended';
+    } else {
+      g.status = g.status_before_suspension === 'inactive' ? 'inactive' : 'active';
+      g.status_before_suspension = null;
+    }
     g.updated_at = iso(this.clock());
     this.audit.push({
       actor: adminId,
@@ -440,13 +455,19 @@ export class FakeRepo implements Repo {
     reason: string,
     _requestId: string,
     suspend: boolean,
-  ): Promise<number> {
+  ): Promise<{ version: number; status: ActivityRow['status'] }> {
     if (!this.admins.has(adminId)) throw fail('FORBIDDEN');
     const a = this.activities.find((x) => x.id === id);
     if (!a) throw fail('NOT_FOUND');
     const allowed = suspend ? ['draft', 'pending_review', 'published', 'cancelled'] : ['suspended'];
     if (!allowed.includes(a.status)) throw fail('CONFLICT');
-    a.status = suspend ? 'suspended' : 'pending_review';
+    if (suspend) {
+      a.status_before_suspension = a.status;
+      a.status = 'suspended';
+    } else {
+      a.status = a.status_before_suspension === 'cancelled' ? 'cancelled' : 'pending_review';
+      a.status_before_suspension = null;
+    }
     a.review_reason = reason;
     a.version += 1;
     this.audit.push({
@@ -455,7 +476,7 @@ export class FakeRepo implements Repo {
       entity_id: id,
       reason,
     });
-    return a.version;
+    return { version: a.version, status: a.status };
   }
   async revealProposalContact(
     id: string,
@@ -555,6 +576,9 @@ export class FakeAuth implements AuthGateway {
   magicLinks: string[] = [];
   magicLinkOk = true;
   linkOk = true;
+  /** user ids with a VERIFIED TOTP factor (QA2-12) */
+  totpVerified = new Set<string>();
+  totpChecks = 0;
 
   constructor(private readonly repo: FakeRepo) {}
 
@@ -589,6 +613,10 @@ export class FakeAuth implements AuthGateway {
   async signOutOthers(token: string) {
     this.signedOutOthers.push(token);
     return true;
+  }
+  async hasVerifiedTotp(userId: string) {
+    this.totpChecks += 1;
+    return this.totpVerified.has(userId);
   }
   async sendMagicLink(email: string) {
     this.magicLinks.push(email);
@@ -725,10 +753,12 @@ export function setup(envOver: Partial<Env> = {}, opts: { edgeCache?: boolean } 
         user: auth.add(token, { id, email, email_confirmed: true, amr_methods: ['otp'] }),
       };
     },
-    admin(aal: 'aal1' | 'aal2' = 'aal2', id = repo.uuid()) {
+    /** `totp`: has a verified TOTP factor (default: only when aal2, as in GoTrue). */
+    admin(aal: 'aal1' | 'aal2' = 'aal2', id = repo.uuid(), totp = aal === 'aal2') {
       const token = `tok-admin-${++tokenSeq}-padding-padding`;
       repo.admins.add(id);
       repo.verified.add(id);
+      if (totp) auth.totpVerified.add(id);
       return {
         token,
         user: auth.add(token, {

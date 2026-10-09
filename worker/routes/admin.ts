@@ -15,7 +15,7 @@ import type { AppBindings } from '../env.ts';
 import { fail } from '../errors.ts';
 import { clientIp, ok, parse, parseBody, readJson, uuidParam } from '../http.ts';
 import { requireAdmin } from '../middleware/auth.ts';
-import { activityPaths, groupPaths, noStore, purgePublic } from '../middleware/cache.ts';
+import { activityPaths, noStore, purgeGroups, purgePublic } from '../middleware/cache.ts';
 import { subjectHash } from '../middleware/rate-limit.ts';
 import { decodeCursor, encodeCursor } from '../services/crypto.ts';
 import { toAdminActivity, toAdminProposal } from '../services/projections.ts';
@@ -71,16 +71,21 @@ const OptionalDecision = z.object({ reason: z.string().trim().min(3).max(500).op
 admin.post('/admin/groups/:id/approve', async (c) => {
   const id = uuidParam(c);
   const { reason } = OptionalDecision.parse(await readJson(c, true));
-  const groupId = await c
+  const r = await c
     .get('deps')
     .repo.approveGroupProposal(id, c.get('user')!.id, reason ?? 'aprovado', c.get('requestId'));
-  return ok(c, { proposal_id: id, group_id: groupId, status: 'active' as const });
+  await purgeGroups(c, r.territory_id); // QA2-03
+  return ok(c, { proposal_id: id, group_id: r.group_id, status: 'active' as const });
 });
 
 admin.post('/admin/groups/:id/reject', async (c) => {
   const id = uuidParam(c);
   const { reason } = await parseBody(c, ModerationDecision);
-  await c.get('deps').repo.rejectGroupProposal(id, c.get('user')!.id, reason, c.get('requestId'));
+  const r = await c
+    .get('deps')
+    .repo.rejectGroupProposal(id, c.get('user')!.id, reason, c.get('requestId'));
+  // A rejection creates no public group; purged anyway so the rule is uniform (QA2-03).
+  await purgeGroups(c, r.territory_id);
   return ok(c, { proposal_id: id, status: 'rejected' as const });
 });
 
@@ -123,7 +128,7 @@ admin.patch('/admin/groups/:id', async (c) => {
   const { repo } = c.get('deps');
   const updated = await repo.patchGroup(id, patch);
   if (!updated) throw fail('NOT_FOUND');
-  await purgePublic(c, groupPaths(updated.territory_id));
+  await purgeGroups(c, updated.territory_id);
   await repo.recordAudit({
     actor: c.get('user')!.id,
     action: 'group.update',
@@ -172,39 +177,43 @@ admin.post('/admin/groups/:id/suspend', async (c) => {
   const row = await c
     .get('deps')
     .repo.setGroupSuspension(id, c.get('user')!.id, reason, c.get('requestId'), true);
-  await purgePublic(c, groupPaths(row.territory_id));
+  await purgeGroups(c, row.territory_id);
   return ok(c, { id: row.id, status: row.status, updated_at: row.updated_at });
 });
 
-/** Lifts a suspension: the group goes back to `active` (it had been approved before). */
+/** Lifts a suspension: the group goes back to its previous state (`active` or `inactive`, QA2-09). */
 admin.post('/admin/groups/:id/unsuspend', async (c) => {
   const id = uuidParam(c);
   const { reason } = await parseBody(c, ModerationDecision);
   const row = await c
     .get('deps')
     .repo.setGroupSuspension(id, c.get('user')!.id, reason, c.get('requestId'), false);
-  await purgePublic(c, groupPaths(row.territory_id));
+  await purgeGroups(c, row.territory_id);
   return ok(c, { id: row.id, status: row.status, updated_at: row.updated_at });
 });
 
 admin.post('/admin/activities/:id/suspend', async (c) => {
   const id = uuidParam(c);
   const { reason } = await parseBody(c, ModerationDecision);
-  const version = await c
+  const r = await c
     .get('deps')
     .repo.setActivitySuspension(id, c.get('user')!.id, reason, c.get('requestId'), true);
   await purgePublic(c, activityPaths(id));
-  return ok(c, { id, status: 'suspended' as const, version });
+  return ok(c, { id, status: 'suspended' as const, version: r.version });
 });
 
-/** Lifts a suspension: the activity returns to `pending_review` and must be approved again. */
+/**
+ * Lifts a suspension (QA2-09): an activity that was `cancelled` goes back to `cancelled`;
+ * any other returns to `pending_review` and must be approved again.
+ */
 admin.post('/admin/activities/:id/unsuspend', async (c) => {
   const id = uuidParam(c);
   const { reason } = await parseBody(c, ModerationDecision);
-  const version = await c
+  const r = await c
     .get('deps')
     .repo.setActivitySuspension(id, c.get('user')!.id, reason, c.get('requestId'), false);
-  return ok(c, { id, status: 'pending_review' as const, version });
+  await purgePublic(c, activityPaths(id));
+  return ok(c, { id, status: r.status, version: r.version });
 });
 
 // ---------------------------------------------------------------- audited contact reveal

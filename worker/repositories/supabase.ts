@@ -8,6 +8,7 @@
  * - Postgres errors are mapped to stable AppError codes; raw messages are never forwarded.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { ActivityStatus } from '../../shared/contracts/activities.ts';
 import type { Database } from '../../shared/types/database.ts';
 import type { AuthUser, Env } from '../env.ts';
 import { type AppError, fail } from '../errors.ts';
@@ -156,6 +157,11 @@ export class SupabaseRepo implements Repo {
       .eq('parent_id', id);
     if (res.error) throw mapPgError(res.error, 'countChildren');
     return res.count ?? 0;
+  }
+
+  async listChildIds(id: string): Promise<string[]> {
+    const res = await this.db.from('territories').select('id').eq('parent_id', id).limit(1000);
+    return (check(res, 'listChildIds') as { id: string }[]).map((r) => r.id);
   }
 
   // ------------------------------------------------------------------ groups
@@ -377,6 +383,7 @@ export class SupabaseRepo implements Repo {
       p_email_state: patch.email_state ?? null,
       p_phone: patch.phone ?? null,
       p_review_required: patch.review_required ?? null,
+      p_email_contact: patch.email_contact ?? null,
     });
   }
 
@@ -411,7 +418,7 @@ export class SupabaseRepo implements Repo {
     adminId: string,
     reason: string,
     requestId: string,
-  ): Promise<string> {
+  ): Promise<{ group_id: string; territory_id: string }> {
     return this.rpc('svc_approve_group_proposal', {
       p_id: id,
       p_admin: adminId,
@@ -425,8 +432,8 @@ export class SupabaseRepo implements Repo {
     adminId: string,
     reason: string,
     requestId: string,
-  ): Promise<void> {
-    await this.rpc('svc_reject_group_proposal', {
+  ): Promise<{ territory_id: string }> {
+    return this.rpc('svc_reject_group_proposal', {
       p_id: id,
       p_admin: adminId,
       p_reason: reason,
@@ -484,19 +491,19 @@ export class SupabaseRepo implements Repo {
     });
   }
 
-  setActivitySuspension(
+  async setActivitySuspension(
     id: string,
     adminId: string,
     reason: string,
     requestId: string,
     suspend: boolean,
-  ): Promise<number> {
-    return this.rpc(suspend ? 'svc_suspend_activity' : 'svc_unsuspend_activity', {
-      p_id: id,
-      p_admin: adminId,
-      p_reason: reason,
-      p_request_id: requestId,
-    });
+  ): Promise<{ version: number; status: ActivityStatus }> {
+    const args = { p_id: id, p_admin: adminId, p_reason: reason, p_request_id: requestId };
+    if (suspend) {
+      const version = await this.rpc<number>('svc_suspend_activity', args);
+      return { version, status: 'suspended' };
+    }
+    return this.rpc('svc_unsuspend_activity', args);
   }
 
   revealProposalContact(
@@ -609,6 +616,12 @@ export class SupabaseAuthGateway implements AuthGateway {
   async signOutOthers(accessToken: string): Promise<boolean> {
     const { error } = await serviceClient(this.env).auth.admin.signOut(accessToken, 'others');
     return !error;
+  }
+
+  async hasVerifiedTotp(userId: string): Promise<boolean> {
+    const { data, error } = await serviceClient(this.env).auth.admin.mfa.listFactors({ userId });
+    if (error || !data) return false; // fail closed
+    return data.factors.some((f) => f.factor_type === 'totp' && f.status === 'verified');
   }
 
   async sendMagicLink(

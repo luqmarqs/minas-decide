@@ -148,6 +148,8 @@ export interface ProfilePatch {
   phone?: string;
   /** true -> review_required_at = now(); false -> cleared */
   review_required?: boolean;
+  /** QA2-01: re-sync with the e-mail confirmed by Auth (only from /auth/confirm-email) */
+  email_contact?: string;
 }
 
 export interface NewGroupProposal {
@@ -237,6 +239,8 @@ export interface Repo {
   searchTerritories(normalizedQuery: string, limit: number): Promise<TerritoryRow[]>;
   getTerritories(ids: string[]): Promise<TerritoryRow[]>;
   countChildren(id: string): Promise<number>;
+  /** ids of the direct children (neighborhoods of a municipality) — cache purge (QA2-04) */
+  listChildIds(id: string): Promise<string[]>;
   // groups
   listActiveGroups(territoryId: string): Promise<PublicGroupRow[]>;
   createGroupProposal(
@@ -281,18 +285,19 @@ export interface Repo {
     limit: number,
     cursor: Cursor | null,
   ): Promise<GroupProposalRow[]>;
+  /** QA2-03: returns the territory too, so the public /groups cache can be purged. */
   approveGroupProposal(
     id: string,
     adminId: string,
     reason: string,
     requestId: string,
-  ): Promise<string>;
+  ): Promise<{ group_id: string; territory_id: string }>;
   rejectGroupProposal(
     id: string,
     adminId: string,
     reason: string,
     requestId: string,
-  ): Promise<void>;
+  ): Promise<{ territory_id: string }>;
   approveActivity(
     id: string,
     adminId: string,
@@ -301,7 +306,7 @@ export interface Repo {
   ): Promise<number>;
   rejectActivity(id: string, adminId: string, reason: string, requestId: string): Promise<number>;
   addGroupManager(m: NewGroupManager, adminId: string, requestId: string): Promise<string>;
-  /** suspend=true: active|inactive -> suspended; false: suspended -> active. Audited in SQL. */
+  /** suspend=true: active|inactive -> suspended; false: suspended -> previous (active|inactive). Audited in SQL. */
   setGroupSuspension(
     id: string,
     adminId: string,
@@ -309,14 +314,15 @@ export interface Repo {
     requestId: string,
     suspend: boolean,
   ): Promise<GroupStatusRow>;
-  /** suspend=true: draft|pending_review|published|cancelled -> suspended; false: -> pending_review. Returns version. */
+  /** suspend=true: draft|pending_review|published|cancelled -> suspended; false: back to
+   *  `cancelled` if it was cancelled, else `pending_review` (QA2-09). */
   setActivitySuspension(
     id: string,
     adminId: string,
     reason: string,
     requestId: string,
     suspend: boolean,
-  ): Promise<number>;
+  ): Promise<{ version: number; status: ActivityStatus }>;
   /** Full proposer contact; the audit row is written in the same transaction. */
   revealProposalContact(
     id: string,
@@ -354,6 +360,8 @@ export interface AuthGateway {
   promoteVerified(userId: string, email: string): Promise<boolean>;
   /** Revoke every other session (refresh token) of the token's user. */
   signOutOthers(accessToken: string): Promise<boolean>;
+  /** QA2-12: true when the user has at least one VERIFIED TOTP factor (Auth admin API). */
+  hasVerifiedTotp(userId: string): Promise<boolean>;
   /** Magic link for an EXISTING user only (shouldCreateUser: false). Result is never shown verbatim. */
   sendMagicLink(email: string, redirectTo: string): Promise<{ ok: boolean; code: string | null }>;
 }

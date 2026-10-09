@@ -29,9 +29,11 @@ test('participar: accessible form, territory pre-filled, client errors block sub
 
 test('criar-atividade without session explains and links to /participar', async ({ page }) => {
   await page.goto('/criar-atividade');
+  // Under parallel load the session probe can take a few seconds; give it room.
   await expect(page.getByRole('link', { name: 'Fazer cadastro' })).toHaveAttribute(
     'href',
     '/participar',
+    { timeout: 15_000 },
   );
 });
 

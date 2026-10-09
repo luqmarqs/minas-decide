@@ -61,6 +61,8 @@ export interface Vars {
   token: string | null;
   rateLimited: boolean;
   startedAt: number;
+  /** QA2-12: per-request cache of "admin has a verified TOTP factor" */
+  adminTotpVerified?: boolean;
 }
 
 export type AppBindings = { Bindings: Env; Variables: Vars };

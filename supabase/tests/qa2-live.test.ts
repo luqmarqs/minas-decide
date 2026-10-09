@@ -6,6 +6,8 @@
  * every Auth user created is deleted. Only @example.org addresses. Never prints secrets.
  *
  * `it.fails` = FINDING (assertion = secure expectation, fails today).
+ * BE-3: Q02 fixed (confirm-email treats any profile -> verified transition as a promotion) and
+ * flipped to `it`.
  */
 import { createHmac } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -183,89 +185,86 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
     expect(refreshed.data.session).toBeNull();
   });
 
-  it.fails(
-    'Q02 P-SEC-1 bypass: promotion by GoTrue email_change skips review and keeps the attacker session',
-    async () => {
-      const attackerEmail = `mm-qa2-att+${tag}@example.org`;
-      const victimEmail = `mm-qa2-victim2+${tag}@example.org`;
-      const att = await anon();
-      const reg = await api('/registrations', {
-        method: 'POST',
-        token: att.token,
-        json: registration(attackerEmail),
-      });
-      expect(reg.res.status).toBe(201);
-      // Equivalent of att.client.auth.updateUser({ email: victimEmail }) + victim clicking the
-      // "confirm e-mail change" link (generated server-side: example.org never gets mail).
-      // Secure e-mail change: the attacker confirms the CURRENT address (its own inbox), the
-      // victim confirms the NEW one.
-      const linkNew = await svc.auth.admin.generateLink({
-        type: 'email_change_new',
-        email: attackerEmail,
-        newEmail: victimEmail,
-      });
-      const linkCur = await svc.auth.admin.generateLink({
-        type: 'email_change_current',
-        email: attackerEmail,
-        newEmail: victimEmail,
-      });
-      console.log('QA2_Q02_generateLink', linkNew.error?.code ?? 'ok', linkCur.error?.code ?? 'ok');
-      expect(linkNew.error).toBeNull();
-      const ac = createClient(URL_, ANON, opts);
-      const cur = await ac.auth.verifyOtp({
-        type: 'email_change',
-        email: attackerEmail,
-        token: linkCur.data.properties?.email_otp ?? '',
-      });
-      console.log('QA2_Q02_verify_current', cur.error?.code ?? 'ok');
-      const vc = createClient(URL_, ANON, opts);
-      const ver = await vc.auth.verifyOtp({
-        type: 'email_change',
-        email: victimEmail,
-        token: linkNew.data.properties?.email_otp ?? '',
-      });
-      console.log('QA2_Q02_verify', ver.error?.code ?? 'ok', 'anon=', ver.data.user?.is_anonymous);
-      expect(ver.error).toBeNull();
-      const victimTok = ver.data.session?.access_token;
-      // the victim's browser lands on /autenticacao/retorno -> confirm-email
-      const conf = await api('/auth/confirm-email', { method: 'POST', token: victimTok });
-      console.log(
-        'QA2_Q02_confirm',
-        conf.res.status,
-        conf.json.error?.code,
-        'review=',
-        conf.json.data?.profile_review_required,
-      );
-      // attacker refreshes its ORIGINAL session and acts as organizer
-      const r = await att.client.auth.refreshSession();
-      const attTok = r.data.session?.access_token;
-      console.log('QA2_Q02_attacker_refresh', r.error?.code ?? 'ok', 'session=', Boolean(attTok));
-      const act = attTok
-        ? await api('/activities', {
-            method: 'POST',
-            token: attTok,
-            json: {
-              title: 'Atividade QA2 atacante',
-              type: 'encontro',
-              description: 'Criada com a sessão do atacante após promoção externa.',
-              territory_id: hood,
-              public_address: 'Rua QA2, 1',
-              coordinates: [-43.9, -19.9],
-              location_confirmed: true,
-              starts_at: new Date(Date.now() + 3 * 86_400_000).toISOString(),
-              timezone: 'America/Sao_Paulo',
-            },
-          })
-        : null;
-      console.log('QA2_Q02_attacker_activity', act?.res.status, act?.json.error?.code);
-      if (act?.res.status === 201) {
-        await svc.from('activities').delete().eq('id', String(act.json.data?.id));
-      }
-      // secure expectation: review flagged AND attacker can no longer act
-      expect(conf.json.data?.profile_review_required).toBe(true);
-      expect(act?.res.status ?? 401).not.toBe(201);
-    },
-  );
+  it('Q02 P-SEC-1 (fixed BE-3): promotion by GoTrue email_change now flags review and kills the attacker session', async () => {
+    const attackerEmail = `mm-qa2-att+${tag}@example.org`;
+    const victimEmail = `mm-qa2-victim2+${tag}@example.org`;
+    const att = await anon();
+    const reg = await api('/registrations', {
+      method: 'POST',
+      token: att.token,
+      json: registration(attackerEmail),
+    });
+    expect(reg.res.status).toBe(201);
+    // Equivalent of att.client.auth.updateUser({ email: victimEmail }) + victim clicking the
+    // "confirm e-mail change" link (generated server-side: example.org never gets mail).
+    // Secure e-mail change: the attacker confirms the CURRENT address (its own inbox), the
+    // victim confirms the NEW one.
+    const linkNew = await svc.auth.admin.generateLink({
+      type: 'email_change_new',
+      email: attackerEmail,
+      newEmail: victimEmail,
+    });
+    const linkCur = await svc.auth.admin.generateLink({
+      type: 'email_change_current',
+      email: attackerEmail,
+      newEmail: victimEmail,
+    });
+    console.log('QA2_Q02_generateLink', linkNew.error?.code ?? 'ok', linkCur.error?.code ?? 'ok');
+    expect(linkNew.error).toBeNull();
+    const ac = createClient(URL_, ANON, opts);
+    const cur = await ac.auth.verifyOtp({
+      type: 'email_change',
+      email: attackerEmail,
+      token: linkCur.data.properties?.email_otp ?? '',
+    });
+    console.log('QA2_Q02_verify_current', cur.error?.code ?? 'ok');
+    const vc = createClient(URL_, ANON, opts);
+    const ver = await vc.auth.verifyOtp({
+      type: 'email_change',
+      email: victimEmail,
+      token: linkNew.data.properties?.email_otp ?? '',
+    });
+    console.log('QA2_Q02_verify', ver.error?.code ?? 'ok', 'anon=', ver.data.user?.is_anonymous);
+    expect(ver.error).toBeNull();
+    const victimTok = ver.data.session?.access_token;
+    // the victim's browser lands on /autenticacao/retorno -> confirm-email
+    const conf = await api('/auth/confirm-email', { method: 'POST', token: victimTok });
+    console.log(
+      'QA2_Q02_confirm',
+      conf.res.status,
+      conf.json.error?.code,
+      'review=',
+      conf.json.data?.profile_review_required,
+    );
+    // attacker refreshes its ORIGINAL session and acts as organizer
+    const r = await att.client.auth.refreshSession();
+    const attTok = r.data.session?.access_token;
+    console.log('QA2_Q02_attacker_refresh', r.error?.code ?? 'ok', 'session=', Boolean(attTok));
+    const act = attTok
+      ? await api('/activities', {
+          method: 'POST',
+          token: attTok,
+          json: {
+            title: 'Atividade QA2 atacante',
+            type: 'encontro',
+            description: 'Criada com a sessão do atacante após promoção externa.',
+            territory_id: hood,
+            public_address: 'Rua QA2, 1',
+            coordinates: [-43.9, -19.9],
+            location_confirmed: true,
+            starts_at: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+            timezone: 'America/Sao_Paulo',
+          },
+        })
+      : null;
+    console.log('QA2_Q02_attacker_activity', act?.res.status, act?.json.error?.code);
+    if (act?.res.status === 201) {
+      await svc.from('activities').delete().eq('id', String(act.json.data?.id));
+    }
+    // secure expectation: review flagged AND attacker can no longer act
+    expect(conf.json.data?.profile_review_required).toBe(true);
+    expect(act?.res.status ?? 401).not.toBe(201);
+  });
 
   it('Q03 MFA: anonymous session TOTP enrolment (report what GoTrue allows)', async () => {
     const a = await anon();
@@ -341,7 +340,7 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
     expect(ok.res.status).not.toBe(403);
   });
 
-  it('Q06 edge cache live: HIT on public GET; approve does not purge /groups; suspend leaves fallback URL stale', async () => {
+  it('Q06 edge cache live: HIT on public GET; approve purges /groups; suspend purges fallback and busted URLs (BE-3)', async () => {
     const adm = await svc.auth.admin.createUser({
       email: `mm-qa2-admin+${tag}@example.org`,
       email_confirm: true,
@@ -395,6 +394,7 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
       'items=',
       m3.json.data?.items?.length,
     );
+    expect(m3.json.data?.items?.length).toBe(1); // QA2-03 fixed: purged on approve
     // fill the neighborhood fallback cache with the (now visible) group
     const fresh = await api(`${muniUrl}&_=${tag}`);
     expect(fresh.json.data?.items?.length).toBe(1);
@@ -421,9 +421,9 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
       b2.json.data?.items?.length,
     );
     expect(m4.json.data?.items?.length).toBe(0); // exact URL purged
-    // documented findings QA2-04/04b: stale for up to 60 s in the same colo
-    expect(h2.json.data?.items?.length).toBe(1);
-    expect(b2.json.data?.items?.length).toBe(1);
+    // QA2-04/04b fixed: neighborhood fallback purged; extra params share the canonical key
+    expect(h2.json.data?.items?.length).toBe(0);
+    expect(b2.json.data?.items?.length).toBe(0);
     // private routes never cached
     const me1 = await api('/me', { token: adminTok });
     const me2 = await api('/me', { token: adminTok });

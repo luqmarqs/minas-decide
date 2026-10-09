@@ -372,6 +372,8 @@ async function main() {
     200,
     `status=${String(unsA.json.data?.status)}`,
   );
+  // QA2-09 (0011): a cancelled activity goes back to cancelled, not to pending_review
+  if (unsA.json.data?.status !== 'cancelled') failures++;
 
   // sandbox territory (impossible IBGE code) so the private proposal can be removed by cascade
   const sandbox = `mg-98${String(Math.floor(Math.random() * 1e5)).padStart(5, '0')}`;

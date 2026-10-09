@@ -1,6 +1,6 @@
 # Dicionário de dados — Supabase TARGET (`minas-em-movimento-dev`)
 
-Migrations: `supabase/migrations/0001…0010` (0001–0009 aplicadas em 2026-10-08/09; `0010_round2_hardening.sql` aplicada via `npm run db:push` em 2026-10-09). Tipos gerados: `shared/types/database.ts`.
+Migrations: `supabase/migrations/0001…0011` (0001–0009 aplicadas em 2026-10-08/09; `0010_round2_hardening.sql` e `0011_qa2_fixes.sql` (BE-3, correções da QA-2) aplicadas via `npm run db:push` em 2026-10-09). Tipos gerados: `shared/types/database.ts`.
 
 - **Coordenadas:** `double precision` lon/lat com CHECK de faixa. Atividades têm também `activities_location_mg_check` (bbox de MG: lon −51,1…−39,8; lat −23,0…−14,2) desde 0010. Sem PostGIS no MVP; bbox via índices btree.
 - **IDs de território:** `mg`, `mg-<ibge7>`, `mg-<ibge7>-<slug>`.
@@ -15,7 +15,7 @@ Dados de referência, carregados de `public/data/<release>/territories-index.jso
 - **Exposição:** SELECT para anon/authenticated (RLS `using (true)`).
 
 ### `whatsapp_groups`
-- **Colunas:** `id`, `territory_id` → territories (cascade), `display_name`, `join_url` (regex `chat.whatsapp.com`), `status` pending/active/inactive/rejected/**suspended** (0010), `source_proposal_id` UNIQUE (T28), `created_by`, `approved_by`, `approved_at`, `last_checked_at`, `created_at`, `updated_at`. Índice único de `join_url` ativo.
+- **Colunas:** `id`, `territory_id` → territories (cascade), `display_name`, `join_url` (regex `chat.whatsapp.com`), `status` pending/active/inactive/rejected/**suspended** (0010), `status_before_suspension` (0011, `active`/`inactive` ou nulo; sem grant para anon/authenticated), `source_proposal_id` UNIQUE (T28), `created_by`, `approved_by`, `approved_at`, `last_checked_at`, `created_at`, `updated_at`. Índice único de `join_url` ativo.
 - **Exposição:**
   - sem SELECT de tabela para anon/authenticated;
   - **SELECT por coluna** só nas colunas públicas (`id, display_name, territory_id, join_url, status, updated_at`) + RLS `status='active'`;
@@ -25,7 +25,7 @@ Dados de referência, carregados de `public/data/<release>/territories-index.jso
 Projeção pública de grupos `active`. SELECT para anon/authenticated.
 
 ### `activities`
-- **Colunas:** `id`, `creator_user_id` → auth.users (cascade), `territory_id` (cascade), `title`, `type`, `description` (bruta, privada), `description_sanitized`, `starts_at`, `ends_at` (> início), `timezone` = America/Sao_Paulo, `public_address`, `location_lon`, `location_lat` (bbox de MG), `location_precision`, `status` (draft/pending_review/published/rejected/cancelled/archived/**suspended**), CHECK `activities_duration_check` (`ends_at ≤ starts_at + 24 h`, 0010), `public_contact_opt_in`, `public_contact_type`, `public_contact_value`, `contact_public_type`, `contact_public_value` (**gerados**: nulos sem opt-in), `reviewed_by`, `reviewed_at`, `review_reason`, `cancelled_at`, `version`, `created_at`, `updated_at`.
+- **Colunas:** `id`, `creator_user_id` → auth.users (cascade), `territory_id` (cascade), `title`, `type`, `description` (bruta, privada), `description_sanitized`, `starts_at`, `ends_at` (> início), `timezone` = America/Sao_Paulo, `public_address`, `location_lon`, `location_lat` (bbox de MG), `location_precision`, `status` (draft/pending_review/published/rejected/cancelled/archived/**suspended**), `status_before_suspension` (0011; sem grant para anon/authenticated), CHECK `activities_duration_check` (`ends_at ≤ starts_at + 24 h`, 0010), `public_contact_opt_in`, `public_contact_type`, `public_contact_value`, `contact_public_type`, `contact_public_value` (**gerados**: nulos sem opt-in), `reviewed_by`, `reviewed_at`, `review_reason`, `cancelled_at`, `version`, `created_at`, `updated_at`.
 - **Exposição:**
   - SELECT por coluna só nas públicas (nunca criador, revisor, motivo, descrição bruta ou contato bruto);
   - RLS: anon/authenticated veem `published`/`cancelled`; authenticated também vê as próprias (`creator_user_id = auth.uid()`), sempre com as mesmas colunas públicas;
@@ -40,9 +40,9 @@ Projeção pública de grupos `active`. SELECT para anon/authenticated.
 - **`svc_*`:** pontos de entrada do Worker, executáveis **só por service_role** (EXECUTE revogado de public/anon/authenticated):
   - `svc_is_admin`, `svc_is_email_verified`, `svc_email_in_use`;
   - `svc_get_profile`, `svc_create_profile`, `svc_delete_profile`, `svc_update_profile`, `svc_grant_admin`;
-  - `svc_create_group_proposal` (0010: `p_idempotency_ttl_seconds`, só deduplica contra pendente não expirada), `svc_list_group_proposals` (0010: inclui `group_id`), `svc_approve_group_proposal`, `svc_reject_group_proposal`, `svc_add_group_manager`;
-  - **0010:** `svc_reveal_proposal_contact` (lê e audita na mesma transação), `svc_erase_group_proposals` (eliminação por id, auditada), `svc_suspend_group`, `svc_unsuspend_group`, `svc_suspend_activity`, `svc_unsuspend_activity`;
-  - `svc_update_profile` (0010: `p_phone`, `p_review_required`);
+  - `svc_create_group_proposal` (0010: `p_idempotency_ttl_seconds`, só deduplica contra pendente não expirada), `svc_list_group_proposals` (0010: inclui `group_id`), `svc_approve_group_proposal` (0011: devolve `{group_id, territory_id}`), `svc_reject_group_proposal` (0011: devolve `{proposal_id, territory_id}`), `svc_add_group_manager`;
+  - **0010:** `svc_reveal_proposal_contact` (lê e audita na mesma transação), `svc_erase_group_proposals` (eliminação por id, auditada), `svc_suspend_group`, `svc_unsuspend_group`, `svc_suspend_activity`, `svc_unsuspend_activity` (0011: devolve `{version, status}`);
+  - `svc_update_profile` (0010: `p_phone`, `p_review_required`; 0011: `p_email_contact`, usado só por `/auth/confirm-email` para re-sincronizar com o e-mail do Auth);
   - `svc_approve_activity`, `svc_reject_activity`, `svc_upsert_rsvp`;
   - `svc_record_audit`, `svc_record_abuse`, `svc_list_security_events`, `svc_consume_turnstile_token`, `svc_purge_expired`.
 
@@ -70,7 +70,7 @@ Todas SECURITY DEFINER, com `search_path=''` e EXECUTE só para service_role.
   - `approve_group_proposal(p_id, p_admin, p_reason, p_request_id?)` → uuid do grupo. Faz `UPDATE … WHERE status='pending' RETURNING`, rechecagem de admin e auditoria.
   - `reject_group_proposal(…)`.
 - **Moderação de atividades:** `approve_activity(…)`, `reject_activity(…)`.
-- **Suspensão (0010):** `set_group_suspension(id, admin, reason, request_id, suspend)` (`active|inactive` ↔ `suspended`; volta a `active`) e `set_activity_suspension(…)` (`draft|pending_review|published|cancelled` → `suspended`; volta a `pending_review`). Rechecam admin, exigem motivo (PT422), transição inválida → PT409, auditam `group.suspend`/`group.unsuspend`/`activity.suspend`/`activity.unsuspend`.
+- **Suspensão (0010):** `set_group_suspension(id, admin, reason, request_id, suspend)` (`active|inactive` ↔ `suspended`; desde 0011 guarda `status_before_suspension` e volta ao status anterior) e `set_activity_suspension(…)` (`draft|pending_review|published|cancelled` → `suspended`; desde 0011 volta a `cancelled` se estava cancelada, senão a `pending_review`). Rechecam admin, exigem motivo (PT422), transição inválida → PT409, auditam `group.suspend`/`group.unsuspend`/`activity.suspend`/`activity.unsuspend`.
 - **RSVP:** `upsert_rsvp(activity, user, subject_hash, going, idem)` → `{going, rsvp_count}`.
 - **Manutenção:** `consume_turnstile_token(hash, ttl)`, `purge_expired()`, `touch_updated_at()` (trigger).
 

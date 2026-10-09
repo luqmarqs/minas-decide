@@ -223,3 +223,61 @@ Dados de teste residuais no TARGET dev (sem PII real, e-mails `@example.org`/`ma
 - [x] Os relatórios `DATA_SOURCE_AUDIT.md` e `ELECTORAL_EXPORT_REPORT.md` existem.
 - [x] Não há segredo ou conexão do SOURCE no frontend/Worker/CI pública. (`check:isolation` em 2.012 arquivos.)
 - [x] O relatório foi gerado em arquivo .md. (Este arquivo; cópia na raiz `RELATORIO_PRIMEIRA_RODADA.md`.)
+
+---
+
+# ADENDO — RODADA 2 (execução autônoma após "toca tudo que pode tocar sem mim")
+
+**Data e hora (America/Sao_Paulo):** 2026-10-09 02:21 (adendo) / fechamento após QA-2 e correções no commit seguinte · **Commits da rodada 2:** `10e9169` … `9bb44d0` (integração), `df3a5b3` (QA2-06/11), fechamento BE-3 · **Ambiente:** local + TARGET dev · **SEM DEPLOY** (não autorizado).
+**Agentes:** BE-2 (Opus, 27 min, 287k tokens), FE-3 (Opus, 121 min, 521k), DATA-2 (Sonnet, 16 min, 187k), QA-2 (Opus, ver §R2-6). Os agentes customizados de `.claude/agents` passaram a ser reconhecidos pela instalação durante esta rodada (QA-2 rodou como `qa-security`).
+
+## R2-1. O que mudou (tudo real, validado contra Worker local + TARGET dev)
+
+| Área | Entrega | Evidência |
+|---|---|---|
+| P-SEC-1 pré-sequestro de perfil | `confirm-email` marca `review_required_at`; `GET /me` expõe `phone_masked`/`profile_review_required`; `PATCH /me` aceita telefone e `profile_reviewed`; organizador bloqueado (403) até revisar; tela "Confira seus dados" no retorno do magic link; gate em `/criar-atividade` e `/minhas-atividades` | `worker/tests/round2.test.ts`, `src/features/account/*`, validação real 17/17 (`docs/screenshots/final-r2/_validacao-real.json`) |
+| P-AUTH-1 MFA TOTP | `/conta/seguranca` (enrolar/verificar/remover fator), `MfaGate` em `/admin`; `reveal-contact` exige aal2 **sem bypass** | enrolamento real + código RFC 6238 gerado em Node → JWT aal2 → `/admin` sem bypass (Worker temporário com `APP_ENV=staging`: aal1 → 403) |
+| F05 rate limit | RSVP por IP+atividade+identidade (10/10min) com teto por IP 120/10min; cadastro por IP+sujeito; CGNAT documentado | `worker/tests/round2.test.ts` |
+| F09/F12/F14/F11/F16/I03 | bbox MG e tetos de data (Worker + CHECK no banco); validação de `Origin`; idempotência escopada por dia e liberada após decisão; cache de borda 60 s com purga; checagem de `RSVP_DEVICE_SECRET` | testes QA F05/F07 convertidos de `it.fails` para verdes; smoke 53/53 |
+| Suspensão e revelação | `POST /admin/{groups,activities}/:id/{suspend,unsuspend}`, `POST /admin/group-proposals/:id/reveal-contact` (auditado, `retention_class='security'`), `AdminGroupProposal.group_id`; PATCH não reativa grupo suspenso | smoke; `supabase/tests/round2.test.ts`; UI com filtros "Suspensos", confirmação e aviso de auditoria |
+| Limpeza TARGET dev | `scripts/db/cleanup-dev-data.ts` (dry-run → `--yes`): 2 usuários, 2 perfis, 2 propostas, 2 grupos, 1 atividade removidos; `audit_events` preservado (118) | relato BE-2 |
+| P-PERF-1/2 | mapa inicia após LCP + idle com placeholder; índice de territórios sob demanda; supabase-js só com sessão; chunk inicial 648 KB → **349 KB (110 KB gz)**; CLS do território **0** | Lighthouse mobile (CPU 4×, mediana de 3): home Perf 38 → **69**, LCP 6,7 s → **1,9 s**; território 25 → **62**, LCP 7,0 → 3,0 s, CLS 0,287 → **0**; A11y 100/100 (`docs/screenshots/final-r2/_lighthouse-*.json`) |
+| P-UX-1..5 | rascunho em `localStorage` (7 dias), "usar outro e-mail" no 409, bottom sheet 3 estados, basemap escuro, swatch "sem dado" com contorno, alvos ≥ 44/24 px, `--color-border-strong` ≥ 3:1 | capturas `docs/screenshots/final-r2/*-20261009-0a2c6cf.png` |
+| Acessibilidade | axe (WCAG 2.x A/AA + best-practice) em 7 telas × desktop/mobile + escuro + sheet: **0 violações** em 16 execuções | `docs/screenshots/final-r2/_resultados-r2.json` |
+| P-DATA-3 | `--year/--round/--election-codes`; releases coexistem com `release-manifest.json`; `manifest.json` = ponteiro; `--no-activate`; rollback documentado | `docs/IMPORT_GUIDE.md` §7–8; 38 testes unitários de scripts |
+| F17 | modo `db-url` com driver em processo, sem segredo em argv; `assertReadOnlySql` reforçado (`INTO`, `set_config`, `pg_sleep`, `dblink`, comentários) | `scripts/import-electoral/source.test.ts` |
+| P-DATA-1 amostragem TSE | 10 municípios (BH, Mariana, Contagem, Juiz de Fora, Uberlândia, Montes Claros, Poços de Caldas, Teófilo Otoni, Gov. Valadares, Serra da Saudade) contra os dados abertos oficiais do TSE (zips de 08/10/2026 lidos por HTTP Range com CRC): **330 indicadores, 312 idênticos, 18 divergentes, todos explicados**; aptos/comparecimento/abstenção/brancos/válidos dos 5 cargos: 90/90 idênticos; total do estado idêntico ao TSE | `docs/TSE_SAMPLE_REPORT.md` |
+| Validador | Σ municípios = estado, Σ bairros = município (tolerância 0), `share_of_valid`, `delta_pp`, órfãos; teste negativo com arquivo adulterado → 39 erros | `npm run data:validate`: 902/902, 0 erros |
+| Snapshot | "Nº 28" (sem nome/partido; 561 votos; nulo técnico no TSE) deixou de ser listado como candidatura (D18); totais da fonte intactos | `public/data` reconstruído: 902 arquivos |
+
+## R2-2. Evidência de testes (rodada 2)
+
+| Comando | Resultado |
+|---|---|
+| `npm run ci` (lint, format, typecheck, unit+worker, isolamento, validação de dados, build) | verde; **313 testes passando, 1 expected-fail** (F10 enumeração — decisão do proprietário) após as correções da QA-2; isolamento OK em 2.088 arquivos |
+| `npm run test:db` | **35 passando**, 16 pulados (ao vivo sem `QA_WORKER_URL`) |
+| QA ao vivo (`qa-worker-live` + `qa2-live`) | 16/16 (BE-3) |
+| `scripts/db/smoke-worker.ts` (porta 8797) | **53/53** (inclui aal2 real) |
+| `npm run test:e2e` | **22 passando** (home, cadastro, rodada 2 × desktop/mobile) |
+| Validação real de UI (`scripts/visual/r2-validate.mjs`) | 17/17 |
+| Lighthouse / axe / CLS | ver R2-1 |
+| `npm audit` | 0 vulnerabilidades |
+| `npx tsx scripts/tse/sample-check.ts` | 330 comparações, 312 idênticas |
+
+## R2-3. Descobertas sobre os dados (honestas)
+
+- A fonte conta como "candidatura" um número sem nome nem partido (Presidente nº 28, 561 votos em MG) que o TSE classifica como **nulo técnico**; isso explica a diferença de 561 entre comparecimento e válidos+brancos+nulos (relatório §9). Decisão D18: não listar; totais intactos.
+- Candidatura a Governador nº 29 (PCO) tem registro **anulado sub judice** no TSE: a fonte soma seus votos à candidatura, mas o TSE os exclui dos válidos. A fonte não traz esse status; a participação nos válidos dessa candidatura fica superestimada (ex.: 238 votos em BH). Documentado na metodologia; corrigir exigiria usar os dados do TSE como fonte complementar (decisão do proprietário).
+- Perf local ≥ 70 ficou em 69 na home; o restante do TBT é o próprio MapLibre. Meta de produção (≥ 85) só mensurável com deploy.
+
+## R2-4. Pendências que continuam exigindo o proprietário
+
+SMTP transacional (P-SEC-3; a cota padrão voltou a estourar com 4 cadastros de teste); conta Cloudflare/Turnstile real/staging (`docs/STAGING_PLAYBOOK.md`); usuário SELECT-only no SOURCE (P-DATA-2); revisão jurídica (`docs/PRIVACY_LGPD_DRAFT.md`); decisões: 409 na enumeração (F10), top 10 proporcionais, Git vs R2, uso do TSE para marcar sub judice; copiar `docs/claude-settings.proposed.json`; remoto Git para o CI.
+
+## R2-5. Pendências técnicas restantes (sem bloqueio)
+
+Deep link `?t=` no mobile abre o sheet no estado meio sem rolar ao mapa; fila do admin não recarrega sozinha após decisão (há botão); `GroupSuspensionResult`/`ActivitySuspensionResult` ainda espelhados em `src/features/admin/api.ts` (mover para `shared/contracts`); índice de territórios de 2,2 MB poderia ser dividido; `manifest.json` (162 KB) poderia separar os hashes; invalidação de cache entre colos (até 60 s); 2º turno depende de confirmar códigos e totais por turno no SOURCE; leitor de tela real/Safari/iOS não testados.
+
+## R2-6. Auditoria QA-2
+
+{QA2}

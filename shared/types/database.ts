@@ -414,6 +414,7 @@ export type Database = {
           reviewed_by: string | null;
           starts_at: string;
           status: string;
+          status_before_suspension: string | null;
           territory_id: string;
           timezone: string;
           title: string;
@@ -443,6 +444,7 @@ export type Database = {
           reviewed_by?: string | null;
           starts_at: string;
           status?: string;
+          status_before_suspension?: string | null;
           territory_id: string;
           timezone?: string;
           title: string;
@@ -472,6 +474,7 @@ export type Database = {
           reviewed_by?: string | null;
           starts_at?: string;
           status?: string;
+          status_before_suspension?: string | null;
           territory_id?: string;
           timezone?: string;
           title?: string;
@@ -560,6 +563,7 @@ export type Database = {
           last_checked_at: string | null;
           source_proposal_id: string | null;
           status: string;
+          status_before_suspension: string | null;
           territory_id: string;
           updated_at: string;
         };
@@ -574,6 +578,7 @@ export type Database = {
           last_checked_at?: string | null;
           source_proposal_id?: string | null;
           status?: string;
+          status_before_suspension?: string | null;
           territory_id: string;
           updated_at?: string;
         };
@@ -588,6 +593,7 @@ export type Database = {
           last_checked_at?: string | null;
           source_proposal_id?: string | null;
           status?: string;
+          status_before_suspension?: string | null;
           territory_id?: string;
           updated_at?: string;
         };
@@ -734,7 +740,7 @@ export type Database = {
           p_reason: string;
           p_request_id?: string;
         };
-        Returns: string;
+        Returns: Json;
       };
       svc_consume_turnstile_token: {
         Args: { p_hash: string; p_ttl_seconds?: number };
@@ -839,7 +845,7 @@ export type Database = {
           p_reason: string;
           p_request_id?: string;
         };
-        Returns: undefined;
+        Returns: Json;
       };
       svc_reveal_proposal_contact: {
         Args: {
@@ -875,7 +881,7 @@ export type Database = {
           p_reason: string;
           p_request_id?: string;
         };
-        Returns: number;
+        Returns: Json;
       };
       svc_unsuspend_group: {
         Args: {
@@ -890,6 +896,7 @@ export type Database = {
         Args: {
           p_contact_opt_in?: boolean;
           p_display_name?: string;
+          p_email_contact?: string;
           p_email_state?: string;
           p_phone?: string;
           p_review_required?: boolean;

@@ -14,7 +14,7 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import type { z } from 'zod';
 import { MeResponse } from '@shared/contracts/registration.ts';
 import { ApiClientError, apiRequest, type RequestOptions } from './api';
-import { markSupabaseLoaded } from './sessionPresence';
+import { hasStoredSession, markSupabaseLoaded } from './sessionPresence';
 
 export class AuthUnavailableError extends Error {
   constructor(message = 'O serviço de login não está configurado neste ambiente.') {
@@ -106,7 +106,11 @@ export type SessionState =
 
 /** Reactive Supabase session (no token ever leaves this hook except via authedRequest). */
 export function useSession(): SessionState {
-  const [state, setState] = useState<SessionState>({ status: 'loading', session: null });
+  // No stored session → answer "none" immediately (pages render their signed-out state
+  // without waiting for supabase-js); the subscription below still upgrades to "active".
+  const [state, setState] = useState<SessionState>(() =>
+    hasStoredSession() ? { status: 'loading', session: null } : { status: 'none', session: null },
+  );
   useEffect(() => {
     let alive = true;
     let unsubscribe: (() => void) | undefined;

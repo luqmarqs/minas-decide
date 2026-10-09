@@ -38,6 +38,11 @@ export const requireSession: MiddlewareHandler<AppBindings> = async (c, next) =>
   await next();
 };
 
+/** Case-insensitive e-mail equality (Auth stores addresses lower-cased). */
+export function sameEmail(a: string | null | undefined, b: string | null | undefined): boolean {
+  return Boolean(a && b && a.trim().toLowerCase() === b.trim().toLowerCase());
+}
+
 /** Organizer = permanent identity with e-mail confirmed by Auth, re-checked in the database. */
 export async function assertOrganizer(c: Context<AppBindings>, user: AuthUser): Promise<void> {
   if (user.is_anonymous || user.jwt_is_anonymous || !user.email_confirmed) {
@@ -52,6 +57,15 @@ export async function assertOrganizer(c: Context<AppBindings>, user: AuthUser): 
   if (!profile) throw fail('FORBIDDEN');
   if (profile.account_state !== 'active') throw fail('FORBIDDEN');
   if (profile.email_verification_state !== 'verified') throw fail('EMAIL_NOT_VERIFIED');
+  // QA2-01: the Auth address changed outside the Worker (e.g. GoTrue e-mail change) and the
+  // profile was not re-synced by /auth/confirm-email (which also revokes the other sessions
+  // and flags the profile for review). Never organize with a stale contact e-mail.
+  if (!sameEmail(profile.email_contact, user.email)) {
+    throw fail(
+      'FORBIDDEN',
+      'Seu e-mail mudou. Abra o link de confirmação e revise seus dados antes de continuar.',
+    );
+  }
   // P-SEC-1: after a magic-link promotion the person must confirm/edit the profile
   // data (which may have been entered by someone else) before acting as organizer.
   if (profile.review_required_at) {
@@ -65,12 +79,16 @@ export const requireOrganizer: MiddlewareHandler<AppBindings> = async (c, next) 
   await next();
 };
 
-/** Returns true when the user may act as admin (admins table + aal2, or the local MFA bypass). */
+/**
+ * Returns true when the user may act as admin: admins table + aal2 + (outside local) at least
+ * one VERIFIED TOTP factor confirmed through the Auth admin API (QA2-12; cached per request).
+ * APP_ENV=local keeps the explicit, logged MFA bypass.
+ */
 export async function isAdminWithMfa(c: Context<AppBindings>, user: AuthUser): Promise<boolean> {
   if (user.is_anonymous) return false;
   if (!(await c.get('deps').repo.isAdmin(user.id))) return false;
-  if (user.aal === 'aal2') return true;
   if (isLocal(c.env)) {
+    if (user.aal === 'aal2') return true;
     // Explicit, logged bypass. APP_ENV=local only — impossible in staging/production.
     console.warn(
       JSON.stringify({
@@ -81,7 +99,17 @@ export async function isAdminWithMfa(c: Context<AppBindings>, user: AuthUser): P
     );
     return true;
   }
-  return false;
+  if (user.aal !== 'aal2') return false;
+  let totp = c.get('adminTotpVerified');
+  if (totp === undefined) {
+    try {
+      totp = await c.get('deps').auth.hasVerifiedTotp(user.id);
+    } catch {
+      totp = false; // fail closed
+    }
+    c.set('adminTotpVerified', totp);
+  }
+  return totp;
 }
 
 export const requireAdmin: MiddlewareHandler<AppBindings> = async (c, next) => {

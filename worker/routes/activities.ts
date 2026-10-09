@@ -14,7 +14,13 @@ import {
   requireOrganizer,
   requireSession,
 } from '../middleware/auth.ts';
-import { activityPaths, edgeCached, noStore, purgePublic } from '../middleware/cache.ts';
+import {
+  ACTIVITIES_KEY,
+  activityPaths,
+  edgeCached,
+  noStore,
+  purgePublic,
+} from '../middleware/cache.ts';
 import { rateLimit } from '../middleware/rate-limit.ts';
 import { requireTurnstile } from '../middleware/turnstile.ts';
 import { buildActivityPatch, buildActivityWrite } from '../services/activities.ts';
@@ -55,7 +61,7 @@ function cursorOrThrow(raw: string | undefined): Cursor | null {
   return { at: c.at!, id: c.id! };
 }
 
-activities.get('/activities', edgeCached(60), async (c) => {
+activities.get('/activities', edgeCached(60, ACTIVITIES_KEY), async (c) => {
   const q = parse(PublicActivitiesQuery, c.req.query());
   const now = c.get('deps').now();
   const from = q.from ?? new Date(now - 6 * 3600_000).toISOString();

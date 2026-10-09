@@ -228,7 +228,7 @@ Dados de teste residuais no TARGET dev (sem PII real, e-mails `@example.org`/`ma
 
 # ADENDO — RODADA 2 (execução autônoma após "toca tudo que pode tocar sem mim")
 
-**Data e hora (America/Sao_Paulo):** 2026-10-09 02:21 · **Commit:** `9bb44d0` (+ commit do adendo e da QA-2) · **Ambiente:** local + TARGET dev · **SEM DEPLOY** (não autorizado).
+**Data e hora (America/Sao_Paulo):** 2026-10-09 02:21 (adendo) / fechamento após QA-2 e correções no commit seguinte · **Commits da rodada 2:** `10e9169` … `9bb44d0` (integração), `df3a5b3` (QA2-06/11), fechamento BE-3 · **Ambiente:** local + TARGET dev · **SEM DEPLOY** (não autorizado).
 **Agentes:** BE-2 (Opus, 27 min, 287k tokens), FE-3 (Opus, 121 min, 521k), DATA-2 (Sonnet, 16 min, 187k), QA-2 (Opus, ver §R2-6). Os agentes customizados de `.claude/agents` passaram a ser reconhecidos pela instalação durante esta rodada (QA-2 rodou como `qa-security`).
 
 ## R2-1. O que mudou (tudo real, validado contra Worker local + TARGET dev)
@@ -254,9 +254,9 @@ Dados de teste residuais no TARGET dev (sem PII real, e-mails `@example.org`/`ma
 
 | Comando | Resultado |
 |---|---|
-| `npm run ci` (lint, format, typecheck, unit+worker, isolamento, validação de dados, build) | verde; **279 testes passando, 1 expected-fail** (F10 enumeração — decisão do proprietário); isolamento OK em 2.038 arquivos |
-| `npm run test:db` | **33 passando**, 9 pulados (ao vivo sem `QA_WORKER_URL`) |
-| QA ao vivo (`qa-worker-live`) | 9/9 (BE-2) |
+| `npm run ci` (lint, format, typecheck, unit+worker, isolamento, validação de dados, build) | verde; **313 testes passando, 1 expected-fail** (F10 enumeração — decisão do proprietário) após as correções da QA-2; isolamento OK em 2.088 arquivos |
+| `npm run test:db` | **35 passando**, 16 pulados (ao vivo sem `QA_WORKER_URL`) |
+| QA ao vivo (`qa-worker-live` + `qa2-live`) | 16/16 (BE-3) |
 | `scripts/db/smoke-worker.ts` (porta 8797) | **53/53** (inclui aal2 real) |
 | `npm run test:e2e` | **22 passando** (home, cadastro, rodada 2 × desktop/mobile) |
 | Validação real de UI (`scripts/visual/r2-validate.mjs`) | 17/17 |
