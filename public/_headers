@@ -1,11 +1,14 @@
 # Security headers for the static SPA (Cloudflare Workers Static Assets `_headers`).
 # /api/* headers are set by the Worker itself. Review the CSP allowlist whenever a
 # new external origin (tiles, fonts, auth) is introduced. HSTS only on real HTTPS domains.
-# Clerk (ADR 0005): only the dev instance Frontend API host (from the publishable key); no wildcards (QA3-08).
-# Production (instance live) needs its own clerk.<domain> host here once a domain exists.
+# Clerk (ADR 0005): only the instance Frontend API origin, no wildcards (QA3-08). `__CLERK_FAPI_ORIGIN__`
+# is replaced at build time (vite.config.ts) with the origin decoded from VITE_CLERK_PUBLISHABLE_KEY
+# (dev: <slug>.clerk.accounts.dev; production: clerk.minasdecide.com.br). cdn.protect.clerk.com serves the
+# bot-protection bootstrap that clerk-js loads on the live instance; it then talks to random
+# <id>.client.protect.clerk.com hosts on several ports (observed in production, 2026-10-09).
 # The browser no longer talks to Supabase (Worker only), so *.supabase.co was removed.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://funky-cheetah-9841.clerk.accounts.dev; frame-src https://challenges.cloudflare.com https://funky-cheetah-9841.clerk.accounts.dev; connect-src 'self' https://tiles.openfreemap.org https://challenges.cloudflare.com https://funky-cheetah-9841.clerk.accounts.dev; img-src 'self' data: blob: https://tiles.openfreemap.org https://img.clerk.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com __CLERK_FAPI_ORIGIN__ https://cdn.protect.clerk.com; frame-src https://challenges.cloudflare.com __CLERK_FAPI_ORIGIN__; connect-src 'self' https://tiles.openfreemap.org https://challenges.cloudflare.com __CLERK_FAPI_ORIGIN__ https://cdn.protect.clerk.com https://*.client.protect.clerk.com:*; img-src 'self' data: blob: https://tiles.openfreemap.org https://img.clerk.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin

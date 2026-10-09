@@ -27,12 +27,25 @@ async function main() {
     throw new Error('Refusing: export APP_ENV=local to run the admin bootstrap (dev only).');
   }
   const dryRun = process.argv.includes('--dry-run');
+  // `--production`: bootstrap admins of the Clerk *live* instance (sk_live_ key exported in the
+  // shell, never read from .dev.vars). Requires the explicit opt-in env below. The database is
+  // still the TARGET (production uses the same project — owner decision, D40).
+  const production = process.argv.includes('--production');
+  if (production && process.env.ALLOW_PRODUCTION_CLERK_BOOTSTRAP !== '1') {
+    throw new Error('Refusing: --production needs ALLOW_PRODUCTION_CLERK_BOOTSTRAP=1 exported.');
+  }
+  const liveKeyFromShell = production ? process.env.CLERK_SECRET_KEY : undefined;
   loadDevVars();
   const url = requireEnv('SUPABASE_TARGET_URL');
   assertTargetUrl(url);
-  const clerkKey = requireEnv('CLERK_SECRET_KEY');
-  if (!clerkKey.startsWith('sk_test_')) {
+  const clerkKey = production ? (liveKeyFromShell ?? '') : requireEnv('CLERK_SECRET_KEY');
+  if (!production && !clerkKey.startsWith('sk_test_')) {
     throw new Error('Refusing: CLERK_SECRET_KEY is not a development (sk_test_) key.');
+  }
+  if (production && !clerkKey.startsWith('sk_live_')) {
+    throw new Error(
+      'Refusing: --production needs a live (sk_live_) CLERK_SECRET_KEY in the shell.',
+    );
   }
   const emails = (process.env.ADMIN_EMAILS ?? '')
     .split(',')

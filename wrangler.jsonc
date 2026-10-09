@@ -46,6 +46,22 @@
         "CLERK_ISSUER": "https://funky-cheetah-9841.clerk.accounts.dev",
       },
     },
+    // Production (2026-10-09, owner): Worker `minas-decide` on the custom domain minasdecide.com.br
+    // (www -> apex is a Cloudflare zone redirect rule). Clerk *live* instance (Frontend API
+    // clerk.minasdecide.com.br). Database: the same TARGET project as dev/staging (D40).
+    // Deploy: `npm run build` (mode production reads .env.production) + `wrangler deploy --env production`.
+    "production": {
+      "name": "minas-decide",
+      "routes": [{ "pattern": "minasdecide.com.br", "custom_domain": true }],
+      "vars": {
+        "APP_ENV": "production",
+        "WRITES_ENABLED": "true",
+        "PUBLIC_ORIGIN": "https://minasdecide.com.br",
+        "ALLOWED_ORIGINS": "",
+        "TURNSTILE_EXPECTED_HOSTNAMES": "minasdecide.com.br",
+        "CLERK_ISSUER": "https://clerk.minasdecide.com.br",
+      },
+    },
   },
   // Secrets (set with `wrangler secret put --env <env>` or in .dev.vars / .dev.vars.local):
   //   SUPABASE_TARGET_URL, SUPABASE_TARGET_SERVICE_ROLE_KEY, CLERK_SECRET_KEY (ADR 0005; Worker only,

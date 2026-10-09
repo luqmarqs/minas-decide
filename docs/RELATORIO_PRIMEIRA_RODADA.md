@@ -425,3 +425,21 @@ A seção 6 deste relatório (sessão provisória do Supabase Auth, magic link, 
 
 **Ressalvas:** pessoa com sessão mas sem indício (cookies e armazenamento apagados) vê "Entrar" numa página pública até o idle; nas rotas de sessão o estado é `loading`, nada é negado por engano. O chunk principal ainda está ~15 KB acima do valor anterior ao Clerk por outras mudanças da rodada (não investigado). Login real ponta a ponta com código por e-mail continua **pendente do proprietário**.
 
+---
+
+# ADENDO — RODADA 5: PRODUÇÃO EM minasdecide.com.br (2026-10-09)
+
+**Pedido:** "precisa colocar o dominio certo e subir pra produção. dominio ja ta na cloudflare". **Decisões do proprietário:** banco de produção = o mesmo projeto Supabase de dev/staging (D40); instância live do Clerk criada por mim (D42); `www` → apex (D41). **No ar:** https://minasdecide.com.br (Worker `minas-decide`, versão `06768ce3…`). Passo a passo reproduzível em `docs/STAGING_PLAYBOOK.md` §P.
+
+| Etapa | Feito | Evidência |
+|---|---|---|
+| Domínio | Custom Domain do Worker no apex; `www` com `AAAA 100::` proxied + regra de redirecionamento 301 (preserva caminho/query) | `curl -I https://www.minasdecide.com.br/territorio?x=1` → 301 para o apex |
+| Clerk live | `clerk deploy` conduzido num pseudo-terminal (o comando recusa rodar sem TTY): instância `ins_3KTgbPJPtMX9fmYhCQ1gTLLGUMy`, domínio `minasdecide.com.br`; 5 CNAMEs criados pela API da Cloudflare (DNS only); DNS, e-mail e SSL verificados; Google OAuth desligado em dev e prod; configuração de autenticação idêntica à de dev (0 diferenças) | `clerk deploy status`: dns/ssl/mail `complete`; `https://clerk.minasdecide.com.br/v1/environment` → 200 |
+| Turnstile | widget Managed `minas-decide-production` (apex e www) | API `/challenges/widgets` |
+| Build/CSP por ambiente | `public/_headers` com placeholder substituído no build pela origem da publishable key (D43); em produção `script-src`/`connect-src` com `clerk.minasdecide.com.br`, `cdn.protect.clerk.com` e `*.client.protect.clerk.com:*` (proteção anti-bot do clerk-js live, observada no probe) | `dist/_headers` após `vite build` (staging mantém o host de dev) |
+| Worker | `env.production` em `wrangler.jsonc` (`APP_ENV=production`, `WRITES_ENABLED=true`, `PUBLIC_ORIGIN`, `TURNSTILE_EXPECTED_HOSTNAMES`, `CLERK_ISSUER=https://clerk.minasdecide.com.br`); 7 secrets (`sk_live_`, Turnstile prod, `RSVP_DEVICE_SECRET` novo, Supabase do TARGET, `ADMIN_EMAILS`) | `wrangler secret list --env production` = 7 |
+| Admin | `luq.marqs@gmail.com` criado na instância live e marcado admin (`bootstrap-admin.ts --production`, novo modo com opt-in explícito e chave `sk_live_` só pelo shell) | saída do script: `is admin = true` |
+| Verificação | `/api/v1/health` 200 com `writes_enabled: true`; home, `/entrar`, `/data/manifest.json` 200; `/me` 401; `/auth/send-link` 404; **e2e 35/35** contra produção (home, mobile, rodada 3, cadastro); probe de CSP nos fluxos entrar/cadastrar: Clerk live carregado e `/v1/client/sign_ins` alcançado, **0 violações próprias** | `curl`, Playwright, `csp-probe` |
+
+**Ressalvas honestas:** (1) o beacon do **Web Analytics da Cloudflare** é injetado na zona e fica **bloqueado** pela CSP (sem envio de dados; gera erro de console a cada página) — não encontrei o site correspondente na API da conta para desligar a injeção; o proprietário pode desligar no painel ou pedir para liberar o host (D43). (2) **Mesmo banco de dev** em produção: usuários/atividades de teste e `[EXEMPLO]` aparecem no site real até serem limpos/arquivados; quem se cadastrou no staging (instância dev do Clerk) tem perfil com o id antigo e, ao se cadastrar em produção com o mesmo e-mail, receberá o 409 neutro até a limpeza — **incluindo o proprietário**, se tiver testado no staging. (3) Cadastro/login real com código por e-mail em produção **não testado por mim** (o Clerk live envia de `clkmail.minasdecide.com.br`). (4) Webhook `user.deleted` da instância live ainda não criado (painel do Clerk + secret). (5) Responsável legal no rodapé continua "[a definir]" — o site está público. (6) `accounts.minasdecide.com.br` (portal do Clerk) responde 403 e não é usado. (7) Token da Cloudflare que passou pelo chat continua válido — rotacionar.
+

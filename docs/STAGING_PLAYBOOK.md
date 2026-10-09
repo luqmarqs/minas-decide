@@ -72,3 +72,22 @@ Enumeração de e-mail (manter 409 — recomendado), conteúdo do snapshot (top 
 ## 5. Repositório
 
 `git remote add origin <url>` e `git push -u origin main` para o CI (`.github/workflows/ci.yml`) rodar; segredos `SUPABASE_TARGET_*` nos secrets do GitHub habilitam `test:db`.
+
+---
+
+## P. PRODUÇÃO — executado em 2026-10-09 (https://minasdecide.com.br)
+
+| Item | Estado | Como reproduzir / onde está |
+|---|---|---|
+| Domínio | zona `minasdecide.com.br` na conta Cloudflare do proprietário | Worker `minas-decide` com **Custom Domain** no apex (`wrangler.jsonc` → `env.production.routes`) |
+| `www` | 301 → apex (D41) | registro `AAAA www 100::` (proxied) + regra em *Rules → Redirect Rules* ("www -> apex (Minas Decide)") |
+| Clerk live (D42) | instância `ins_3KTgbPJPtMX9fmYhCQ1gTLLGUMy`, Frontend API `clerk.minasdecide.com.br`, DNS/SSL/e-mail verificados | `clerk deploy status`; chaves `pk_live_`/`sk_live_` em `~/.minas-em-movimento/clerk-prod.env` (`clerk env pull --instance prod --file …`) |
+| Turnstile | widget **Managed** `minas-decide-production` (domínios apex e www) | `~/.minas-em-movimento/turnstile-production.env` |
+| Build | `npx vite build` (modo `production` lê `.env.production`, gitignorado: `VITE_TURNSTILE_SITE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY` live, `VITE_SNAPSHOT_BASE=/data`, URLs do Clerk) | a CSP recebe `https://clerk.minasdecide.com.br` pelo plugin de `vite.config.ts` (D43) |
+| Deploy | `npx wrangler deploy --env production` com `CLOUDFLARE_API_TOKEN` exportado | vars: `APP_ENV=production`, `WRITES_ENABLED=true`, `PUBLIC_ORIGIN`, `TURNSTILE_EXPECTED_HOSTNAMES=minasdecide.com.br`, `CLERK_ISSUER=https://clerk.minasdecide.com.br` |
+| Secrets (7) | `SUPABASE_TARGET_URL`, `SUPABASE_TARGET_SERVICE_ROLE_KEY`, `SUPABASE_TARGET_ANON_KEY` (legado), `TURNSTILE_SECRET_KEY` (prod), `RSVP_DEVICE_SECRET` (novo, `~/.minas-em-movimento/rsvp-production.env`), `ADMIN_EMAILS`, `CLERK_SECRET_KEY` (`sk_live_`) | `npx wrangler secret put <NOME> --env production` |
+| Banco | **mesmo TARGET dev** (D40) | migrations 0001–0013 já aplicadas; territórios carregados |
+| Admin | `luq.marqs@gmail.com` criado na instância live e marcado admin | `ALLOW_PRODUCTION_CLERK_BOOTSTRAP=1 APP_ENV=local CLERK_SECRET_KEY=<sk_live> ADMIN_EMAILS=<e-mail> npx tsx scripts/db/bootstrap-admin.ts --production --only=<e-mail>` |
+| Webhook `user.deleted` | **pendente** (painel do Clerk, instância live → `https://minasdecide.com.br/api/v1/webhooks/clerk`; depois `wrangler secret put CLERK_WEBHOOK_SIGNING_SECRET --env production`) | §1c |
+| Verificação | `/api/v1/health` 200 (`writes_enabled: true`), CSP com host live, `www` 301, `/me` 401, `/auth/send-link` 404, e2e 35/35 contra produção, probe de CSP: 0 violações próprias (só o beacon do Web Analytics da Cloudflare bloqueado, D43) | `curl`, Playwright |
+
