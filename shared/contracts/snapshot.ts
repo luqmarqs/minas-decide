@@ -58,7 +58,10 @@ export const HighlightItem = z.object({
   compare_value: z.number().nullable(),
   compare_label: z.string().nullable(),
   note: z.string().nullable(),
+  /** short label for the UI, e.g. "TSE", "TSE 2022", "IBGE", "OpenStreetMap" */
   source: z.string(),
+  /** full provenance (files, dates) — shown only on the methodology page */
+  source_detail: z.string().nullable().optional(),
 });
 export const Highlights = z.object({
   generated_at: z.string(),
@@ -70,6 +73,7 @@ export const Highlights = z.object({
       value: z.number().nullable(),
       unit: z.string().nullable(),
       source: z.string(),
+      source_detail: z.string().nullable().optional(),
     }),
   ),
 });

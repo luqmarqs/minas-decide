@@ -109,8 +109,37 @@ Gerado offline (`npm run etl:build`), sem banco em runtime. Contratos em `shared
 
 ### `<release>/highlights.json` (`Highlights`)
 
-`items[]`: `id`, `label`, `value`, `unit` (`people` \| `percent` \| `pp` \| `votes` \| `count`), `compare_value`/`compare_label` (número secundário: total nacional, % ou votos), `note`, `source` (sempre preenchido). **`percent` em escala 0–100.** Ids: `mg_eligible_2026`, `mg_share_national_eligible_2026`, `mg_rank_eligible_2026` (posição; `compare_value` = nº de UFs), `mg_municipalities`, `mg_turnout_2026_r1`, `mg_abstention_2026_r1`, `mg_2026_r1_{lula,flavio}_{votes,share}`, `mg_2026_r1_margin_votes`, `mg_2022_r1_{lula,bolsonaro}_votes`, `mg_2022_r1_margin_votes`, `mg_2022_r2_{lula,bolsonaro}_votes`, `mg_2022_r2_margin_votes`, `br_2022_r2_{lula,bolsonaro}_share`, `br_2022_r2_margin_votes`, `mg_{2026_r1,2022_r2}_municipalities_led_{lula,bolsonaro}`, `mg_2026_r1_other_candidates_votes`, `mg_2026_r1_blank_null_votes`, `mg_2026_r1_abstention_votes`, `mg_2026_r1_neither_of_two`, `mg_2022_r2_blank_null_votes`, `mg_2022_r2_abstention_votes` (margens = Lula − Bolsonaro; negativo = Bolsonaro à frente). `why_minas[]`: `title`, `text` (frase com números calculados), `value`, `unit`, `source`.
+`items[]`: `id`, `label`, `value`, `unit` (`people` \| `percent` \| `pp` \| `votes` \| `count`), `compare_value`/`compare_label` (número secundário: total nacional, % ou votos), `note`, `source` (rótulo **curto** para a interface, D32: `TSE` = apuração 2026 do extrato, `TSE 2022` = dados abertos 2022, `TSE · eleitorado 2026` = aptos/ranking, `IBGE` = malha/municípios, `OpenStreetMap` = POIs; sempre preenchido), `source_detail` (proveniência completa: arquivos, Last-Modified, snapshot — exibida só na metodologia). **`percent` em escala 0–100.** Ids: `mg_eligible_2026`, `mg_share_national_eligible_2026`, `mg_rank_eligible_2026` (posição; `compare_value` = nº de UFs), `mg_municipalities`, `mg_turnout_2026_r1`, `mg_abstention_2026_r1`, `mg_2026_r1_{lula,flavio}_{votes,share}`, `mg_2026_r1_margin_votes`, `mg_2022_r1_{lula,bolsonaro}_votes`, `mg_2022_r1_margin_votes`, `mg_2022_r2_{lula,bolsonaro}_votes`, `mg_2022_r2_margin_votes`, `br_2022_r2_{lula,bolsonaro}_share`, `br_2022_r2_margin_votes`, `mg_{2026_r1,2022_r2}_municipalities_led_{lula,bolsonaro}`, `mg_2026_r1_other_candidates_votes`, `mg_2026_r1_blank_null_votes`, `mg_2026_r1_abstention_votes`, `mg_2026_r1_neither_of_two`, `mg_2022_r2_blank_null_votes`, `mg_2022_r2_abstention_votes` (margens = Lula − Bolsonaro; negativo = Bolsonaro à frente). `why_minas[]`: `title`, `text` (frase com números calculados), `value`, `unit`, `source` (curto), `source_detail`.
 
 ### `pois/terminais-mg.json` (`PoiFile`, fora do release e do manifesto)
 
 `generated_at`, `source` (endpoint Overpass, data da base OSM e da consulta), `license: 'ODbL 1.0'`, `attribution: '© OpenStreetMap contributors'`, `items[]`: `id` (`osm-<tipo>-<id>`), `name`, `category` (`bus_terminal` = `amenity=bus_station`; `bus_station` = estação BRT/MOVE ou `public_transport=station`+`bus=yes`; `metro_station` = `railway=station`+`station=subway`), `coordinates` `[lon, lat]`, `municipality_id` (ponto-em-polígono na malha IBGE), `osm_url`.
+
+## Geometrias de bairro (`public/geo/bairros/`, fora do release e do manifesto) — D29 / DATA-6
+
+Gerado por `npm run geo:bairros` (offline; arquivos locais + malha pública de bairros do IBGE em cache; nunca o SOURCE); validado por `npm run geo:validate`.
+
+### `bairros/<ibge7>.geojson` (um por município com local de votação)
+
+`FeatureCollection` de `Feature` com geometria **`MultiPolygon`** (lon/lat, 5 casas decimais). `properties`:
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `territory_id` | string | `mg-<ibge7>-<slugify(bairro)>` — sempre existe em `territories-index.json` (tipo `neighborhood`) |
+| `name` | string | nome do bairro no índice do snapshot |
+| `municipality_id` | string | `mg-<ibge7>` |
+| `polling_places` | number | nº de locais de votação do bairro no extrato |
+| `method` | `official-ibge-cd2022` \| `owner-provided` \| `voronoi-polling-places` | origem da área |
+| `official` | boolean | `true` para limite oficial (IBGE CD2022 ou fornecido pelo proprietário) |
+| `approx` | boolean | `true` ⇔ `method = voronoi-polling-places` (área aproximada, **não** é limite oficial) |
+| `whole_municipality` | boolean | município com um único bairro e sem malha oficial: a área é o polígono municipal inteiro |
+| `approx_coords_only` | boolean | área Voronoi calculada só com locais de `coord_aproximada = true` |
+| `official_name` | string? | só oficiais: nome na malha oficial (`NM_BAIRRO`; vários unidos por " / " se o mesmo nome aparece em mais de um polígono) |
+| `official_code` | string\|null? | só oficiais: `CD_BAIRRO` (vírgula se vários) |
+| `match` | `direct` \| `prefix`? | só oficiais: casamento por slug idêntico ou após remover "Bairro "/"Vila " |
+
+### `bairros/index.json`
+
+`release`, `methods`, `decimals`, `note`, `attribution`, `sources[]` (`name`, `url`, `crs`), `totals` (`municipalities`, `neighborhoods_with_area`, `neighborhoods_without_area`, `by_method`, `municipalities_with_official_mesh`, `official_neighborhoods_in_mesh`, `official_matched`, `bytes`), `municipalities[]` (`ibge`, `municipality_id`, `file`, `neighborhoods`, `by_method`, `bytes`).
+
+O relatório de casamento por nome (oficiais × índice, não casados dos dois lados) fica em `data/private/geo/match-report.json` (local, não publicado).

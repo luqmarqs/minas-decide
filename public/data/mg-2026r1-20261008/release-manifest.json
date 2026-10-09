@@ -2,7 +2,7 @@
   "schema_version": 1,
   "release_id": "mg-2026r1-20261008",
   "status": "validated",
-  "generated_at": "2026-10-09T18:33:38.039Z",
+  "generated_at": "2026-10-09T18:45:45.077Z",
   "years": [
     2022,
     2026
@@ -23,7 +23,7 @@
     "candidaturas",
     "votos_cand"
   ],
-  "pipeline_commit": "cac11fb",
+  "pipeline_commit": "af28be9",
   "territories_count": 6931,
   "records_count": 333462,
   "indicator_types": [
@@ -4556,8 +4556,8 @@
     },
     {
       "path": "mg-2026r1-20261008/highlights.json",
-      "sha256": "13ed7ed3de0c6991c0f4a0f732b5f738295f1781ebbe33f045b0cbcb05d5f809",
-      "bytes": 14348
+      "sha256": "4da493f9b48768157cef6f030391a912b086db174a353c728000679d31ed491e",
+      "bytes": 15270
     },
     {
       "path": "mg-2026r1-20261008/methodology.json",

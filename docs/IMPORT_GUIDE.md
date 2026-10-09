@@ -120,6 +120,21 @@ npm run data:validate
 - Rollback do release: a versão da rodada 2 está em `data/private/rollback/mg-2026r1-20261008-r2/` (copiar a pasta para `public/data/mg-2026r1-20261008/` e `root-manifest.json` para `public/data/manifest.json`).
 - Overpass: uma consulta por execução; respeitar a política de uso (não rodar em loop; usar o cache).
 
+## 12. Áreas por bairro (D29 / DATA-6, sem SOURCE)
+
+Depois do `etl:build` (precisa de `public/data/<release>/territories-index.json` e do extrato `locais.json`):
+
+```bash
+npm run geo:bairros                  # baixa (1x) a malha de bairros IBGE CD2022 de MG para data/private/geo/ibge-bairros/ e gera public/geo/bairros/
+npm run geo:bairros -- --offline     # não baixa nada (sem o cache: só Voronoi)
+npm run geo:bairros -- --no-official # ignora malhas oficiais (só Voronoi)
+npm run geo:validate                 # GeoJSON, anéis, ids × índice, cobertura, áreas × município
+```
+
+- Limites do proprietário: colocar `.geojson`/`.json`/`.zip` (shapefile, lon/lat) em `data/private/geo-input/`; o município vem de `CD_MUN`/`cd_ibge`/`codarea` ou do nome (`NM_MUN`/`municipio`), o bairro de `NM_BAIRRO`/`bairro`/`nome`/`name`. Têm prioridade sobre o IBGE no município.
+- Saída fora do release e do manifesto (cache `/geo/*` de 1 dia em `public/_headers`); relatório de casamento por nome em `data/private/geo/match-report.json`.
+- `scripts/geo/voronoi.ts` (Voronoi, recorte, união, arredondamento, simplificação) e `scripts/geo/official.ts` (casamento por nome) são puros e testados (`*.test.ts`).
+
 ## Segurança
 
 - O extrator recusa qualquer SQL que não comece com `SELECT`/`WITH`, contenha palavras de escrita ou mais de um statement.

@@ -7,3 +7,4 @@ data/generated
 public/data
 package-lock.json
 *.md
+public/geo/bairros

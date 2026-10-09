@@ -94,7 +94,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'people',
       compare_value: natEligible,
       compare_label: 'eleitorado apto no Brasil, inclui exterior (2026)',
-      source: `${src26}; total nacional: ${srcNat26}`,
+      source: 'TSE · eleitorado 2026',
+      source_detail: `${src26}; total nacional: ${srcNat26}`,
     }),
     item({
       id: 'mg_share_national_eligible_2026',
@@ -104,7 +105,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       compare_value: pct(t.eligible / natEligibleNoZZ),
       compare_label: 'sem o eleitorado do exterior (%)',
       note: 'Percentual em escala 0–100.',
-      source: srcNat26,
+      source: 'TSE · eleitorado 2026',
+      source_detail: srcNat26,
     }),
     item({
       id: 'mg_rank_eligible_2026',
@@ -113,14 +115,16 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'count',
       compare_value: ufs,
       compare_label: 'unidades da federação',
-      source: srcNat26,
+      source: 'TSE · eleitorado 2026',
+      source_detail: srcNat26,
     }),
     item({
       id: 'mg_municipalities',
       label: 'Municípios de Minas Gerais',
       value: i.municipalities,
       unit: 'count',
-      source: src26,
+      source: 'IBGE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_turnout_2026_r1',
@@ -129,7 +133,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'people',
       compare_value: pct(t.turnout_rate),
       compare_label: '% do eleitorado apto',
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_abstention_2026_r1',
@@ -138,7 +143,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'people',
       compare_value: pct(t.abstention_rate),
       compare_label: '% do eleitorado apto',
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_2026_r1_lula_votes',
@@ -147,7 +153,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'votes',
       compare_value: lula26,
       compare_label: '% dos votos válidos',
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_2026_r1_flavio_votes',
@@ -156,21 +163,24 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'votes',
       compare_value: flavio26,
       compare_label: '% dos votos válidos',
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_2026_r1_lula_share',
       label: 'Lula em MG — % dos válidos (1º turno de 2026)',
       value: lula26,
       unit: 'percent',
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_2026_r1_flavio_share',
       label: 'Flávio Bolsonaro em MG — % dos válidos (1º turno de 2026)',
       value: flavio26,
       unit: 'percent',
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_2026_r1_margin_votes',
@@ -180,7 +190,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       compare_value: m26.pp,
       compare_label: 'p.p. dos válidos',
       note: 'Valor negativo: Flávio Bolsonaro à frente.',
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_2022_r1_lula_votes',
@@ -189,7 +200,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'votes',
       compare_value: lula22r1,
       compare_label: '% dos votos válidos',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
     item({
       id: 'mg_2022_r1_bolsonaro_votes',
@@ -198,7 +210,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'votes',
       compare_value: bolso22r1,
       compare_label: '% dos votos válidos',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
     item({
       id: 'mg_2022_r1_margin_votes',
@@ -207,7 +220,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'votes',
       compare_value: m1.pp,
       compare_label: 'p.p. dos válidos',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
     item({
       id: 'mg_2022_r2_lula_votes',
@@ -216,7 +230,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'votes',
       compare_value: lula22r2,
       compare_label: '% dos votos válidos',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
     item({
       id: 'mg_2022_r2_bolsonaro_votes',
@@ -225,7 +240,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'votes',
       compare_value: bolso22r2,
       compare_label: '% dos votos válidos',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
     item({
       id: 'mg_2022_r2_margin_votes',
@@ -234,7 +250,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'votes',
       compare_value: m2.pp,
       compare_label: 'p.p. dos válidos',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
     item({
       id: 'br_2022_r2_lula_share',
@@ -243,7 +260,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'percent',
       compare_value: br22.r2.lula,
       compare_label: 'votos',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
     item({
       id: 'br_2022_r2_bolsonaro_share',
@@ -252,7 +270,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'percent',
       compare_value: br22.r2.bolsonaro,
       compare_label: 'votos',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
     item({
       id: 'br_2022_r2_margin_votes',
@@ -261,7 +280,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'votes',
       compare_value: mBr2.pp,
       compare_label: 'p.p. dos válidos',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
   ];
 
@@ -274,6 +294,7 @@ export function buildHighlights(i: HighlightInput): Highlights {
     who: 'lula' | 'bolsonaro',
     label: string,
     src: string,
+    srcShort: string,
   ) =>
     item({
       id: `mg_${key === 'r1_2026' ? '2026_r1' : '2022_r2'}_municipalities_led_${who}`,
@@ -283,7 +304,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       compare_value: pct(i.leaders[key][who] / N),
       compare_label: `% dos ${N} municípios`,
       note: 'Liderança = mais votos válidos entre Lula e Bolsonaro no município (diferença > 0).',
-      source: src,
+      source: srcShort,
+      source_detail: src,
     });
   // 2026 r1: nulls derived as comparecimento − válidos − brancos (= TSE QT_TOTAL_VOTOS_NULOS, inclui nulos técnicos)
   const others26 = valid26 - lula.votes_2026_r1 - bolso.votes_2026_r1;
@@ -295,19 +317,21 @@ export function buildHighlights(i: HighlightInput): Highlights {
   const r2 = mg22.r2;
   const bn22 = r2.blank + r2.null_votes;
   const extra: Item[] = [
-    lead('r1_2026', 'lula', 'Municípios onde Lula liderou (1º turno de 2026)', src26),
+    lead('r1_2026', 'lula', 'Municípios onde Lula liderou (1º turno de 2026)', src26, 'TSE'),
     lead(
       'r1_2026',
       'bolsonaro',
       'Municípios onde Flávio Bolsonaro liderou (1º turno de 2026)',
       src26,
+      'TSE',
     ),
-    lead('r2_2022', 'lula', 'Municípios onde Lula liderou (2º turno de 2022)', src22),
+    lead('r2_2022', 'lula', 'Municípios onde Lula liderou (2º turno de 2022)', src22, 'TSE 2022'),
     lead(
       'r2_2022',
       'bolsonaro',
       'Municípios onde Jair Bolsonaro liderou (2º turno de 2022)',
       src22,
+      'TSE 2022',
     ),
     item({
       id: 'mg_2026_r1_other_candidates_votes',
@@ -317,7 +341,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       compare_value: pct(others26 / valid26),
       compare_label: '% dos votos válidos',
       note: 'Votos válidos menos os de Lula e de Flávio Bolsonaro.',
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_2026_r1_blank_null_votes',
@@ -327,7 +352,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       compare_value: pct(bn26 / t.turnout),
       compare_label: '% do comparecimento',
       note: `Brancos ${t.blank} + nulos ${nulls26} (nulos = comparecimento − válidos − brancos; inclui 561 nulos técnicos do TSE). ${NOTE_GROUPS}`,
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_2026_r1_abstention_votes',
@@ -336,7 +362,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'people',
       compare_value: pct(t.abstention / t.eligible),
       compare_label: '% do eleitorado apto',
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_2026_r1_neither_of_two',
@@ -347,7 +374,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       compare_value: pct(neither26 / t.eligible),
       compare_label: '% do eleitorado apto',
       note: `Abstenção ${t.abstention} + brancos e nulos ${bn26} + outras candidaturas ${others26}. ${NOTE_GROUPS}`,
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     }),
     item({
       id: 'mg_2022_r2_blank_null_votes',
@@ -357,7 +385,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       compare_value: pct(bn22 / r2.turnout),
       compare_label: '% do comparecimento',
       note: `Brancos ${r2.blank} + nulos ${r2.null_votes}. ${NOTE_GROUPS}`,
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
     item({
       id: 'mg_2022_r2_abstention_votes',
@@ -366,7 +395,8 @@ export function buildHighlights(i: HighlightInput): Highlights {
       unit: 'people',
       compare_value: pct(r2.abstention / r2.eligible),
       compare_label: '% do eleitorado apto',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     }),
   ];
   items.push(...extra);
@@ -377,35 +407,40 @@ export function buildHighlights(i: HighlightInput): Highlights {
       text: `Minas Gerais tem ${fmtMi(t.eligible)} milhões de eleitores aptos em 2026, ${fmtPct(shareNat)} % do eleitorado do país (incluindo o exterior) — o ${rank}º maior entre as ${ufs} unidades da federação.`,
       value: shareNat,
       unit: '%',
-      source: `${src26}; ${srcNat26}`,
+      source: 'TSE · eleitorado 2026',
+      source_detail: `${src26}; ${srcNat26}`,
     },
     {
       title: 'Margem estreita em 2022',
       text: `No 2º turno de 2022, Lula venceu em Minas por ${fmtInt(m2.votes)} votos (${fmtPct(m2.pp)} p.p. dos válidos): ${fmtPct(lula22r2)} % a ${fmtPct(bolso22r2)} %. No Brasil, a diferença foi de ${fmtPct(mBr2.pp)} p.p. (${fmtPct(lulaBr22r2)} % a ${fmtPct(bolsoBr22r2)} %).`,
       value: m2.votes,
       unit: 'votos',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     },
     {
       title: 'Resultado de MG próximo ao nacional',
       text: `Em 2022, o percentual de Lula em Minas no 2º turno (${fmtPct(lula22r2)} %) ficou a ${fmtPct(Math.abs(lulaBr22r2 - lula22r2))} p.p. do resultado nacional (${fmtPct(lulaBr22r2)} %). Minas reuniu ${fmtPct(mgShareBrValid22r2)} % dos votos válidos do país nesse turno.`,
       value: Math.round((lulaBr22r2 - lula22r2) * 100) / 100,
       unit: 'p.p.',
-      source: src22,
+      source: 'TSE 2022',
+      source_detail: src22,
     },
     {
       title: '1º turno de 2026',
       text: `No 1º turno de 2026, Lula teve ${fmtPct(lula26)} % dos votos válidos em Minas (${fmtInt(lula.votes_2026_r1)} votos) e Flávio Bolsonaro, ${fmtPct(flavio26)} % (${fmtInt(bolso.votes_2026_r1)} votos). Em 2022, no 1º turno, Lula teve ${fmtPct(lula22r1)} % e Jair Bolsonaro, ${fmtPct(bolso22r1)} %.`,
       value: lula26,
       unit: '%',
-      source: `${src26}; ${src22}`,
+      source: 'TSE',
+      source_detail: `${src26}; ${src22}`,
     },
     {
       title: 'Participação',
       text: `Compareceram ${fmtMi(t.turnout)} milhões de eleitores no 1º turno de 2026 (${fmtPct(pct(t.turnout_rate))} % do eleitorado apto); a abstenção foi de ${fmtPct(pct(t.abstention_rate))} % em ${fmtInt(i.municipalities)} municípios.`,
       value: pct(t.turnout_rate),
       unit: '%',
-      source: src26,
+      source: 'TSE',
+      source_detail: src26,
     },
   ];
   return { generated_at: new Date().toISOString(), items, why_minas: why };
