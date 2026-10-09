@@ -356,3 +356,27 @@ A seção 6 deste relatório (sessão provisória do Supabase Auth, magic link, 
 **O que não foi testado por mim:** cadastro e login com caixa de entrada real (código recebido por e-mail) — **pendente do proprietário** em `/participar` e `/entrar` no staging. O erro "Não encontrado" visto pelo proprietário no RSVP ocorreu durante a aplicação da migration 0012 no banco dev compartilhado e não se repetiu depois.
 
 **Pendências que ficam:** instância `live` do Clerk com domínio próprio para produção (D37; `STAGING_PLAYBOOK.md` §1b); webhook `user.deleted` → `svc_erase_user_data` (hoje a exclusão no Clerk não apaga o perfil no banco); SMTP só para avisos futuros (o Clerk envia os códigos); auditoria QA-3 do novo fluxo (resultado no próximo adendo).
+
+---
+
+# ADENDO — RODADA 4b: MAPA NO CELULAR E DESEMPENHO (2026-10-09)
+
+**Pedido:** "o mapa ta terrivel em mobile, da pra ver nada"; "aqui precisa sinalizar a rolagem" (infográfico); bairros automáticos no mapa. **Commit:** `bc6a181` (+ `5a182f5` CSP). **Staging** redeployado (versão `59ffa815…`); e2e mobile contra o staging **19/19**.
+
+| Medida (município selecionado) | Antes | Depois |
+|---|---|---|
+| Pixel 7 (412×839): mapa visível | 112 px (13,3 %) | **608 px (72,4 %)** |
+| iPhone 13 (390×664): mapa visível | 8 px (1,2 %) | **424 px (63,9 %)** |
+| Lighthouse home mobile (CPU 4×, 3 rodadas, estático): desempenho | 64–66 | **73–82** |
+| idem: TBT | 1,61–2,61 s | **0,31–0,45 s** |
+| idem: LCP | 2,7–3,0 s | 3,0–4,2 s (piorou; ver abaixo) |
+| Menor fonte do infográfico | 7,1 px | 11,2 px |
+
+**O que mudou no celular (< 1024 px):** barra compacta de 52 px no topo do mapa ("Camada: Abstenção · 2026 · 1º" abre o seletor num popover não modal; botões-ícone de Atividades/Terminais e da lista); legenda recolhida num chip com o selo DEMO/parcial sempre visível; créditos do mapa num botão ⓘ; o mapa ocupa a tela abaixo do cabeçalho e, ao selecionar, o sheet abre **recolhido** (76 px: nome, selo, abstenção e brancos/nulos) com três estados e arrasto; a câmera enquadra o território no espaço livre entre barra e sheet; popovers de atividade/terminal acima do sheet, largura total; sheet próprio (`role="dialog"` não modal, conteúdo `inert` quando recolhido) no lugar do vaul — chunk de 31,2 KB para 3,6 KB e sem o contorno de `aria-hidden` apontado na rodada 3; hero com a arte limitada a ~26–28 % da altura; mapas da narrativa a no máximo 42 %; carrossel do infográfico com "espiada" do próximo bloco, pontos, setas e dica "Deslize para ver mais →" na primeira visita; agenda em lista vertical; mapa, malha do IBGE e camadas da narrativa carregados só quando a seção se aproxima.
+
+**Bairros automáticos:** a partir do zoom 10, as áreas de bairro de até 12 municípios na tela carregam sozinhas (cache; download cancelado ao sair da tela), coloridas pela camada ativa; rótulos de município entre os zooms 8 e 12 e de bairro a partir do 12, sem sobreposição; o município selecionado mostra bairros em qualquer zoom. Limite: a interseção usa o retângulo envolvente do município, não o polígono.
+
+**Validação:** `npm run ci` **445/445** (inclui 18 testes novos de mobile), isolamento OK em 3.859 arquivos, build OK; e2e **43 passam** (+7 pulados: só-mobile no projeto desktop); axe **0 violações** no topo da página nos dois aparelhos. Dois e2e antigos oscilaram sob carga da suíte completa (passaram isolados) e ganharam folga de tempo. Capturas antes/depois e JSONs de medição em `docs/screenshots/mobile/`.
+
+**Ressalvas honestas:** a meta de LCP ≤ 3 s **não foi atingida** — o `clerk-js` entra no bundle inicial (395 → 491 KB) e é baixado no início; o build de controle só com o Clerk já chegava a 4,3 s. Mitigado parcialmente com `preload` da imagem do hero e remoção do `preload` da Bungee Outline; a correção definitiva é carregar o Clerk sob demanda (pendência). Com o mapa rolado sob o cabeçalho fixo, sobra 1 violação `target-size` do botão "Quero participar" (pré-existente). Sem tela cheia `/mapa` (não foi preciso); gestos cooperativos (dois dedos) mantidos para a página continuar rolando. O mapa expõe um evento `mm-test-jump` só para os e2e moverem a câmera (sem dados).
+
