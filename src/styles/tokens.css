@@ -1,32 +1,33 @@
 /*
- * Minas em Movimento — design tokens (spec §12.11)
- * Identidade PROVISÓRIA, retematizável: a arte oficial chegará depois. Toda cor,
- * fonte, espaçamento e duração usados por componentes passa por estes tokens.
- * Direção: editorial, terroso, contemporâneo. Verde-serra como ação, areia como
- * superfície, ocre como destaque. Escala de mapa sequencial neutra (não moral).
+ * Minas Decide — design tokens (spec §12.11)
+ * Identidade OFICIAL "Minas Decide" (arte aceita pelo proprietário em 2026-10-09;
+ * docs/IDENTITY_AUDIT.md, docs/DESIGN_SYSTEM.md). Creme + tinta no claro, oliva + creme
+ * no escuro; azul-céu como ação (texto branco), amarelo-sol só como superfície em fundo
+ * claro. Escala de mapa sequencial neutra (não moral, inalterada; spec §13.3).
+ * O tema provisório anterior sobrevive como `data-brand="provisorio"` (rollback).
  */
 :root {
   color-scheme: light dark;
 
   /* ---- superfícies e texto ---- */
-  --color-surface: #f6f3ee;
-  --color-surface-alt: #ece7de;
-  --color-surface-raised: #ffffff;
-  --color-surface-overlay: rgb(20 19 15 / 0.55);
-  --color-text-primary: #1b1a16;
-  --color-text-secondary: #43413a;
-  --color-text-muted: #605d53; /* 4,9:1 sobre surface-alt (axe VR-1) */
-  --color-text-on-action: #f6f3ee;
-  --color-border: #d8d2c6;
-  --color-border-strong: #857d6c; /* ≥ 3:1 sobre surface, surface-alt e surface-raised (bordas de controles, WCAG 1.4.11; VR-1 P-UX-5) */
+  --color-surface: #f6ece4;
+  --color-surface-alt: #ebd6ca;
+  --color-surface-raised: #fffaf6;
+  --color-surface-overlay: rgb(32 32 32 / 0.55);
+  --color-text-primary: #202020;
+  --color-text-secondary: #4a4038;
+  --color-text-muted: #5b5249; /* 5,5:1 sobre surface-alt #ebd6ca */
+  --color-text-on-action: #ffffff;
+  --color-border: #dcc6b4;
+  --color-border-strong: #7f5c34; /* ocre: 4,3:1 sobre surface-alt, 5,8:1 sobre raised (WCAG 1.4.11) */
 
   /* ---- ação e estados ---- */
-  --color-action-primary: #1f4e3d;
-  --color-action-hover: #173d30;
-  --color-action-active: #112c23;
-  --color-action-soft: #dfe9e3;
-  --color-accent: #c2771a;
-  --color-accent-soft: #f4e3cb;
+  --color-action-primary: #067fa8; /* céu: texto branco 4,56:1; nunca como cor de texto */
+  --color-action-hover: #06688a;
+  --color-action-active: #055574;
+  --color-action-soft: #d6eaf0;
+  --color-accent: #e8ba1f; /* sol: SÓ superfície/borda decorativa, nunca texto em fundo claro */
+  --color-accent-soft: #f6e3a6;
   --color-success: #256841; /* ≥ 4,5:1 sobre success-soft (axe VR-1) */
   --color-success-soft: #dcefe3;
   --color-warning: #8a4f10; /* ≥ 4,5:1 sobre warning-soft (VR-1) */
@@ -35,7 +36,7 @@
   --color-error-soft: #f6dcd8;
   --color-info: #2f5d8a;
   --color-info-soft: #dbe6f2;
-  --color-focus: #c2771a;
+  --color-focus: #06688a; /* 4,47:1 sobre surface-alt */
   --color-demo: #6b4ea8;
   --color-demo-soft: #e8e1f5;
 
@@ -50,13 +51,29 @@
   --map-diverging-zero: #ece7de;
   --map-diverging-pos: #2f6d53;
   --map-stroke: #1b1a16;
-  --map-selected: #c2771a;
-  --map-activity: #c2771a;
-  --map-activity-halo: rgb(194 119 26 / 0.25);
+  --map-selected: #e8ba1f;
+  --map-selected-casing: #202020; /* amarelo sozinho tem < 3:1 sobre o basemap claro */
+  --map-activity: #06688a;
+  --map-activity-halo: rgb(6 104 138 / 0.25);
+
+  /* ---- cores cruas da arte oficial (hero, divisória, lockup, selos de marca) ---- */
+  --brand-sky: #067fa8;
+  --brand-sky-deep: #06688a;
+  --brand-sun: #e8ba1f;
+  --brand-cream: #ebd6ca;
+  --brand-ocre: #7f5c34;
+  --brand-ocre-deep: #5e4325;
+  --brand-olive: #262824;
+  --brand-olive-deep: #1e1f1c;
+  --brand-ink: #202020;
+
+  /* ---- tipografia de marca (só hero, selos de marca e lockup) ---- */
+  --font-brand: 'Anton', 'Impact', 'Haettenschweiler', 'Arial Narrow Bold', sans-serif;
+  --font-brand-outline: 'Bungee Outline', 'Anton', 'Impact', sans-serif;
+  --heading-weight: 700;
 
   /* ---- tipografia ---- */
-  --font-display:
-    'Fraunces', 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --font-display: var(--font-body); /* títulos comuns: sans do corpo em 700 */
   --font-body:
     'Inter', 'InterVariable', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
     sans-serif;
@@ -124,6 +141,134 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
+    --color-surface: #1e1f1c;
+    --color-surface-alt: #262824;
+    --color-surface-raised: #2e302b;
+    --color-surface-overlay: rgb(0 0 0 / 0.6);
+    --color-text-primary: #ebd6ca;
+    --color-text-secondary: #d4c3b7;
+    --color-text-muted: #b3a497;
+    --color-text-on-action: #202020;
+    --color-border: #3d3f38;
+    --color-border-strong: #9c7a4f; /* ocre claro: #5e4325 (auditoria) dá < 3:1 aqui */
+    --color-action-primary: #e8ba1f; /* sol com texto #202020 (8,9:1) */
+    --color-action-hover: #d7ac1e;
+    --color-action-active: #c99a12;
+    --color-action-soft: #3a3320;
+    --color-accent: #e8ba1f;
+    --color-accent-soft: #3a3320;
+    --color-success: #7fcf9b;
+    --color-success-soft: #1d3a2a;
+    --color-warning: #e3a85a;
+    --color-warning-soft: #3d2b12;
+    --color-error: #ef8b7d;
+    --color-error-soft: #431d18;
+    --color-info: #8db6e3;
+    --color-info-soft: #1c2d40;
+    --color-focus: #e8ba1f;
+    --color-demo: #b9a4e8;
+    --color-demo-soft: #2b2340;
+    --map-fill-none: #37332a;
+    --map-fill-low: #26302a;
+    --map-fill-mid-low: #345546;
+    --map-fill-mid: #4d8a6a;
+    --map-fill-mid-high: #7fbf9c;
+    --map-fill-high: #c3e4d1;
+    --map-diverging-neg: #e58a5f;
+    --map-diverging-zero: #2a2820;
+    --map-diverging-pos: #7fbf9c;
+    --map-stroke: #f1ede5;
+    --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.45);
+    --shadow-sheet: 0 -8px 32px rgb(0 0 0 / 0.6);
+    --map-selected: #e8ba1f;
+    --map-selected-casing: #1e1f1c;
+    --map-activity: #5fb8d9; /* céu claro: o azul-escuro some no basemap escuro */
+    --map-activity-halo: rgb(95 184 217 / 0.3);
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-surface: #1e1f1c;
+  --color-surface-alt: #262824;
+  --color-surface-raised: #2e302b;
+  --color-surface-overlay: rgb(0 0 0 / 0.6);
+  --color-text-primary: #ebd6ca;
+  --color-text-secondary: #d4c3b7;
+  --color-text-muted: #b3a497;
+  --color-text-on-action: #202020;
+  --color-border: #3d3f38;
+  --color-border-strong: #9c7a4f; /* ocre claro: #5e4325 (auditoria) dá < 3:1 aqui */
+  --color-action-primary: #e8ba1f; /* sol com texto #202020 (8,9:1) */
+  --color-action-hover: #d7ac1e;
+  --color-action-active: #c99a12;
+  --color-action-soft: #3a3320;
+  --color-accent: #e8ba1f;
+  --color-accent-soft: #3a3320;
+  --color-success: #7fcf9b;
+  --color-success-soft: #1d3a2a;
+  --color-warning: #e3a85a;
+  --color-warning-soft: #3d2b12;
+  --color-error: #ef8b7d;
+  --color-error-soft: #431d18;
+  --color-info: #8db6e3;
+  --color-info-soft: #1c2d40;
+  --color-focus: #e8ba1f;
+  --color-demo: #b9a4e8;
+  --color-demo-soft: #2b2340;
+  --map-fill-none: #37332a;
+  --map-fill-low: #26302a;
+  --map-fill-mid-low: #345546;
+  --map-fill-mid: #4d8a6a;
+  --map-fill-mid-high: #7fbf9c;
+  --map-fill-high: #c3e4d1;
+  --map-diverging-neg: #e58a5f;
+  --map-diverging-zero: #2a2820;
+  --map-diverging-pos: #7fbf9c;
+  --map-stroke: #f1ede5;
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.45);
+  --shadow-sheet: 0 -8px 32px rgb(0 0 0 / 0.6);
+  --map-selected: #e8ba1f;
+  --map-selected-casing: #1e1f1c;
+  --map-activity: #5fb8d9; /* céu claro: o azul-escuro some no basemap escuro */
+  --map-activity-halo: rgb(95 184 217 / 0.3);
+}
+
+/* ==========================================================================
+ * Tema PROVISÓRIO (rodadas 1–2) — mantido só para comparação/rollback.
+ * Ativado por `?brand=0` (persistido em localStorage mm.brand=provisorio;
+ * src/lib/brand.ts). Especificidade: o bloco claro (0,2,0) vem depois dos escuros
+ * oficiais para vencê-los; os escuros provisórios (0,3,0) vencem o claro provisório.
+ * Foco escurecido para #a8640f (3,8:1 sobre surface-alt; antes #c2771a = 2,87:1).
+ * ======================================================================== */
+:root[data-brand='provisorio'] {
+  --color-surface: #f6f3ee;
+  --color-surface-alt: #ece7de;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: rgb(20 19 15 / 0.55);
+  --color-text-primary: #1b1a16;
+  --color-text-secondary: #43413a;
+  --color-text-muted: #605d53;
+  --color-text-on-action: #f6f3ee;
+  --color-border: #d8d2c6;
+  --color-border-strong: #857d6c;
+  --color-action-primary: #1f4e3d;
+  --color-action-hover: #173d30;
+  --color-action-active: #112c23;
+  --color-action-soft: #dfe9e3;
+  --color-accent: #c2771a;
+  --color-accent-soft: #f4e3cb;
+  --color-focus: #a8640f;
+  --map-selected: #c2771a;
+  --map-selected-casing: transparent;
+  --map-activity: #c2771a;
+  --map-activity-halo: rgb(194 119 26 / 0.25);
+  --font-display:
+    'Fraunces', 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --heading-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-brand='provisorio']:not([data-theme='light']) {
     --color-surface: #14130f;
     --color-surface-alt: #1e1c17;
     --color-surface-raised: #262319;
@@ -133,13 +278,21 @@
     --color-text-muted: #9f998b;
     --color-text-on-action: #0f1a15;
     --color-border: #37332a;
-    --color-border-strong: #7d7562; /* ≥ 3:1 sobre surface-raised escuro */
+    --color-border-strong: #7d7562;
     --color-action-primary: #8fcba9;
     --color-action-hover: #a8d8bd;
     --color-action-active: #c3e4d1;
     --color-action-soft: #1f3a2d;
     --color-accent: #e8a24a;
     --color-accent-soft: #3e2c12;
+    --color-focus: #e8a24a;
+    --map-selected: #c2771a;
+    --map-selected-casing: transparent;
+    --map-activity: #c2771a;
+    --map-activity-halo: rgb(194 119 26 / 0.25);
+    --font-display:
+      'Fraunces', 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+    --heading-weight: 600;
     --color-success: #7fcf9b;
     --color-success-soft: #1d3a2a;
     --color-warning: #e3a85a;
@@ -148,7 +301,6 @@
     --color-error-soft: #431d18;
     --color-info: #8db6e3;
     --color-info-soft: #1c2d40;
-    --color-focus: #e8a24a;
     --color-demo: #b9a4e8;
     --color-demo-soft: #2b2340;
     --map-fill-none: #37332a;
@@ -166,7 +318,7 @@
   }
 }
 
-:root[data-theme='dark'] {
+:root[data-brand='provisorio'][data-theme='dark'] {
   --color-surface: #14130f;
   --color-surface-alt: #1e1c17;
   --color-surface-raised: #262319;
@@ -183,6 +335,14 @@
   --color-action-soft: #1f3a2d;
   --color-accent: #e8a24a;
   --color-accent-soft: #3e2c12;
+  --color-focus: #e8a24a;
+  --map-selected: #c2771a;
+  --map-selected-casing: transparent;
+  --map-activity: #c2771a;
+  --map-activity-halo: rgb(194 119 26 / 0.25);
+  --font-display:
+    'Fraunces', 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --heading-weight: 600;
   --color-success: #7fcf9b;
   --color-success-soft: #1d3a2a;
   --color-warning: #e3a85a;
@@ -191,7 +351,6 @@
   --color-error-soft: #431d18;
   --color-info: #8db6e3;
   --color-info-soft: #1c2d40;
-  --color-focus: #e8a24a;
   --color-demo: #b9a4e8;
   --color-demo-soft: #2b2340;
   --map-fill-none: #37332a;

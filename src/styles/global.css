@@ -70,7 +70,7 @@
     font-family: var(--font-display);
     letter-spacing: var(--tracking-display);
     line-height: var(--leading-tight);
-    font-weight: 600;
+    font-weight: var(--heading-weight, 700);
   }
   :focus-visible {
     outline: 3px solid var(--color-focus);
@@ -181,4 +181,159 @@
 /* Keep MapLibre controls clear of the desktop side panel. */
 .mm-map-has-panel .maplibregl-ctrl-bottom-right {
   right: calc(var(--panel-width) + 1.5rem);
+}
+
+/* ==========================================================================
+ * Identidade oficial "Minas Decide" (docs/IDENTITY_AUDIT.md, DESIGN_SYSTEM.md).
+ * Anton e Bungee Outline (OFL, self-hosted em public/fonts, preload no index.html)
+ * ficam restritas ao hero, aos selos de marca e ao lockup; os demais títulos usam a
+ * sans do corpo em 700. Regras abaixo valem salvo no rollback `data-brand="provisorio"`.
+ * ======================================================================== */
+@font-face {
+  font-family: 'Anton';
+  src: url('/fonts/anton/Anton-Regular-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC,
+    U+2122, U+2212, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Bungee Outline';
+  src: url('/fonts/bungee-outline/BungeeOutline-Regular-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC,
+    U+2122, U+2212, U+FEFF, U+FFFD;
+}
+
+/* Anton tem um só peso: sem negrito sintético nos títulos. */
+.brand-display {
+  font-family: var(--font-brand);
+  font-weight: 400;
+  font-synthesis: none;
+  letter-spacing: 0.01em;
+}
+.brand-outline {
+  font-family: var(--font-brand-outline, 'Bungee Outline', sans-serif);
+  font-weight: 400;
+  font-synthesis: none;
+  letter-spacing: 0.02em;
+  /* O contorno da Bungee Outline é fino em tamanhos de header: engrossa levemente. */
+  -webkit-text-stroke: 0.04em currentColor;
+}
+
+/* "Eu vou" amarelo-sol com texto tinta (8,9:1). */
+:root:not([data-brand='provisorio']) .mm-rsvp-cta:not(:disabled) {
+  background-color: var(--brand-sun);
+  color: var(--brand-ink);
+}
+:root:not([data-brand='provisorio']) .mm-rsvp-cta:not(:disabled):hover {
+  background-color: #d7ac1e;
+}
+:root:not([data-brand='provisorio']) .mm-rsvp-cta:disabled {
+  background-color: var(--brand-sun);
+  color: var(--brand-ink);
+}
+
+/* Amostra "selecionado" da legenda: o amarelo ganha contorno tinta (≥ 3:1). */
+:root:not([data-brand='provisorio']) .mm-selected-swatch {
+  box-shadow: 0 0 0 1px var(--map-selected-casing);
+}
+
+/* ---- Hero da home (sempre "ilha escura" oliva, em claro e escuro) ---- */
+.brand-hero {
+  --color-surface: #1e1f1c;
+  --color-surface-alt: #262824;
+  --color-surface-raised: #2e302b;
+  --color-text-primary: #ebd6ca;
+  --color-text-secondary: #d4c3b7;
+  --color-text-muted: #b3a497;
+  --color-text-on-action: #202020;
+  --color-border: #3d3f38;
+  --color-border-strong: #9c7a4f;
+  --color-action-primary: #e8ba1f;
+  --color-action-hover: #d7ac1e;
+  --color-action-active: #c99a12;
+  --color-action-soft: #3a3320;
+  --color-accent-soft: #3a3320;
+  --color-focus: #e8ba1f;
+  /* Aliases do @theme (resolvidos no :root): remapeados aqui para a ilha escura. */
+  --color-primary: #ebd6ca;
+  --color-secondary: #d4c3b7;
+  --color-muted: #b3a497;
+  --color-on-action: #202020;
+  --color-action: #e8ba1f;
+  position: relative;
+  isolation: isolate;
+  background: var(--brand-olive-deep);
+  color: var(--color-text-primary);
+}
+.brand-hero__art {
+  position: relative;
+  overflow: hidden;
+  /* 36vh no celular; 40–52vh no desktop (empilhado até 1279px). */
+  height: clamp(36vh, 40vw, 52vh);
+  min-height: 220px;
+}
+.brand-hero__art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Sol + letreiro da arte no centro do recorte. */
+  object-position: 50% 55%;
+}
+/* Base da arte funde-se com a faixa oliva onde fica o título. */
+.brand-hero__art::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 64%,
+    rgb(30 31 28 / 0.6) 84%,
+    var(--brand-olive-deep) 100%
+  );
+}
+/* Grão de serigrafia (≤ 6 %), só na arte do hero — nunca em formulário/mapa. */
+.brand-hero__art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.4 -0.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+@media (min-width: 1280px) {
+  .brand-hero__art {
+    height: 48vh;
+    min-height: 340px;
+    aspect-ratio: 16 / 9;
+  }
+  .brand-hero__art img {
+    object-position: 50% 50%;
+  }
+  /* Lado esquerdo funde-se com a coluna do título. */
+  .brand-hero__art::before {
+    background: linear-gradient(to right, var(--brand-olive-deep) 0%, transparent 16%);
+  }
+}
+.brand-horizon {
+  display: block;
+  width: 100%;
+  height: 18px;
+  color: var(--brand-ocre);
+}
+@media (min-width: 1024px) {
+  .brand-horizon {
+    height: 26px;
+  }
 }

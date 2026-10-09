@@ -11,6 +11,8 @@ export interface MapPalette {
   none: string;
   stroke: string;
   selected: string;
+  /** Casing under the selected outline (transparent unless a theme needs it). */
+  selectedCasing: string;
   activity: string;
   surface: string;
   surfaceAlt: string;
@@ -48,6 +50,7 @@ export function readMapPalette(): MapPalette {
     none: cssVar('--map-fill-none', 'rgb(216,210,198)'),
     stroke: cssVar('--map-stroke', 'rgb(27,26,22)'),
     selected: cssVar('--map-selected', 'rgb(194,119,26)'),
+    selectedCasing: cssVar('--map-selected-casing', 'rgba(0,0,0,0)'),
     activity: cssVar('--map-activity', 'rgb(194,119,26)'),
     surface: cssVar('--color-surface', 'rgb(246,243,238)'),
     surfaceAlt: cssVar('--color-surface-alt', 'rgb(236,231,222)'),

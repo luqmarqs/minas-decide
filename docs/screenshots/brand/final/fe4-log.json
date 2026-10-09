@@ -1,0 +1,162 @@
+{
+  "commit": "6a0a66f",
+  "shots": [
+    "docs/screenshots/brand/final/home-desktop1440-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-dobra-desktop1440-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/territorio-desktop1440-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/participar-desktop1440-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/atividade-desktop1440-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/header-lockup-zoom-desktop1440-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-desktop1440-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-dobra-desktop1440-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/territorio-desktop1440-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/participar-desktop1440-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/atividade-desktop1440-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/header-lockup-zoom-desktop1440-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-mobile390-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-dobra-mobile390-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/territorio-mobile390-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/participar-mobile390-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/atividade-mobile390-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/header-lockup-zoom-mobile390-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-mobile390-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-dobra-mobile390-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/territorio-mobile390-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/participar-mobile390-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/atividade-mobile390-escuro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-antes-provisorio-desktop1440-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-depois-oficial-desktop1440-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-antes-provisorio-mobile390-claro-20261009-6a0a66f.png",
+    "docs/screenshots/brand/final/home-depois-oficial-mobile390-claro-20261009-6a0a66f.png"
+  ],
+  "axe": {
+    "home-desktop1440-claro": [],
+    "territorio-desktop1440-claro": [],
+    "participar-desktop1440-claro": [],
+    "atividade-desktop1440-claro": [],
+    "home-desktop1440-escuro": [],
+    "territorio-desktop1440-escuro": [],
+    "participar-desktop1440-escuro": [],
+    "atividade-desktop1440-escuro": [],
+    "home-mobile390-claro": [],
+    "territorio-mobile390-claro": [],
+    "participar-mobile390-claro": [],
+    "atividade-mobile390-claro": [],
+    "home-mobile390-escuro": [],
+    "territorio-mobile390-escuro": [],
+    "participar-mobile390-escuro": [],
+    "atividade-mobile390-escuro": [],
+    "home-provisorio-desktop1440-claro": [],
+    "home-provisorio-mobile390-claro": []
+  },
+  "overflow": {
+    "home-desktop1440-claro": false,
+    "territorio-desktop1440-claro": false,
+    "participar-desktop1440-claro": false,
+    "atividade-desktop1440-claro": false,
+    "home-desktop1440-escuro": false,
+    "territorio-desktop1440-escuro": false,
+    "participar-desktop1440-escuro": false,
+    "atividade-desktop1440-escuro": false,
+    "home-mobile390-claro": false,
+    "territorio-mobile390-claro": false,
+    "participar-mobile390-claro": false,
+    "atividade-mobile390-claro": false,
+    "home-mobile390-escuro": false,
+    "territorio-mobile390-escuro": false,
+    "participar-mobile390-escuro": false,
+    "atividade-mobile390-escuro": false
+  },
+  "fonts": {
+    "desktop1440-claro": {
+      "anton": true,
+      "bungee": true,
+      "requests": [
+        "/fonts/anton/Anton-Regular-latin.woff2",
+        "/fonts/bungee-outline/BungeeOutline-Regular-latin.woff2",
+        "/fonts/Noto%20Sans%20Italic/0-255.pbf",
+        "/fonts/Noto%20Sans%20Regular/0-255.pbf",
+        "/fonts/Noto%20Sans%20Bold/0-255.pbf",
+        "/fonts/Noto%20Sans%20Regular/65024-65279.pbf",
+        "/fonts/Noto%20Sans%20Bold/65024-65279.pbf"
+      ]
+    },
+    "desktop1440-escuro": {
+      "anton": true,
+      "bungee": true,
+      "requests": [
+        "/fonts/anton/Anton-Regular-latin.woff2",
+        "/fonts/bungee-outline/BungeeOutline-Regular-latin.woff2",
+        "/fonts/Noto%20Sans%20Regular/0-255.pbf",
+        "/fonts/Noto%20Sans%20Regular/65024-65279.pbf"
+      ]
+    },
+    "mobile390-claro": {
+      "anton": true,
+      "bungee": true,
+      "requests": [
+        "/fonts/anton/Anton-Regular-latin.woff2",
+        "/fonts/bungee-outline/BungeeOutline-Regular-latin.woff2",
+        "/fonts/Noto%20Sans%20Italic/0-255.pbf",
+        "/fonts/Noto%20Sans%20Regular/0-255.pbf",
+        "/fonts/Noto%20Sans%20Bold/0-255.pbf",
+        "/fonts/Noto%20Sans%20Regular/65024-65279.pbf",
+        "/fonts/Noto%20Sans%20Bold/65024-65279.pbf"
+      ]
+    },
+    "mobile390-escuro": {
+      "anton": true,
+      "bungee": true,
+      "requests": [
+        "/fonts/anton/Anton-Regular-latin.woff2",
+        "/fonts/bungee-outline/BungeeOutline-Regular-latin.woff2",
+        "/fonts/Noto%20Sans%20Regular/0-255.pbf",
+        "/fonts/Noto%20Sans%20Regular/65024-65279.pbf"
+      ]
+    },
+    "provisorio-desktop1440": {
+      "requests": [
+        "http://127.0.0.1:8792/fonts/anton/Anton-Regular-latin.woff2",
+        "http://127.0.0.1:8792/fonts/bungee-outline/BungeeOutline-Regular-latin.woff2",
+        "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Italic/0-255.pbf",
+        "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Regular/0-255.pbf",
+        "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Bold/0-255.pbf"
+      ]
+    },
+    "provisorio-mobile390": {
+      "requests": [
+        "http://127.0.0.1:8792/fonts/anton/Anton-Regular-latin.woff2",
+        "http://127.0.0.1:8792/fonts/bungee-outline/BungeeOutline-Regular-latin.woff2",
+        "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Italic/0-255.pbf",
+        "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Regular/0-255.pbf",
+        "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Bold/0-255.pbf",
+        "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Regular/65024-65279.pbf",
+        "https://tiles.openfreemap.org/fonts/Noto%20Sans%20Bold/65024-65279.pbf"
+      ]
+    }
+  },
+  "titleContrast": {
+    "home-desktop1440-claro": {
+      "worstPixel": 11.83,
+      "p99": 11.83,
+      "mean": 11.83
+    },
+    "home-desktop1440-escuro": {
+      "worstPixel": 11.83,
+      "p99": 11.83,
+      "mean": 11.83
+    },
+    "home-mobile390-claro": {
+      "worstPixel": 8.98,
+      "p99": 10.85,
+      "mean": 11.79
+    },
+    "home-mobile390-escuro": {
+      "worstPixel": 8.98,
+      "p99": 10.85,
+      "mean": 11.79
+    }
+  },
+  "notes": [],
+  "reducedMotion": 0
+}

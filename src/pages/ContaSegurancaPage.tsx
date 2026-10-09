@@ -256,7 +256,7 @@ function Enrolment({ onCancel, onDone }: { onCancel: () => void; onDone: () => v
           Escaneie o QR code com o app autenticador.
           <img
             src={enrollment.qrDataUrl}
-            alt="QR code com a chave do autenticador para Minas em Movimento"
+            alt="QR code com a chave do autenticador para Minas Decide"
             width={192}
             height={192}
             className="mt-2 size-48 rounded-sm border border-border bg-white p-2"

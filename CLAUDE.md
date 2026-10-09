@@ -1,4 +1,4 @@
-# Minas em Movimento — guia operacional para agentes
+# Minas Decide — guia operacional para agentes
 
 Atlas eleitoral público de Minas Gerais + organização voluntária de atividades presenciais.
 Especificação-mestre: `ESPECIFICACAO_COMPLETA_MINAS_EM_MOVIMENTO (1).md` (ler quando houver dúvida de requisito).

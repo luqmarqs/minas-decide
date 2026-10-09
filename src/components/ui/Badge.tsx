@@ -1,7 +1,8 @@
 import type { HTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
-export type BadgeVariant = 'neutral' | 'demo' | 'success' | 'warning' | 'error' | 'info' | 'accent';
+export type BadgeVariant =
+  'neutral' | 'demo' | 'success' | 'warning' | 'error' | 'info' | 'accent' | 'brand';
 
 const variants: Record<BadgeVariant, string> = {
   neutral: 'bg-surface-alt text-secondary border-border',
@@ -12,6 +13,9 @@ const variants: Record<BadgeVariant, string> = {
   error: 'bg-error-soft text-error border-error/40',
   info: 'bg-info-soft text-info border-info/40',
   accent: 'bg-accent-soft text-primary border-accent/50',
+  // Brand seal (official identity): sun surface + ink text (8,9:1), Anton caps. Never for data status.
+  brand:
+    'brand-display border-(--brand-sun) bg-(--brand-sun) text-(--brand-ink) text-[0.8rem] uppercase tracking-wide',
 };
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {

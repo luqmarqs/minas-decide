@@ -52,12 +52,30 @@ export const LAYERS: Record<MapLayerCode, LayerMeta> = {
     scale: 'diverging',
     needsCandidate: true,
   },
+  president_comparison: {
+    code: 'president_comparison',
+    label: 'Lula × Bolsonaro: 2022 → 2026',
+    short: '2022 → 2026',
+    unit: 'pontos percentuais (p.p.)',
+    denominator: 'participação nos válidos 2026 (1º turno) − 2022 (1º turno)',
+    scale: 'diverging',
+    needsCandidate: true,
+  },
   activities: {
     code: 'activities',
     label: 'Atividades',
     short: 'Atividades',
     unit: 'atividades publicadas',
     denominator: 'agenda pública aprovada',
+    scale: 'none',
+    needsCandidate: false,
+  },
+  pois: {
+    code: 'pois',
+    label: 'Locais de grande circulação',
+    short: 'Terminais',
+    unit: 'terminais e estações (OpenStreetMap)',
+    denominator: 'pontos de interesse, não dados eleitorais',
     scale: 'none',
     needsCandidate: false,
   },
@@ -77,7 +95,9 @@ export const LAYER_SLUG: Record<MapLayerCode, string> = {
   turnout: 'comparecimento',
   votes: 'votacao',
   comparison: 'comparacao',
+  president_comparison: 'lula-bolsonaro',
   activities: 'atividades',
+  pois: 'terminais',
 };
 
 export function layerFromSlug(slug: string | null): MapLayerCode | null {

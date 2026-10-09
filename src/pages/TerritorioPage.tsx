@@ -27,7 +27,7 @@ export default function TerritorioPage() {
   return (
     // min-height keeps the footer below the fold while data loads (P-PERF-2, CLS).
     <div className="mx-auto grid min-h-[calc(100dvh-var(--header-height))] w-full max-w-(--content-max) content-start gap-6 px-(--gutter) py-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:px-6 lg:py-10">
-      <title>{`${entry ? territoryLabel(entry) : 'Território'} — Minas em Movimento`}</title>
+      <title>{`${entry ? territoryLabel(entry) : 'Território'} — Minas Decide`}</title>
       <div className="min-w-0">
         <h1 className="mb-4 text-3xl sm:text-4xl">{entry?.name ?? 'Território'}</h1>
         <TerritoryDetails

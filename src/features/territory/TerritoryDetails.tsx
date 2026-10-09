@@ -120,7 +120,7 @@ function ShareTerritoryButton({
       onClick={async () => {
         const url = absoluteUrl(`/${mapQuery({ territoryId: entry.id, year, round })}`);
         const outcome = await shareOrCopy({
-          title: `${territoryLabel(entry)} — Minas em Movimento`,
+          title: `${territoryLabel(entry)} — Minas Decide`,
           url,
         });
         if (outcome !== 'cancelled' && outcome !== 'shared') {

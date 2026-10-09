@@ -25,7 +25,9 @@ export function MetricCard({
   return (
     <div className={cn('rounded-md border border-border bg-surface p-3', className)}>
       <p className="text-xs font-semibold tracking-wide text-muted uppercase">{label}</p>
-      <p className="mt-0.5 font-display text-2xl leading-tight tabular-nums">{value}</p>
+      <p className="mt-0.5 font-display text-2xl leading-tight font-(--heading-weight) tabular-nums">
+        {value}
+      </p>
       {detail ? <p className="mt-0.5 text-sm text-secondary">{detail}</p> : null}
     </div>
   );

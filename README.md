@@ -1,4 +1,6 @@
-# Minas em Movimento
+# Minas Decide
+
+> Nome provisório durante a especificação: "Minas em Movimento". Identidade visual oficial "MINAS DECIDE" adotada em 2026-10-09 (`docs/IDENTITY_AUDIT.md`).
 
 [![ci](https://github.com/luqmarqs/minas-decide/actions/workflows/ci.yml/badge.svg)](https://github.com/luqmarqs/minas-decide/actions/workflows/ci.yml)
 

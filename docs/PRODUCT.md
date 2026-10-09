@@ -1,4 +1,4 @@
-# PRODUCT — Minas em Movimento (rodada 1)
+# PRODUCT — Minas Decide (nome provisório na spec: Minas em Movimento)
 
 **Proposição:** mapa público de dados eleitorais agregados de Minas Gerais + comunidade territorial (grupos de WhatsApp aprovados) + agenda de atividades presenciais com "Eu vou" sem login.
 

@@ -1,16 +1,18 @@
-# Design system — Minas em Movimento (identidade provisória)
+# Design system — Minas Decide (identidade oficial)
 
-Status: **provisório e retematizável** (spec §12.1, §13). A arte oficial ainda não foi entregue; nada aqui
-simula marca oficial. Toda decisão visual passa por tokens para que a troca de identidade seja feita em
-`src/styles/tokens.css` sem tocar componentes.
+Status: **identidade oficial "Minas Decide"** (arte aceita pelo proprietário em 2026-10-09, alternativa A da
+`docs/IDENTITY_AUDIT.md`; FE-5). Toda decisão visual continua passando por tokens
+(`src/styles/tokens.css`). A identidade provisória das rodadas 1–2 sobrevive apenas como tema de
+comparação/rollback (`data-brand="provisorio"`, ver a seção "Identidade oficial e rollback").
 
 ## 1. Princípios
 
 - **Mapa como instrumento, não fundo.** O mapa ocupa a área principal da home, é navegável e sempre tem
   legenda com unidade, cálculo (denominador), fonte/versão e status do snapshot.
-- **Editorial, terroso, contemporâneo.** Serifada de display (Fraunces → fallback Iowan/Palatino/Georgia) para
-  títulos e números de destaque; sans de corpo (Inter → system-ui). Superfícies areia, ação verde-serra, ocre
-  para foco/seleção.
+- **Cartaz serigrafado nas bordas, neutro no miolo de dados.** Hero com a chave visual, sol como símbolo,
+  Anton/Bungee Outline só no hero, nos selos de marca e no lockup. Todos os demais títulos usam a sans do
+  corpo (Inter → system-ui) em 700. Superfícies creme (claro) e oliva (escuro), ação azul-céu (texto
+  branco), amarelo-sol como destaque de superfície, ocre nas bordas fortes e na divisória "horizonte".
 - **Sem estética de dashboard SaaS.** Sem sidebar onipresente, sem gradientes decorativos, sombras só onde há
   sobreposição real (painéis e overlays sobre o mapa).
 - **Honestidade de estado.** Carregando / sem dado / erro / indisponível / demonstrativo são estados visuais
@@ -43,7 +45,8 @@ solto; o mapa lê as cores com `getComputedStyle` (`src/features/electoral-map/p
 - Sequencial (abstenção, comparecimento, votação): `--map-fill-low → high`, verde neutro, crescente em
   luminância; não codifica julgamento moral. "Sem dado" = `--map-fill-none` (neutro, explicado na legenda).
 - Divergente (2022 × 2026, p.p.): `--map-diverging-neg / zero / pos`, domínio simétrico em torno de 0.
-- Seleção: contorno `--map-selected` (ocre), também usado no foco — consistente para "isto está em foco".
+- Seleção: contorno `--map-selected` (amarelo-sol) sobre um contorno `--map-selected-casing` (tinta no claro,
+  oliva no escuro), porque o amarelo sozinho tem < 3:1 sobre o basemap claro.
 - Listas (fallback sem WebGL) usam os mesmos tokens em 5 faixas (`swatchVar`), sempre com o valor numérico ao
   lado — cor nunca é o único portador de significado.
 
@@ -165,3 +168,60 @@ Padrões novos: `ProfileReview`/`ProfileReviewGate` (revisão de dados após a p
 `MfaGate` + `OtpField` (código de 6 dígitos, `autocomplete="one-time-code"`, `inputmode="numeric"`),
 `RevealContact` (contato completo só em estado local, some ao fechar a revisão ou esconder a aba),
 `ModerationDialog` genérico (aprovar/rejeitar/suspender/reativar, motivo obrigatório).
+
+## Identidade oficial e rollback (FE-4 protótipo → FE-5 padrão)
+
+Fonte: `docs/IDENTITY_AUDIT.md` (§2 paleta medida, §7 mapeamento). Aceita pelo proprietário (alternativa A,
+nome "Minas Decide").
+
+- **Padrão:** `<html data-brand="minas-decide">`, já no `index.html` e reaplicado por `initBrand()`
+  (`src/lib/brand.ts`, chamado em `main.tsx` antes do primeiro render). Os valores oficiais estão em `:root` e
+  nos blocos escuros (`prefers-color-scheme` + `[data-theme='dark']`), então a página fica correta mesmo antes do
+  JS rodar.
+- **Rollback/comparação:** `?brand=0` (ou `?brand=provisorio`) grava `localStorage['mm.brand']='provisorio'` e
+  aplica `data-brand="provisorio"`. `?brand=1` volta ao oficial e limpa o storage. O bloco
+  `:root[data-brand='provisorio']` (+ escuros) restaura as cores, a Fraunces e o peso 600 dos títulos; o header
+  mostra a marca antiga com o texto "Minas Decide", e a home volta ao hero compacto. Favicon: `/favicon.svg` (sol)
+  × `/favicon-provisorio.svg`. No provisório o foco passou a `#a8640f` (3,79:1 sobre surface-alt; antes
+  `#c2771a` = 2,87:1).
+- **Tokens oficiais:**
+
+| Token | Claro | Escuro |
+|---|---|---|
+| `--color-surface` / `-alt` / `-raised` | #f6ece4 / #ebd6ca / #fffaf6 | #1e1f1c / #262824 / #2e302b |
+| `--color-text-primary` / `-secondary` / `-muted` | #202020 / #4a4038 / #5b5249 | #ebd6ca / #d4c3b7 / #b3a497 |
+| `--color-action-primary` (texto sobre ela) | #067fa8 (branco, 4,56:1) | #e8ba1f (#202020, 8,9:1) |
+| `--color-action-hover` / `-active` | #06688a / #055574 | #d7ac1e / #c99a12 |
+| `--color-accent` | #e8ba1f (só superfície; nunca texto em fundo claro) | #e8ba1f |
+| `--color-focus` | #06688a | #e8ba1f |
+| `--color-border-strong` | #7f5c34 (ocre) | #9c7a4f (a auditoria sugeria #5e4325, que dá < 3:1) |
+| `--map-selected` (+ `--map-selected-casing`) | #e8ba1f com contorno #202020 | #e8ba1f com contorno #1e1f1c |
+| `--map-activity` | #06688a | #5fb8d9 (o azul-escuro some no basemap escuro) |
+| `--font-display` / `--heading-weight` | `var(--font-body)` / 700 | idem |
+| `--font-brand` / `--font-brand-outline` | Anton / Bungee Outline | idem |
+
+  `--map-fill-*`, as escalas divergentes e `--color-demo*`/status não mudam. As cores cruas da arte
+  (`--brand-sky/sun/cream/ocre/olive/ink…`) servem só para hero, divisória, lockup e selos de marca.
+  Verificação: `node scripts/visual/contrast.mjs` (oficial) e `--brand provisorio`.
+- **Tipografia:** decisão FE-5: títulos comuns (painéis, cartões de métrica, formulários, páginas, rodapé) em
+  **Inter/system 700**, e não em serifa, para ficar neutro e legível no miolo de dados. Anton (`.brand-display`,
+  `--font-brand`) só no h1 do `BrandHero`, no lockup e no `Badge variant="brand"`. Bungee Outline
+  (`.brand-outline`) só em palavras curtas em caixa alta no hero e no lockup. As duas são OFL, self-hosted em
+  `public/fonts/*/` (woff2, subconjunto latino, 20,7 KB + 50,6 KB, `OFL.txt` ao lado), com `font-display: swap`
+  e `<link rel="preload">` no `index.html`; `/fonts/*` tem cache de 7 dias (`public/_headers`).
+- **Marca:** `SunMark.tsx` (sol vetorial desenhado por código: semicírculo + 11 raios ondulados, `currentColor`,
+  `aria-hidden`, geometria em `sunGeometry.ts`); `BrandLockup.tsx` (sol + MINAS + DECIDE; `mono` usa a cor do
+  texto) no `AppHeader`, cujo link se chama "Minas Decide — página inicial". Os favicons são gerados por
+  `npx tsx scripts/visual/brand-favicon.ts`.
+- **Home:** `BrandHero.tsx`, com a chave visual em `<picture>` (800w/1600w, `eager` + `fetchpriority=high`).
+  Altura de 36vh no celular, `clamp(36vh, 40vw, 52vh)` no layout empilhado e 48vh em coluna (≥ 1280px). O
+  título fica na faixa oliva que continua a base da arte, com a busca logo abaixo e `HorizonDivider.tsx`
+  (serra ocre) antes do mapa. O hero é sempre uma "ilha escura" (tokens remapeados em `.brand-hero`). Há grão
+  SVG a 6 % só sobre a arte, nunca sobre formulário, mapa ou legenda.
+- **Componentes:** `ActivityMarker` vira um sol pequeno com halo; "Eu vou" (`.mm-rsvp-cta`) fica amarelo com
+  texto #202020; o botão primário é azul com texto branco no claro; os selos DEMO/validado não mudam. O
+  `SidePanel` é uma `section` rotulada, e não um `aside`, porque fica dentro da seção do mapa e um landmark
+  complementar aninhado falha no axe.
+- **Evidências:** `docs/screenshots/brand/` (protótipo FE-4, `?brand=1`) e `docs/screenshots/brand/final/`
+  (padrão FE-5, sem query; inclui o antes/depois com `?brand=0`), mais `fe4-log.json`, gerados por
+  `BASE=… AXE=… node scripts/visual/capture-brand.mjs` (`OUT`/`QS` configuráveis).

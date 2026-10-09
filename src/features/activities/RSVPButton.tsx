@@ -74,7 +74,7 @@ export function RSVPButton({ activityId, initialCount, disabledReason }: RSVPBut
       ) : (
         <Button
           size="lg"
-          className="w-full sm:w-auto"
+          className="mm-rsvp-cta w-full sm:w-auto"
           loading={pending}
           loadingText="Registrando…"
           disabled={disabled}

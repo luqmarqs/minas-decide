@@ -308,6 +308,18 @@ export default function MapCanvas(props: MapCanvasProps) {
         );
         map.addLayer(
           {
+            // Invisible by default (transparent token); the minas-decide variant uses an ink
+            // casing because yellow alone has < 3:1 against the light basemap.
+            id: 'mm-muni-selected-casing',
+            type: 'line',
+            source: SRC_MUNI,
+            filter: ['==', ['get', 'codarea'], ''],
+            paint: { 'line-color': palette.selectedCasing, 'line-width': 5.5 },
+          },
+          beforeId,
+        );
+        map.addLayer(
+          {
             id: 'mm-muni-selected',
             type: 'line',
             source: SRC_MUNI,
@@ -597,6 +609,7 @@ export default function MapCanvas(props: MapCanvasProps) {
     const muniId = selectedId ? municipalityIdOf(selectedId) : null;
     const muni = muniId && muniId !== 'mg' ? index.byId.get(muniId) : undefined;
     map.setFilter('mm-muni-selected', ['==', ['get', 'codarea'], muni?.ibge_code ?? '']);
+    map.setFilter('mm-muni-selected-casing', ['==', ['get', 'codarea'], muni?.ibge_code ?? '']);
     const children = muni ? (index.childrenOf.get(muni.id) ?? []) : [];
     const features: GeoFeature<GeoPoint>[] = children
       .filter((c) => c.centroid)

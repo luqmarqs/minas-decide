@@ -27,7 +27,7 @@ export function ActivityCard({ activity, demo, compact, className }: ActivityCar
         <span className="text-xs font-semibold uppercase text-muted">
           {formatDateShort(activity.starts_at).split(' ')[1]}
         </span>
-        <span className="font-display text-xl leading-none">
+        <span className="font-display text-xl leading-none font-(--heading-weight)">
           {formatDateShort(activity.starts_at).split(' ')[0]}
         </span>
         <span className="text-xs text-secondary">{formatTime(activity.starts_at)}</span>

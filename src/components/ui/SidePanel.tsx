@@ -15,7 +15,9 @@ export interface SidePanelProps {
 }
 
 /**
- * Desktop contextual panel (spec §12.3): expandable/collapsible, not modal.
+ * Desktop contextual panel (spec §12.3): expandable/collapsible, not modal. A named
+ * `section` (region), not `aside`: it lives inside the map section, and a nested
+ * complementary landmark fails axe `landmark-complementary-is-top-level`.
  * Entry animation uses --duration-panel (180–280 ms; 0 ms under prefers-reduced-motion).
  */
 export function SidePanel({
@@ -32,7 +34,7 @@ export function SidePanel({
   const headingId = useId();
   const bodyId = useId();
   return open ? (
-    <aside
+    <section
       aria-labelledby={headingId}
       className={cn(
         'flex max-h-full w-(--panel-width) animate-[panel-in_var(--duration-panel)_var(--easing-emphasized)] flex-col overflow-hidden rounded-card border border-border bg-surface-raised text-primary shadow-raised',
@@ -82,6 +84,6 @@ export function SidePanel({
       >
         {children}
       </div>
-    </aside>
+    </section>
   ) : null;
 }

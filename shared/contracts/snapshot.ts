@@ -10,6 +10,8 @@
  *   public/data/<release_id>/metrics/mg.json                                MunicipalityMetricsFile (state level)
  *   public/data/<release_id>/metrics/mg-<ibge7>.json                        MunicipalityMetricsFile
  *   public/data/<release_id>/candidates.json                                CandidateIndex
+ *   public/data/<release_id>/highlights.json                                Highlights
+ *   public/data/pois/terminais-mg.json                                      PoiFile (OpenStreetMap, ODbL)
  *
  * No file may contain PII, project refs, or connection strings.
  */
@@ -44,6 +46,60 @@ export const CandidateIndexEntry = z.object({
 });
 export const CandidateIndex = z.object({ items: z.array(CandidateIndexEntry) });
 export type CandidateIndex = z.infer<typeof CandidateIndex>;
+
+/** Key numbers for the home page cards ("por que Minas decide"). All values must
+ *  carry a source; nothing here is typed by hand. */
+export const HighlightItem = z.object({
+  id: z.string(),
+  label: z.string(),
+  value: z.number(),
+  unit: z.enum(['people', 'percent', 'pp', 'votes', 'count']),
+  /** optional secondary number (e.g. national total, 2022 counterpart) */
+  compare_value: z.number().nullable(),
+  compare_label: z.string().nullable(),
+  note: z.string().nullable(),
+  source: z.string(),
+});
+export const Highlights = z.object({
+  generated_at: z.string(),
+  items: z.array(HighlightItem),
+  why_minas: z.array(
+    z.object({
+      title: z.string(),
+      text: z.string(),
+      value: z.number().nullable(),
+      unit: z.string().nullable(),
+      source: z.string(),
+    }),
+  ),
+});
+export type Highlights = z.infer<typeof Highlights>;
+
+/** Points of interest with high foot traffic (bus terminals etc.) from OpenStreetMap. */
+export const PoiCategory = z.enum([
+  'bus_terminal',
+  'bus_station',
+  'metro_station',
+  'market',
+  'other',
+]);
+export const PoiItem = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: PoiCategory,
+  /** [lon, lat] */
+  coordinates: z.tuple([z.number(), z.number()]),
+  municipality_id: TerritoryId.nullable(),
+  osm_url: z.string().url(),
+});
+export const PoiFile = z.object({
+  generated_at: z.string(),
+  source: z.string(),
+  license: z.string(),
+  attribution: z.string(),
+  items: z.array(PoiItem),
+});
+export type PoiFile = z.infer<typeof PoiFile>;
 
 export const MunicipalityMetricsFile = z.object({
   territory_id: TerritoryId,

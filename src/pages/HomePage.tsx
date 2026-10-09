@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
+import { BrandHero } from '@/components/brand/BrandHero';
 import { Badge } from '@/components/ui/Badge';
 import { ButtonLink } from '@/components/ui/Button';
 import { LoadingBlock } from '@/components/ui/Skeleton';
+import { useBrandActive } from '@/lib/brand';
 import { useAfterIdle } from '@/lib/idle';
 import { DESKTOP_QUERY, prefersReducedMotion } from '@/lib/media';
 import { DeferredMapShell } from '@/features/electoral-map/DeferredMapShell';
@@ -38,61 +40,93 @@ export default function HomePage() {
   const [interacted, setInteracted] = useState(false);
   const mapSectionRef = useRef<HTMLElement>(null);
   const agendaReady = useAfterIdle(location.hash === '#agenda');
+  const brand = useBrandActive();
 
   useEffect(() => {
     if (location.hash === '#busca') document.getElementById(SEARCH_ID)?.focus();
     if (location.hash === '#agenda') document.getElementById('agenda')?.scrollIntoView();
   }, [location.hash, location.key]);
 
+  const search = (
+    <TerritorySearch
+      id={SEARCH_ID}
+      size="lg"
+      className="w-full"
+      onSelect={(e) => {
+        setInteracted(true);
+        update({ territoryId: e.id, view: state.view }, { push: true });
+        // Mobile: bring the map up so the half-open sheet leaves it visible (P-UX-2).
+        if (!window.matchMedia?.(DESKTOP_QUERY).matches) {
+          mapSectionRef.current?.scrollIntoView?.({
+            block: 'start',
+            behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+          });
+        }
+      }}
+    />
+  );
+
   return (
     <>
-      <title>Minas em Movimento — atlas eleitoral e agenda de Minas Gerais</title>
+      <title>Minas Decide — atlas eleitoral e agenda de Minas Gerais</title>
       {/* Desktop: hero + map fill the viewport whatever the hero height (DEMO badge
-          included), so the map attribution is never cut (P-UX-4). −1px: header border. */}
-      <div className="flex flex-col lg:h-[calc(100dvh-var(--header-height)-1px)] lg:min-h-[44rem]">
-        <section
-          className="border-b border-border bg-surface px-(--gutter) pt-5 pb-4 lg:px-6"
-          aria-labelledby="home-title"
-        >
-          <div className="mx-auto flex max-w-(--content-max) flex-col gap-4 lg:max-w-none lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <h1 id="home-title" className="text-2xl sm:text-3xl">
-                Minas Gerais, território por território
-              </h1>
-              <p className="mt-1 text-secondary">
-                Veja participação e votação por cidade e bairro, e encontre atividades presenciais
-                perto de você.
-              </p>
-              {snap?.status === 'demo' ? (
-                <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-secondary">
+          included), so the map attribution is never cut (P-UX-4). −1px: header border.
+          Official identity (default): the illustrated hero is taller, so the map gets its own
+          viewport; the compact hero only remains under the `provisorio` rollback theme. */}
+      <div
+        className={
+          brand
+            ? 'flex flex-col'
+            : 'flex flex-col lg:h-[calc(100dvh-var(--header-height)-1px)] lg:min-h-[44rem]'
+        }
+      >
+        {brand ? (
+          <BrandHero
+            titleId="home-title"
+            notice={
+              snap?.status === 'demo' ? (
+                <p className="flex flex-wrap items-center gap-2 text-sm text-secondary">
                   <Badge variant="demo">{SNAPSHOT_STATUS_LABEL.demo}</Badge>
                   Snapshot oficial ainda não publicado: os números abaixo são sintéticos.
                 </p>
-              ) : null}
+              ) : null
+            }
+            search={search}
+          />
+        ) : (
+          <section
+            className="border-b border-border bg-surface px-(--gutter) pt-5 pb-4 lg:px-6"
+            aria-labelledby="home-title"
+          >
+            <div className="mx-auto flex max-w-(--content-max) flex-col gap-4 lg:max-w-none lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-2xl">
+                <h1 id="home-title" className="text-2xl sm:text-3xl">
+                  Minas Gerais, território por território
+                </h1>
+                <p className="mt-1 text-secondary">
+                  Veja participação e votação por cidade e bairro, e encontre atividades presenciais
+                  perto de você.
+                </p>
+                {snap?.status === 'demo' ? (
+                  <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-secondary">
+                    <Badge variant="demo">{SNAPSHOT_STATUS_LABEL.demo}</Badge>
+                    Snapshot oficial ainda não publicado: os números abaixo são sintéticos.
+                  </p>
+                ) : null}
+              </div>
+              <div className="w-full lg:max-w-md">{search}</div>
             </div>
-            <TerritorySearch
-              id={SEARCH_ID}
-              size="lg"
-              className="w-full lg:max-w-md"
-              onSelect={(e) => {
-                setInteracted(true);
-                update({ territoryId: e.id, view: state.view }, { push: true });
-                // Mobile: bring the map up so the half-open sheet leaves it visible (P-UX-2).
-                if (!window.matchMedia?.(DESKTOP_QUERY).matches) {
-                  mapSectionRef.current?.scrollIntoView?.({
-                    block: 'start',
-                    behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-                  });
-                }
-              }}
-            />
-          </div>
-        </section>
+          </section>
+        )}
 
         <section
           ref={mapSectionRef}
           aria-label="Mapa de Minas Gerais"
-          className="h-[72dvh] min-h-[440px] scroll-mt-(--header-height) lg:h-auto lg:min-h-[560px] lg:flex-1"
+          className={
+            brand
+              ? 'h-[72dvh] min-h-[440px] scroll-mt-(--header-height) lg:h-[calc(100dvh-var(--header-height)-1px)] lg:min-h-[560px]'
+              : 'h-[72dvh] min-h-[440px] scroll-mt-(--header-height) lg:h-auto lg:min-h-[560px] lg:flex-1'
+          }
         >
           <DeferredMapShell
             start={interacted}

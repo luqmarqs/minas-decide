@@ -31,7 +31,7 @@ export function PageShell({
         className,
       )}
     >
-      {docTitle ? <title>{`${docTitle} — Minas em Movimento`}</title> : null}
+      {docTitle ? <title>{`${docTitle} — Minas Decide`}</title> : null}
       {eyebrow ? <div className="mb-2">{eyebrow}</div> : null}
       <h1 className="text-3xl sm:text-4xl">{title}</h1>
       {lead ? <div className="mt-3 text-lg text-secondary">{lead}</div> : null}

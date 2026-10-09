@@ -80,6 +80,41 @@ export const ComparisonPoint = z.object({
 });
 export type ComparisonPoint = z.infer<typeof ComparisonPoint>;
 
+/** Presidential head-to-head used for the 2022 → 2026 comparison (owner decision, rodada 3).
+ *  2022 figures come from TSE open data (municipality level; neighborhood level is an
+ *  approximation when polling places could be matched). */
+export const PresidentialCandidateKey = z.enum(['lula', 'bolsonaro']);
+export type PresidentialCandidateKey = z.infer<typeof PresidentialCandidateKey>;
+
+export const PresidentialComparisonEntry = z.object({
+  key: PresidentialCandidateKey,
+  ballot_name_2022: z.string(),
+  ballot_name_2026: z.string(),
+  number_2022: z.number().int(),
+  number_2026: z.number().int(),
+  votes_2022_r1: z.number().int().nonnegative().nullable(),
+  valid_2022_r1: z.number().int().nonnegative().nullable(),
+  share_2022_r1: z.number().min(0).max(1).nullable(),
+  votes_2022_r2: z.number().int().nonnegative().nullable(),
+  valid_2022_r2: z.number().int().nonnegative().nullable(),
+  share_2022_r2: z.number().min(0).max(1).nullable(),
+  votes_2026_r1: z.number().int().nonnegative().nullable(),
+  valid_2026_r1: z.number().int().nonnegative().nullable(),
+  share_2026_r1: z.number().min(0).max(1).nullable(),
+  /** percentage points, share_2026_r1 − share_2022_r1 */
+  delta_pp_r1: z.number().nullable(),
+  delta_votes_r1: z.number().int().nullable(),
+});
+export type PresidentialComparisonEntry = z.infer<typeof PresidentialComparisonEntry>;
+
+export const PresidentialComparison = z.object({
+  /** 'exact' (municipality/state) or 'approximate' (neighborhood matched by polling place) or 'unavailable' */
+  precision: z.enum(['exact', 'approximate', 'unavailable']),
+  entries: z.array(PresidentialComparisonEntry),
+  note: z.string().nullable(),
+});
+export type PresidentialComparison = z.infer<typeof PresidentialComparison>;
+
 export const TerritoryMetrics = z.object({
   territory_id: TerritoryId,
   year: z.number().int(),
@@ -91,13 +126,23 @@ export const TerritoryMetrics = z.object({
   /** per office: top candidates (majoritarian: all; proportional: top N + tracked) */
   results: z.partialRecord(OfficeCode, z.array(CandidateResult)),
   valid_by_office: z.partialRecord(OfficeCode, z.number().int().nonnegative()),
+  /** @deprecated kept empty since rodada 3 (tracked-candidate history is no longer highlighted) */
   comparison_2022: z.array(ComparisonPoint),
+  president_comparison: PresidentialComparison.nullable().optional(),
   warnings: z.array(z.string()),
 });
 export type TerritoryMetrics = z.infer<typeof TerritoryMetrics>;
 
 /** Map layer codes (spec §12.3). */
-export const MapLayerCode = z.enum(['abstention', 'turnout', 'votes', 'comparison', 'activities']);
+export const MapLayerCode = z.enum([
+  'abstention',
+  'turnout',
+  'votes',
+  'comparison',
+  'president_comparison',
+  'activities',
+  'pois',
+]);
 export type MapLayerCode = z.infer<typeof MapLayerCode>;
 
 /**
@@ -110,6 +155,7 @@ export const MapLayerValues = z.object({
   year: z.number().int(),
   round: z.number().int(),
   unit: z.enum(['rate', 'share', 'pp']),
+  /** candidate id (votes layer) or 'lula' | 'bolsonaro' (president_comparison layer) */
   candidate_id: z.string().nullable(),
   values: z.record(z.string(), z.number()),
   domain: z.tuple([z.number(), z.number()]),

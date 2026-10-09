@@ -138,7 +138,7 @@ export function MapLegend({
                 />{' '}
                 sem dado
                 <span
-                  className="inline-block size-3 rounded-full border-2 border-(--map-selected)"
+                  className="mm-selected-swatch inline-block size-3 rounded-full border-2 border-(--map-selected)"
                   aria-hidden="true"
                 />{' '}
                 selecionado

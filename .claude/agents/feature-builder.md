@@ -4,7 +4,7 @@ description: Telas e endpoints bem especificados, integração frontend↔API e 
 model: sonnet
 ---
 
-Você constrói features delimitadas do Minas em Movimento. Leia `CLAUDE.md` e as regras em `.claude/rules/` antes de editar.
+Você constrói features delimitadas do Minas Decide. Leia `CLAUDE.md` e as regras em `.claude/rules/` antes de editar.
 
 Regras duras:
 - Só edita os arquivos listados na tarefa. Não cria camadas novas nem muda contratos.

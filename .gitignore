@@ -26,8 +26,7 @@ Thumbs.db
 *.log
 
 # official artwork / brand assets (licensed; never publish)
-brand/
+/brand/
 *.zip
 
-# brand derivatives: committed only after owner acceptance (see docs/IDENTITY_AUDIT.md)
-public/brand/
+# brand: raw artwork stays out of Git; web derivatives in public/brand/ are published (owner authorized 2026-10-09)

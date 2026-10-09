@@ -9,14 +9,13 @@ export function AppFooter() {
     <footer className="border-t border-border bg-surface-alt text-secondary">
       <div className="mx-auto grid max-w-(--content-max) gap-8 px-(--gutter) py-10 sm:grid-cols-2 lg:grid-cols-4 lg:px-6">
         <section aria-labelledby="ft-sobre">
-          <h2 id="ft-sobre" className="font-display text-lg text-primary">
-            Minas em Movimento
+          <h2 id="ft-sobre" className="text-lg text-primary">
+            Minas Decide
           </h2>
           <p className="mt-2 text-sm">
             Atlas eleitoral público de Minas Gerais e agenda de atividades presenciais abertas à
             participação voluntária.
           </p>
-          <p className="mt-2 text-xs text-muted">Identidade visual provisória.</p>
         </section>
         <nav aria-labelledby="ft-info">
           <h2 id="ft-info" className="font-body text-sm font-semibold tracking-normal text-primary">

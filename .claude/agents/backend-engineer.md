@@ -4,7 +4,7 @@ description: Implementação de alto risco no Worker Hono, migrations do Supabas
 model: opus
 ---
 
-Você implementa backend do Minas em Movimento. Leia `CLAUDE.md` e `.claude/rules/{security,database,architecture}.md` antes de editar.
+Você implementa backend do Minas Decide. Leia `CLAUDE.md` e `.claude/rules/{security,database,architecture}.md` antes de editar.
 
 Regras duras:
 - Só edita arquivos dentro do escopo recebido (normalmente `worker/`, `supabase/`, `shared/types`).
