@@ -56,3 +56,21 @@ export const SendLinkInput = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   turnstile_token: z.string().min(1).max(2048),
 });
+
+/** Neutral response: never reveals whether the e-mail exists. */
+export const SendLinkResponse = z.object({
+  sent: z.literal(true),
+  message: z.string(),
+});
+
+/** POST /auth/confirm-email — promotes a provisional (anonymous) identity after
+ *  the e-mail was confirmed through an OTP/magic-link session. */
+export const ConfirmEmailResponse = z.object({
+  user_id: z.string().uuid(),
+  email_verified: z.boolean(),
+  is_anonymous: z.boolean(),
+  promoted: z.boolean(),
+  /** client must call refreshSession() to get a JWT with is_anonymous=false */
+  refresh_required: z.boolean(),
+});
+export type ConfirmEmailResponse = z.infer<typeof ConfirmEmailResponse>;

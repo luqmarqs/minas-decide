@@ -62,6 +62,20 @@ export const GroupManagerInput = z.object({
   role_label: z.string().trim().max(60).default('responsável'),
 });
 
+export const ModerationResult = z.object({
+  id: z.string().uuid(),
+  status: z.string(),
+  reviewed_at: z.string(),
+});
+export type ModerationResult = z.infer<typeof ModerationResult>;
+
+export const AdminQueueResponse = z.object({
+  kind: z.enum(['groups', 'activities']),
+  items: z.array(z.union([AdminGroupProposal, AdminActivity])),
+  next_cursor: z.string().nullable(),
+});
+export type AdminQueueResponse = z.infer<typeof AdminQueueResponse>;
+
 export const SecurityEvent = z.object({
   id: z.string().uuid(),
   created_at: z.string(),

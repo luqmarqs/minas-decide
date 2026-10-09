@@ -62,7 +62,6 @@ const locais = readJson<Local[]>('locais.json');
 const candidaturas = readJson<Candidatura[]>('candidaturas.json');
 const historico = existsSync(join(extractDir, 'historico-2022.json')) ? readJson<HistRow[]>('historico-2022.json') : [];
 
-const munByCd = new Map(municipios.map((m) => [m.cd_municipio, m]));
 const munIdByCd = new Map(municipios.map((m) => [m.cd_municipio, `mg-${m.cd_ibge}`]));
 
 // territory of each polling place: [municipalityId, neighborhoodId]

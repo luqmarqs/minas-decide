@@ -98,7 +98,7 @@ export function runQuery<T = Record<string, unknown>>(
   } catch (err) {
     const e = err as { stderr?: string; stdout?: string; message: string };
     const msg = (e.stderr ?? e.message).replace(/[a-z]{20}\.supabase\.co/g, '<ref>.supabase.co');
-    throw new Error(`SOURCE query failed: ${msg.slice(0, 600)}`);
+    throw new Error(`SOURCE query failed: ${msg.slice(0, 600)}`, { cause: err });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

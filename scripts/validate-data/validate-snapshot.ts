@@ -6,7 +6,8 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { MapLayerValues, SnapshotManifest, TerritoryMetrics } from '../../shared/contracts/metrics.ts';
+import { MapLayerValues, SnapshotManifest } from '../../shared/contracts/metrics.ts';
+import type { TerritoryMetrics } from '../../shared/contracts/metrics.ts';
 import { TerritoryIndexEntry } from '../../shared/contracts/territory.ts';
 import { CandidateIndex, Methodology, MunicipalityMetricsFile } from '../../shared/contracts/snapshot.ts';
 import { z } from 'zod';
