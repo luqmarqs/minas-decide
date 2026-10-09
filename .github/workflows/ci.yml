@@ -32,10 +32,10 @@ jobs:
           path: dist
           retention-days: 7
 
-  # Database/RLS tests need TARGET dev credentials; they run only when secrets exist.
+  # Database/RLS tests need TARGET dev credentials; steps are skipped when the
+  # secrets are absent (the `secrets` context cannot gate a job-level `if`).
   db-tests:
     runs-on: ubuntu-latest
-    if: ${{ secrets.SUPABASE_TARGET_URL != '' }}
     needs: verify
     env:
       SUPABASE_TARGET_URL: ${{ secrets.SUPABASE_TARGET_URL }}
@@ -48,4 +48,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run test:db
+      - name: RLS tests against TARGET dev (skipped without secrets)
+        if: ${{ env.SUPABASE_TARGET_URL != '' }}
+        run: npm run test:db
+      - name: No secrets configured
+        if: ${{ env.SUPABASE_TARGET_URL == '' }}
+        run: echo "SUPABASE_TARGET_* secrets not set; db tests skipped"
