@@ -9,7 +9,6 @@ import type {
   PublicContactType,
 } from '../../shared/contracts/activities.ts';
 import type { DataQuality, TerritoryType } from '../../shared/contracts/territory.ts';
-import type { AuthUser } from '../env.ts';
 
 export interface TerritoryRow {
   id: string;
@@ -122,7 +121,7 @@ export interface ProfileRow {
   consent_version: string;
   contact_opt_in_at: string | null;
   account_state: 'active' | 'suspended';
-  /** P-SEC-1: set when promoted by magic link; null once the person reviewed their data */
+  /** P-SEC-1, discontinued by ADR 0005: always null */
   review_required_at: string | null;
   created_at: string;
   updated_at: string;
@@ -146,9 +145,7 @@ export interface ProfilePatch {
   email_state?: ProfileRow['email_verification_state'];
   /** E.164, already normalized */
   phone?: string;
-  /** true -> review_required_at = now(); false -> cleared */
-  review_required?: boolean;
-  /** QA2-01: re-sync with the e-mail confirmed by Auth (only from /auth/confirm-email) */
+  /** re-sync with the verified primary e-mail reported by Clerk */
   email_contact?: string;
 }
 
@@ -349,17 +346,31 @@ export interface Repo {
   consumeTurnstileToken(tokenHash: string, ttlSeconds: number): Promise<boolean>;
 }
 
-export type LinkEmailResult = { ok: true } | { ok: false; reason: 'error' };
+/** Result of a successful Clerk session-token verification. */
+export interface VerifiedSession {
+  /** Clerk user id (`user_…`) */
+  sub: string;
+  /** verified JWT payload (custom claims `email`/`email_verified` are used when present) */
+  claims: Record<string, unknown>;
+}
 
+/** What the Worker needs to know about a Clerk user (primary e-mail address). */
+export interface ClerkUserInfo {
+  id: string;
+  /** primary e-mail, lower-cased; null when the account has none */
+  email: string | null;
+  /** Clerk verified the primary e-mail (code/link) */
+  email_verified: boolean;
+  /** banned or locked in Clerk */
+  banned: boolean;
+}
+
+/** Identity provider (Clerk, ADR 0005). Fakes implement it in worker/tests/fakes.ts. */
 export interface AuthGateway {
-  /** Validates the access token with Supabase Auth. Returns null when invalid/expired. */
-  getUser(accessToken: string): Promise<AuthUser | null>;
-  /** Attach an UNCONFIRMED e-mail to the (anonymous) user. Sends no e-mail by itself. */
-  linkEmail(userId: string, email: string): Promise<LinkEmailResult>;
-  /** Mark e-mail confirmed and turn the anonymous user permanent (spike: re-set same e-mail). */
-  promoteVerified(userId: string, email: string): Promise<boolean>;
-  /** Revoke every other session (refresh token) of the token's user. */
-  signOutOthers(accessToken: string): Promise<boolean>;
-  /** Magic link for an EXISTING user only (shouldCreateUser: false). Result is never shown verbatim. */
-  sendMagicLink(email: string, redirectTo: string): Promise<{ ok: boolean; code: string | null }>;
+  /** Verifies a Clerk session token (JWKS signature, exp/nbf, azp). null when invalid. */
+  verify(token: string): Promise<VerifiedSession | null>;
+  /** Backend API lookup; null when the user does not exist. Throws AppError on outage. */
+  getUser(userId: string): Promise<ClerkUserInfo | null>;
+  /** Backend API lookup by e-mail (scripts / admin bootstrap). */
+  findUserByEmail(email: string): Promise<ClerkUserInfo | null>;
 }

@@ -7,12 +7,19 @@
  * so single-use is enforced only by app_private.turnstile_tokens_used.
  *
  * Every row lives under a sandbox territory `mg-98xxxxx` (impossible IBGE code) and is
- * removed in afterAll by cascade; every Auth user created is deleted. Uses only
- * @example.org addresses (Supabase Auth refuses to send mail to that domain, so no e-mail
- * is delivered). Never prints secrets.
+ * removed in afterAll by cascade. ADR 0005: identities are throw-away users of the Clerk
+ * DEVELOPMENT instance (created server-side, no e-mail sent) with REAL session tokens, erased
+ * in afterAll (svc_erase_user_data + Clerk deleteUser). Only @example.org addresses. Never
+ * prints secrets.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  createClerkTestUser,
+  deleteClerkTestUser,
+  devClerk,
+  type ClerkTestUser,
+} from '../../scripts/db/clerk-test-users.ts';
 import { loadDevVars } from '../../scripts/db/load-env.ts';
 
 loadDevVars();
@@ -21,7 +28,7 @@ const ANON = process.env.SUPABASE_TARGET_ANON_KEY ?? '';
 const SERVICE = process.env.SUPABASE_TARGET_SERVICE_ROLE_KEY ?? '';
 const WORKER = process.env.QA_WORKER_URL ?? '';
 const configured =
-  Boolean(URL_ && ANON && SERVICE && WORKER) &&
+  Boolean(URL_ && ANON && SERVICE && WORKER && process.env.CLERK_SECRET_KEY) &&
   new URL(URL_ || 'http://x').hostname.startsWith('wnclh');
 
 const opts = { auth: { persistSession: false, autoRefreshToken: false } };
@@ -32,12 +39,15 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
   const hood = `${muni}-qa-${tag}`;
   const ip = `198.51.100.${Math.floor(Math.random() * 250) + 1}`;
   const userIds: string[] = [];
+  const supabaseAuthIds: string[] = []; // only if GoTrue signup is still open (L13)
   let svc: SupabaseClient;
-  let anonTok = '';
-  let anonTok2 = '';
-  let org1Tok = '';
+  const clerk = configured ? devClerk() : null;
+  // Clerk users: org1/org2 have NO profile (registered only where a test says so)
+  let org1: ClerkTestUser;
+  let org2: ClerkTestUser;
+  let fresh: ClerkTestUser;
+  let fresh2: ClerkTestUser;
   let org1Id = '';
-  let org2Tok = '';
   let published = '';
   let pendingOfOrg1 = '';
   let seq = 0;
@@ -74,27 +84,10 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
     return { res, text, json };
   }
 
-  async function verifiedSession(label: string): Promise<{ token: string; id: string }> {
-    const email = `mm-qa-${label}+${tag}@example.org`;
-    const { data, error } = await svc.auth.admin.createUser({ email, email_confirm: true });
-    if (error || !data.user) throw new Error(`createUser ${label}: ${error?.code}`);
-    userIds.push(data.user.id);
-    const link = await svc.auth.admin.generateLink({ type: 'magiclink', email });
-    const c = createClient(URL_, ANON, opts);
-    const ver = await c.auth.verifyOtp({
-      type: 'magiclink',
-      token_hash: link.data.properties?.hashed_token ?? '',
-    });
-    if (ver.error || !ver.data.session) throw new Error(`verifyOtp ${label}: ${ver.error?.code}`);
-    return { token: ver.data.session.access_token, id: data.user.id };
-  }
-
-  async function anonSession(): Promise<string> {
-    const c = createClient(URL_, ANON, opts);
-    const s = await c.auth.signInAnonymously();
-    if (s.error || !s.data.session) throw new Error(`anon: ${s.error?.code}`);
-    userIds.push(s.data.user!.id);
-    return s.data.session.access_token;
+  async function clerkUser(label: string): Promise<ClerkTestUser> {
+    const u = await createClerkTestUser(clerk!, `qa-clerk-l-${label}-${tag}@example.org`);
+    userIds.push(u.id);
+    return u;
   }
 
   beforeAll(async () => {
@@ -130,12 +123,11 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
       },
     ]);
     if (h.error) throw new Error(`territory hood: ${h.error.code}`);
-    const o1 = await verifiedSession('org1');
-    org1Tok = o1.token;
-    org1Id = o1.id;
-    org2Tok = (await verifiedSession('org2')).token;
-    anonTok = await anonSession();
-    anonTok2 = await anonSession();
+    org1 = await clerkUser('org1');
+    org1Id = org1.id;
+    org2 = await clerkUser('org2');
+    fresh = await clerkUser('fresh');
+    fresh2 = await clerkUser('fresh2');
     const base = {
       territory_id: hood,
       type: 'encontro',
@@ -165,7 +157,8 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
     if (!svc) return;
     await svc.from('territories').delete().eq('id', hood);
     await svc.from('territories').delete().eq('id', muni);
-    for (const id of userIds) await svc.auth.admin.deleteUser(id);
+    for (const id of userIds) await deleteClerkTestUser(clerk!, svc, id);
+    for (const id of supabaseAuthIds) await svc.auth.admin.deleteUser(id);
   });
 
   it('L01 body > 32 KB is rejected before parsing', async () => {
@@ -231,10 +224,10 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
     expect(evil.res.status).toBe(400);
   });
 
-  it('L05 F01 (fixed): verified Auth user WITHOUT profile cannot create an activity', async () => {
+  it('L05 F01 (fixed): verified Clerk user WITHOUT profile cannot create an activity', async () => {
     const r = await api('/activities', {
       method: 'POST',
-      token: org1Tok,
+      token: await org1.token(),
       json: {
         title: 'Atividade QA sem perfil',
         type: 'encontro',
@@ -252,23 +245,28 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
     expect(r.text).not.toContain(org1Id);
   });
 
-  it('L06 IDOR: other organizer cannot PATCH/cancel; L07 anon session cannot create', async () => {
+  it('L06 IDOR: other organizer cannot PATCH/cancel; L07 Clerk session without profile cannot create', async () => {
     const p = await api(`/activities/${pendingOfOrg1}`, {
       method: 'PATCH',
-      token: org2Tok,
+      token: await org2.token(),
       json: { version: 1, title: 'trocado por outro' },
     });
     expect(p.res.status).toBe(404);
-    const c = await api(`/activities/${pendingOfOrg1}/cancel`, { method: 'POST', token: org2Tok });
+    const c = await api(`/activities/${pendingOfOrg1}/cancel`, {
+      method: 'POST',
+      token: await org2.token(),
+    });
     expect(c.res.status).toBe(404);
-    const a = await api('/activities', { method: 'POST', token: anonTok, json: {} });
+    const a = await api('/activities', { method: 'POST', token: await fresh.token(), json: {} });
     expect(a.res.status).toBe(403);
   });
 
-  it('L08 confirm-email with an anonymous session is refused; L09 non-admin denied', async () => {
-    const r = await api('/auth/confirm-email', { method: 'POST', token: anonTok });
-    expect(r.res.status).toBe(403);
-    const q = await api('/admin/queue?kind=groups', { token: org1Tok });
+  it('L08 confirm-email no longer exists (404, ADR 0005); L09 non-admin denied; bad token 401', async () => {
+    const r = await api('/auth/confirm-email', { method: 'POST', token: await fresh.token() });
+    expect(r.res.status).toBe(404);
+    const bad = await api('/me', { token: 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyX3gifQ.forged' });
+    expect(bad.res.status).toBe(401);
+    const q = await api('/admin/queue?kind=groups', { token: await org1.token() });
     expect(q.res.status).toBe(403);
   });
 
@@ -287,8 +285,8 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
     expect(r2.res.headers.get('cache-control')).toBe('no-store');
   });
 
-  it('L11 registration: second provisional session with the same e-mail gets 409 (enumeration oracle)', async () => {
-    const email = `qa-reg+${tag}@example.org`;
+  it('L11 registration: another account cannot take an e-mail (400, no enumeration oracle)', async () => {
+    const email = fresh.email;
     const reg = (tok: string) =>
       api('/registrations', {
         method: 'POST',
@@ -304,35 +302,27 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
           turnstile_token: turnstile(),
         },
       });
-    const a = await reg(anonTok);
+    const a = await reg(await fresh.token());
     expect([200, 201]).toContain(a.res.status);
     expect(a.text).not.toContain(email);
-    const b = await reg(anonTok2);
-    expect(b.res.status).toBe(409);
-    const me = await api('/me', { token: anonTok });
+    // fresh2 tries fresh's e-mail: same answer as any address it does not own
+    const b = await reg(await fresh2.token());
+    expect(b.res.status).toBe(400);
+    const me = await api('/me', { token: await fresh.token() });
     expect(me.res.status).toBe(200);
     expect(me.text).not.toContain(email);
     expect(me.text).not.toContain('98888');
   });
 
-  it('L12 send-link: neutral 202, 4th call from the same IP -> 429 with Retry-After', async () => {
-    const lip = `198.51.100.${(Number(ip.split('.')[3]) % 250) + 2}`;
-    const statuses: number[] = [];
-    let retry: string | null = null;
-    for (let i = 0; i < 4; i++) {
-      const r = await api('/auth/send-link', {
-        method: 'POST',
-        ip: lip,
-        json: { email: `nobody${i}+${tag}@example.org`, turnstile_token: turnstile() },
-      });
-      statuses.push(r.res.status);
-      if (r.res.status === 429) retry = r.res.headers.get('retry-after');
-    }
-    expect(statuses).toEqual([202, 202, 202, 429]);
-    expect(Number(retry)).toBeGreaterThan(0);
+  it('L12 send-link no longer exists (404, ADR 0005)', async () => {
+    const r = await api('/auth/send-link', {
+      method: 'POST',
+      json: { email: `nobody+${tag}@example.org`, turnstile_token: turnstile() },
+    });
+    expect(r.res.status).toBe(404);
   });
 
-  it('L13 Auth surface: direct e-mail signup through the public anon key', async () => {
+  it('L13 Supabase Auth surface is closed: direct e-mail signup refused (ADR 0005)', async () => {
     const res = await fetch(`${URL_}/auth/v1/signup`, {
       method: 'POST',
       headers: { apikey: ANON, 'Content-Type': 'application/json' },
@@ -348,11 +338,12 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
       user?: { id?: string };
     };
     const createdId = j.user?.id ?? j.id;
-    if (typeof createdId === 'string') userIds.push(createdId);
-    // Record the observed code; 'signup_disabled' would mean direct signup is closed.
+    if (typeof createdId === 'string') supabaseAuthIds.push(createdId);
+    // config.toml [auth] enable_signup = false (BE-5): GoTrue must refuse and create nothing.
     process.stderr.write(
       `QA_L13 ${JSON.stringify({ status: res.status, code: j.error_code ?? j.code ?? null, created: Boolean(createdId) })}\n`,
     );
-    expect(res.status).toBeGreaterThan(0);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(createdId).toBeUndefined();
   });
 });

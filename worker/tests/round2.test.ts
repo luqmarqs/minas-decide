@@ -1,8 +1,7 @@
 /**
- * Round 2 (BE-2): P-SEC-1, QA-1 F05/F09/F11/F12/F14/F16, I03, suspension and audited reveal.
+ * Round 2 (BE-2): profile phone (P-SEC-1 discontinued by ADR 0005), QA-1 F05/F09/F11/F12/F14/F16, I03, suspension and audited reveal.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { MeResponse } from '../../shared/contracts/registration.ts';
 import { AdminGroupProposal, AdminRevealContactResponse } from '../../shared/contracts/admin.ts';
 import { body, setup } from './fakes.ts';
 
@@ -49,60 +48,42 @@ const proposal = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-describe('P-SEC-1: profile review after promotion', () => {
-  async function registeredAndPromoted() {
+// P-SEC-1 (profile review after magic-link promotion) was discontinued by ADR 0005: the e-mail
+// is verified by Clerk BEFORE the session exists, so nobody else can have typed the data.
+describe('profile data after a Clerk registration (phone editable, masked, audited)', () => {
+  async function registered() {
     const s = setup();
-    const a = s.users.anonymous();
+    const a = s.users.signedUp('vitima@example.org');
     const reg = await s.request('/api/v1/registrations', {
       method: 'POST',
       token: a.token,
       json: registration({ email: 'vitima@example.org' }),
     });
     expect(reg.status).toBe(201);
-    // magic-link session of the inbox owner
-    a.user.email = 'vitima@example.org';
-    a.user.email_confirmed = true;
-    a.user.amr_methods = ['otp'];
-    const conf = await s.request('/api/v1/auth/confirm-email', { method: 'POST', token: a.token });
-    expect(conf.status).toBe(200);
-    a.user.is_anonymous = false;
-    a.user.jwt_is_anonymous = false;
-    return { s, a, conf };
+    return { s, a };
   }
 
-  it('promotion sets the review flag; /me exposes masked phone and the flag', async () => {
-    const { s, a, conf } = await registeredAndPromoted();
-    expect((await body(conf)).data?.profile_review_required).toBe(true);
-    const me = MeResponse.parse(
-      (await body(await s.request('/api/v1/me', { token: a.token }))).data,
-    );
-    expect(me.profile_review_required).toBe(true);
-    expect(me.phone_masked).toBe('+55 (31) 9****-**77');
+  it('/me exposes the masked phone and never asks for a review', async () => {
+    const { s, a } = await registered();
+    const me = (await body(await s.request('/api/v1/me', { token: a.token }))).data;
+    expect(me?.profile_review_required).toBe(false);
+    expect(me?.phone_masked).toBe('+55 (31) 9****-**77');
     expect(JSON.stringify(me)).not.toContain('988887777');
   });
 
-  it('confirm-email on an already permanent account does not raise the flag', async () => {
-    const s = setup();
-    const v = s.users.verified();
-    const r = await s.request('/api/v1/auth/confirm-email', { method: 'POST', token: v.token });
-    expect(r.status).toBe(200);
-    expect((await body(r)).data?.profile_review_required).toBe(false);
-  });
-
-  it('PATCH /me {phone, profile_reviewed} edits own phone, clears the flag, audits without PII', async () => {
-    const { s, a } = await registeredAndPromoted();
+  it('PATCH /me {phone} edits own phone and audits without PII', async () => {
+    const { s, a } = await registered();
     const r = await s.request('/api/v1/me', {
       method: 'PATCH',
       token: a.token,
-      json: { phone: '(31) 96666-5544', profile_reviewed: true },
+      json: { phone: '(31) 96666-5544' },
     });
     expect(r.status).toBe(200);
-    const me = MeResponse.parse((await body(r)).data);
-    expect(me.profile_review_required).toBe(false);
-    expect(me.phone_masked).toBe('+55 (31) 9****-**44');
+    expect((await body(r)).data?.phone_masked).toBe('+55 (31) 9****-**44');
     expect(s.repo.profiles.get(a.user.id)?.phone_e164).toBe('+5531966665544');
     const actions = s.repo.audit.filter((e) => e.entity_id === a.user.id).map((e) => e.action);
-    expect(actions).toEqual(expect.arrayContaining(['profile.phone_change', 'profile.review']));
+    expect(actions).toContain('profile.phone_change');
+    expect(actions).not.toContain('profile.review');
     expect(JSON.stringify(s.repo.audit)).not.toMatch(/96666|5544|vitima/);
   });
 
@@ -330,7 +311,7 @@ describe('F16: edge cache and light limits', () => {
     expect((await n.request('/api/v1/territories/mg-3140001')).status).toBe(200);
   });
 
-  it('PATCH /me and confirm-email: 61st request in 10 min -> 429', async () => {
+  it('PATCH /me: 61st request in 10 min -> 429', async () => {
     const s = setup();
     const v = s.users.verified();
     let last = 0;
@@ -343,12 +324,6 @@ describe('F16: edge cache and light limits', () => {
         })
       ).status;
     expect(last).toBe(429);
-    let lastConfirm = 0;
-    for (let i = 0; i < 61; i++)
-      lastConfirm = (
-        await s.request('/api/v1/auth/confirm-email', { method: 'POST', token: v.token })
-      ).status;
-    expect(lastConfirm).toBe(429);
   });
 });
 
@@ -373,7 +348,7 @@ describe('I03: RSVP_DEVICE_SECRET validated on first request', () => {
 });
 
 describe('suspension (admin, audited)', () => {
-  it('group: reason required, non-admin/anonymous denied, disappears publicly, unsuspend -> active', async () => {
+  it('group: reason required, non-admin/unverified denied, disappears publicly, unsuspend -> active', async () => {
     const s = setup();
     const g = s.repo.addGroup('mg-3140001');
     const path = `/api/v1/admin/groups/${g.id}/suspend`;
@@ -392,7 +367,7 @@ describe('suspension (admin, audited)', () => {
       (
         await s.request(path, {
           method: 'POST',
-          token: s.users.anonymous().token,
+          token: s.users.unverified().token,
           json: { reason: 'abuso' },
         })
       ).status,
@@ -525,13 +500,13 @@ describe('audited contact reveal', () => {
     }
   });
 
-  it('non-admin, anonymous and unconfirmed-e-mail admin -> 403 without leak or audit; unknown 404', async () => {
+  it('non-admin, unverified Clerk session and unconfirmed-e-mail admin -> 403 without leak or audit; unknown 404', async () => {
     const { s, id } = await withProposal();
     const path = `/api/v1/admin/group-proposals/${id}/reveal-contact`;
     expect((await s.request(path, { method: 'POST' })).status).toBe(401);
     for (const token of [
       s.users.verified().token,
-      s.users.anonymous().token,
+      s.users.unverified().token,
       s.users.admin('aal1', undefined, { emailConfirmed: false }).token,
     ]) {
       const r = await s.request(path, { method: 'POST', token });
@@ -563,31 +538,5 @@ describe('audited contact reveal', () => {
     const item = AdminGroupProposal.parse(after.data?.items?.[0]);
     expect(item.group_id).toBe(ap.data?.group_id);
     expect(item.proposer_email_masked).not.toContain('proponente@');
-  });
-});
-
-describe('P-SEC-1: organizer actions blocked while profile review is pending', () => {
-  it('POST /activities -> 403 until PATCH /me {profile_reviewed:true}', async () => {
-    const s = setup();
-    const v = s.users.verified();
-    await s.repo.updateProfile(v.user.id, { review_required: true });
-    const blocked = await s.request('/api/v1/activities', {
-      method: 'POST',
-      token: v.token,
-      json: activityInput(),
-    });
-    expect(blocked.status).toBe(403);
-    const reviewed = await s.request('/api/v1/me', {
-      method: 'PATCH',
-      token: v.token,
-      json: { profile_reviewed: true },
-    });
-    expect(reviewed.status).toBe(200);
-    const ok = await s.request('/api/v1/activities', {
-      method: 'POST',
-      token: v.token,
-      json: activityInput(),
-    });
-    expect(ok.status).toBe(201);
   });
 });

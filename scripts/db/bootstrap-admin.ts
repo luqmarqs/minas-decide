@@ -1,31 +1,26 @@
 /**
- * Bootstraps admins on the TARGET dev project: for each e-mail in ADMIN_EMAILS, finds the
- * auth user (or creates it with e-mail already confirmed) and inserts it into
+ * Bootstraps admins on the TARGET dev project (ADR 0005 — identity = Clerk): for each e-mail
+ * in ADMIN_EMAILS, finds the Clerk user by e-mail (Backend API `users.getUserList`), creating
+ * it when missing (`users.createUser`; addresses created through the Backend API are marked
+ * verified by Clerk — observed in the dev instance), and inserts its Clerk id into
  * app_private.admins via the service-role-only RPC `svc_grant_admin`.
  *
- * Runs ONLY with APP_ENV=local exported in the shell (never in staging/production):
- *   APP_ENV=local npx tsx scripts/db/bootstrap-admin.ts [--dry-run]
- * There is no public endpoint that promotes users. MFA is optional (D35): an admin is a
- * permanent account with a confirmed e-mail listed in app_private.admins.
+ * Runs ONLY with APP_ENV=local exported in the shell (never in staging/production) and only with
+ * a development Clerk key (`sk_test_…`):
+ *   APP_ENV=local npx tsx scripts/db/bootstrap-admin.ts [--dry-run] [--only=<email>]
+ * There is no public endpoint that promotes users. MFA is optional (D35): an admin is a Clerk
+ * account with a verified primary e-mail whose id is listed in app_private.admins.
+ * Output never contains full e-mails or ids.
  */
-import { createClient, type User } from '@supabase/supabase-js';
+import { createClerkClient } from '@clerk/backend';
+import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../../shared/types/database.ts';
 import { maskEmail } from '../../shared/schemas/phone.ts';
+import { ClerkAuthGateway } from '../../worker/repositories/clerk.ts';
+import type { Env } from '../../worker/env.ts';
 import { assertTargetUrl, loadDevVars, requireEnv } from './load-env.ts';
 
-async function findUserByEmail(
-  db: ReturnType<typeof createClient<Database>>,
-  email: string,
-): Promise<User | null> {
-  for (let page = 1; page <= 50; page++) {
-    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw new Error(`listUsers failed (${error.code ?? error.status ?? 'unknown'})`);
-    const hit = data.users.find((u) => u.email?.toLowerCase() === email);
-    if (hit) return hit;
-    if (data.users.length < 1000) return null;
-  }
-  return null;
-}
+const maskId = (id: string) => `${id.slice(0, 7)}…`;
 
 async function main() {
   if (process.env.APP_ENV !== 'local') {
@@ -35,32 +30,52 @@ async function main() {
   loadDevVars();
   const url = requireEnv('SUPABASE_TARGET_URL');
   assertTargetUrl(url);
+  const clerkKey = requireEnv('CLERK_SECRET_KEY');
+  if (!clerkKey.startsWith('sk_test_')) {
+    throw new Error('Refusing: CLERK_SECRET_KEY is not a development (sk_test_) key.');
+  }
   const emails = (process.env.ADMIN_EMAILS ?? '')
     .split(',')
     .map((e) => e.trim().toLowerCase())
     .filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
+  // optional `--only=<email>`: bootstrap just one of the ADMIN_EMAILS entries
+  const only = process.argv
+    .find((a) => a.startsWith('--only='))
+    ?.slice('--only='.length)
+    .trim()
+    .toLowerCase();
+  if (only && !emails.includes(only)) throw new Error('--only must be one of ADMIN_EMAILS.');
+  if (only) emails.splice(0, emails.length, only);
   if (emails.length === 0) throw new Error('ADMIN_EMAILS is empty.');
 
   const db = createClient<Database>(url, requireEnv('SUPABASE_TARGET_SERVICE_ROLE_KEY'), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  const gateway = new ClerkAuthGateway({ APP_ENV: 'local', CLERK_SECRET_KEY: clerkKey } as Env);
+  const clerk = createClerkClient({ secretKey: clerkKey });
 
   for (const email of emails) {
-    let user = await findUserByEmail(db, email);
+    let user = await gateway.findUserByEmail(email);
     console.log(
-      `bootstrap-admin: ${maskEmail(email)} -> ${user ? 'existing user' : 'no user yet'}`,
+      `bootstrap-admin: ${maskEmail(email)} -> ${user ? `Clerk user ${maskId(user.id)}` : 'no Clerk user yet'}`,
     );
     if (dryRun) continue;
     if (!user) {
-      const { data, error } = await db.auth.admin.createUser({ email, email_confirm: true });
-      if (error || !data.user) throw new Error(`createUser failed (${error?.code ?? 'unknown'})`);
-      user = data.user;
+      const created = await clerk.users.createUser({
+        emailAddress: [email],
+        skipPasswordRequirement: true,
+      });
+      user = await gateway.getUser(created.id);
+      if (!user) throw new Error('createUser: user not readable after creation');
+      console.log(`bootstrap-admin: created Clerk user ${maskId(user.id)}`);
+    }
+    if (!user.email_verified || user.email !== email) {
+      throw new Error(`${maskEmail(email)}: primary e-mail is not verified in Clerk; refusing.`);
     }
     const { error } = await db.rpc('svc_grant_admin', { p_user: user.id });
     if (error) throw new Error(`svc_grant_admin failed (${error.code ?? 'unknown'})`);
-    console.log(`bootstrap-admin: ${maskEmail(email)} is admin.`);
-    // D35: MFA is optional. Access to the admin depends on the security of this e-mail
-    // account (risk accepted by the owner); TOTP can still be enrolled in /conta/seguranca.
+    const check = await db.rpc('svc_is_admin', { p_user: user.id });
+    console.log(`bootstrap-admin: ${maskEmail(email)} is admin = ${String(check.data)}.`);
     console.log(
       'bootstrap-admin: note — MFA opcional (D35); proteja a conta de e-mail deste admin.',
     );

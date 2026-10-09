@@ -73,7 +73,7 @@ groups.post('/groups/proposals', noStore, rateLimit('proposals'), optionalSessio
     proposer_name: sanitizePlainText(input.proposer_name, 120),
     proposer_email: input.proposer_email,
     proposer_phone: phone,
-    proposer_user_id: user && !user.is_anonymous ? user.id : null,
+    proposer_user_id: user ? user.id : null,
     consent_version: input.consent_version,
     idempotency_hash: await sha256Hex(idemSource),
     idempotency_ttl_seconds: IDEMPOTENCY_TTL_SECONDS,

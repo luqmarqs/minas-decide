@@ -35,160 +35,99 @@ const proposal = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const registration = () => ({
-  display_name: 'Nome',
-  email: 'pessoa@example.org',
-  phone: '(31) 98888-7777',
-  territory_id: 'mg-3140001-centro',
-  terms_accepted: true,
-  contact_opt_in: false,
-  consent_version: '2026-10',
-  turnstile_token: `tok-${Math.random()}`,
-});
-
-describe('QA2-01: any transition of the profile to verified is a promotion', () => {
-  it('e-mail changed in Auth (secure change, already permanent): blocked until confirm-email + review', async () => {
+// QA2-01/QA2-02 were about the Supabase Auth promotion (anonymous -> permanent) and the
+// revocation of other sessions; both flows no longer exist with Clerk (ADR 0005: the e-mail is
+// verified BEFORE any session exists). What remains is the e-mail divergence case below.
+describe('QA2-01 (Clerk): profile e-mail follows the VERIFIED primary e-mail in Clerk', () => {
+  it('verified primary e-mail changed in Clerk: re-synced on the next organizer action, audited without PII', async () => {
     const s = setup();
-    const v = s.users.verified();
-    // GoTrue changed the address (email_change confirmed by the new inbox) outside the Worker
-    v.user.email = 'nova-dona@example.org';
-    v.user.amr_methods = ['email_change'];
-    const before = await s.request('/api/v1/activities', {
-      method: 'POST',
-      token: v.token,
-      json: activityInput(),
+    const v = s.users.verified(undefined, 'antiga@example.org');
+    s.auth.people.set(v.user.id, {
+      id: v.user.id,
+      email: 'nova-dona@example.org',
+      email_verified: true,
+      banned: false,
     });
-    expect(before.status).toBe(403);
-
-    const conf = await s.request('/api/v1/auth/confirm-email', { method: 'POST', token: v.token });
-    expect(conf.status).toBe(200);
-    expect((await body(conf)).data?.profile_review_required).toBe(true);
-    expect(s.auth.signedOutOthers).toEqual([v.token]);
-    expect(s.repo.profiles.get(v.user.id)?.email_contact).toBe('nova-dona@example.org');
-    const audit = s.repo.audit.filter((e) => e.action === 'profile.email_changed');
-    expect(audit).toHaveLength(1);
-    expect(audit[0]).toMatchObject({ actor: v.user.id, entity_id: v.user.id, reason: null });
-    expect(JSON.stringify(s.repo.audit)).not.toContain('nova-dona@');
-
-    // still blocked while the review is pending; allowed after PATCH /me {profile_reviewed}
-    const pending = await s.request('/api/v1/activities', {
-      method: 'POST',
-      token: v.token,
-      json: activityInput(),
-    });
-    expect(pending.status).toBe(403);
-    const rev = await s.request('/api/v1/me', {
-      method: 'PATCH',
-      token: v.token,
-      json: { profile_reviewed: true },
-    });
-    expect(rev.status).toBe(200);
-    const after = await s.request('/api/v1/activities', {
-      method: 'POST',
-      token: v.token,
-      json: activityInput(),
-    });
-    expect(after.status).toBe(201);
-  });
-
-  it('PATCH /me {profile_reviewed} does NOT re-sync a diverged e-mail (only confirm-email does)', async () => {
-    const s = setup();
-    const v = s.users.verified();
-    v.user.email = 'outra@example.org';
-    const rev = await s.request('/api/v1/me', {
-      method: 'PATCH',
-      token: v.token,
-      json: { profile_reviewed: true },
-    });
-    expect(rev.status).toBe(200);
-    expect(s.repo.profiles.get(v.user.id)?.email_contact).not.toBe('outra@example.org');
-    const act = await s.request('/api/v1/activities', {
-      method: 'POST',
-      token: v.token,
-      json: activityInput(),
-    });
-    expect(act.status).toBe(403);
-  });
-
-  it('e-mail comparison is case-insensitive; a repeated confirm-email is a no-op', async () => {
-    const s = setup();
-    const v = s.users.verified(undefined, 'Org.Case@Example.org');
-    v.user.email = 'org.case@example.org';
-    const conf = await s.request('/api/v1/auth/confirm-email', { method: 'POST', token: v.token });
-    expect(conf.status).toBe(200);
-    expect((await body(conf)).data?.profile_review_required).toBe(false);
-    expect(s.auth.signedOutOthers).toHaveLength(0);
     const act = await s.request('/api/v1/activities', {
       method: 'POST',
       token: v.token,
       json: activityInput(),
     });
     expect(act.status).toBe(201);
+    expect(s.repo.profiles.get(v.user.id)?.email_contact).toBe('nova-dona@example.org');
+    const audit = s.repo.audit.filter((e) => e.action === 'profile.email_changed');
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ actor: v.user.id, entity_id: v.user.id, reason: null });
+    expect(JSON.stringify(s.repo.audit)).not.toContain('nova-dona@');
   });
 
-  it('confirm-email without an e-mail proof in amr -> 403 EMAIL_NOT_VERIFIED; no session -> 401', async () => {
+  it('new primary e-mail NOT verified in Clerk -> 403 EMAIL_NOT_VERIFIED, profile untouched', async () => {
+    const s = setup();
+    const v = s.users.verified(undefined, 'antiga2@example.org');
+    s.auth.people.set(v.user.id, {
+      id: v.user.id,
+      email: 'nao-verificado@example.org',
+      email_verified: false,
+      banned: false,
+    });
+    const act = await s.request('/api/v1/activities', {
+      method: 'POST',
+      token: v.token,
+      json: activityInput(),
+    });
+    expect(act.status).toBe(403);
+    expect((await body(act)).error?.code).toBe('EMAIL_NOT_VERIFIED');
+    expect(s.repo.profiles.get(v.user.id)?.email_contact).toBe('antiga2@example.org');
+  });
+
+  it('new primary e-mail already held by another profile -> 409, profile untouched', async () => {
+    const s = setup();
+    s.users.verified(undefined, 'ocupado@example.org');
+    const v = s.users.verified(undefined, 'minha@example.org');
+    s.auth.people.set(v.user.id, {
+      id: v.user.id,
+      email: 'ocupado@example.org',
+      email_verified: true,
+      banned: false,
+    });
+    const act = await s.request('/api/v1/activities', {
+      method: 'POST',
+      token: v.token,
+      json: activityInput(),
+    });
+    expect(act.status).toBe(409);
+    expect(s.repo.profiles.get(v.user.id)?.email_contact).toBe('minha@example.org');
+  });
+
+  it('e-mail comparison is case-insensitive (no re-sync, no audit)', async () => {
+    const s = setup();
+    const v = s.users.verified(undefined, 'Org.Case@Example.org');
+    s.auth.people.set(v.user.id, {
+      id: v.user.id,
+      email: 'org.case@example.org',
+      email_verified: true,
+      banned: false,
+    });
+    const act = await s.request('/api/v1/activities', {
+      method: 'POST',
+      token: v.token,
+      json: activityInput(),
+    });
+    expect(act.status).toBe(201);
+    expect(s.repo.audit.filter((e) => e.action === 'profile.email_changed')).toHaveLength(0);
+  });
+
+  it('PATCH /me {profile_reviewed} is accepted and ignored (P-SEC-1 discontinued)', async () => {
     const s = setup();
     const v = s.users.verified();
-    v.user.email = 'nova@example.org';
-    v.user.amr_methods = ['password'];
-    const r = await s.request('/api/v1/auth/confirm-email', { method: 'POST', token: v.token });
-    expect(r.status).toBe(403);
-    expect((await body(r)).error?.code).toBe('EMAIL_NOT_VERIFIED');
-    expect(s.repo.profiles.get(v.user.id)?.email_contact).not.toBe('nova@example.org');
-    expect((await s.request('/api/v1/auth/confirm-email', { method: 'POST' })).status).toBe(401);
-  });
-});
-
-describe('QA2-02: confirm-email fails closed when other sessions cannot be revoked', () => {
-  async function provisional() {
-    const s = setup();
-    const a = s.users.anonymous();
-    const reg = await s.request('/api/v1/registrations', {
-      method: 'POST',
-      token: a.token,
-      json: registration(),
+    const r = await s.request('/api/v1/me', {
+      method: 'PATCH',
+      token: v.token,
+      json: { profile_reviewed: true },
     });
-    expect(reg.status).toBe(201);
-    a.user.email = 'pessoa@example.org';
-    a.user.email_confirmed = true;
-    a.user.amr_methods = ['otp'];
-    return { s, a };
-  }
-
-  it('two failures -> 500 INTERNAL_ERROR, profile not verified, no review flag', async () => {
-    const { s, a } = await provisional();
-    let calls = 0;
-    s.auth.signOutOthers = async () => {
-      calls += 1;
-      return false;
-    };
-    const r = await s.request('/api/v1/auth/confirm-email', { method: 'POST', token: a.token });
-    expect(r.status).toBe(500);
-    expect((await body(r)).error?.code).toBe('INTERNAL_ERROR');
-    expect(calls).toBe(2);
-    expect(s.repo.profiles.get(a.user.id)?.email_verification_state).toBe('pending');
-    expect(s.repo.profiles.get(a.user.id)?.review_required_at).toBeNull();
-  });
-
-  it('a throwing gateway is also a failure (500)', async () => {
-    const { s, a } = await provisional();
-    s.auth.signOutOthers = async () => {
-      throw new Error('timeout');
-    };
-    const r = await s.request('/api/v1/auth/confirm-email', { method: 'POST', token: a.token });
-    expect(r.status).toBe(500);
-    expect(s.repo.profiles.get(a.user.id)?.email_verification_state).toBe('pending');
-  });
-
-  it('first attempt fails, retry succeeds -> 200 verified + review flag', async () => {
-    const { s, a } = await provisional();
-    let calls = 0;
-    s.auth.signOutOthers = async () => ++calls > 1;
-    const r = await s.request('/api/v1/auth/confirm-email', { method: 'POST', token: a.token });
     expect(r.status).toBe(200);
-    expect(calls).toBe(2);
-    expect(s.repo.profiles.get(a.user.id)?.email_verification_state).toBe('verified');
-    expect((await body(r)).data?.profile_review_required).toBe(true);
+    expect((await body(r)).data?.profile_review_required).toBe(false);
+    expect(s.repo.audit.filter((e) => e.action === 'profile.review')).toHaveLength(0);
   });
 });
 
@@ -375,17 +314,14 @@ describe('QA2-09: unsuspend restores the previous state', () => {
 
 describe('D35 (replaces QA2-12): admin = admins table + confirmed e-mail, MFA not required', () => {
   for (const APP_ENV of ['local', 'staging', 'production']) {
-    it(`${APP_ENV}: admin aal1/aal2 -> 200; non-admin, anonymous, unconfirmed e-mail -> 403`, async () => {
+    it(`${APP_ENV}: admin aal1/aal2 -> 200; non-admin, unverified e-mail -> 403`, async () => {
       const s = setup({ APP_ENV, WRITES_ENABLED: 'true' });
       const q = (token: string) => s.request('/api/v1/admin/queue', { token });
       expect((await q(s.users.admin('aal1').token)).status).toBe(200);
       expect((await q(s.users.admin('aal2').token)).status).toBe(200);
       expect((await q(s.users.verified().token)).status).toBe(403);
-      expect((await q(s.users.anonymous().token)).status).toBe(403);
-      // listed in app_private.admins, but the session is anonymous / e-mail not confirmed
-      expect((await q(s.users.admin('aal1', undefined, { anonymous: true }).token)).status).toBe(
-        403,
-      );
+      expect((await q(s.users.unverified().token)).status).toBe(403);
+      // listed in app_private.admins (by Clerk id), but the Clerk e-mail is not verified
       expect(
         (await q(s.users.admin('aal1', undefined, { emailConfirmed: false }).token)).status,
       ).toBe(403);

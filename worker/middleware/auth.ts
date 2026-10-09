@@ -2,8 +2,16 @@ import type { Context, MiddlewareHandler } from 'hono';
 import type { AppBindings, AuthUser } from '../env.ts';
 import { fail } from '../errors.ts';
 import { clientIp } from '../http.ts';
+import type { ProfileRow } from '../repositories/types.ts';
 import { subjectHash } from './rate-limit.ts';
 
+/**
+ * Authentication = Clerk (ADR 0005). The client sends the Clerk session token as
+ * `Authorization: Bearer <jwt>`; the Worker verifies it (JWKS signature, exp/nbf, azp) through
+ * the injected AuthGateway and resolves the primary e-mail + verification status either from
+ * custom session claims (`email`, `email_verified`) or from the Clerk Backend API (once per
+ * request — the AuthUser is memoised in the request context).
+ */
 function bearer(c: Context<AppBindings>): string | null | 'malformed' {
   const h = c.req.header('Authorization');
   if (!h) return null;
@@ -11,17 +19,46 @@ function bearer(c: Context<AppBindings>): string | null | 'malformed' {
   return m?.[1] ?? 'malformed';
 }
 
+const INVALID_SESSION = 'Sessão inválida ou expirada. Entre novamente.';
+
 async function resolveUser(c: Context<AppBindings>, required: boolean): Promise<AuthUser | null> {
+  const cached = c.get('user');
+  if (cached) return cached;
   const token = bearer(c);
   if (token === null) {
     if (required) throw fail('UNAUTHENTICATED');
     return null;
   }
   if (token === 'malformed') throw fail('UNAUTHENTICATED');
-  const user = await c.get('deps').auth.getUser(token);
-  if (!user) throw fail('UNAUTHENTICATED', 'Sessão inválida ou expirada. Entre novamente.');
+  const { auth } = c.get('deps');
+  const session = await auth.verify(token);
+  if (!session) throw fail('UNAUTHENTICATED', INVALID_SESSION);
+  // Session tasks (e.g. pending org selection) are not a usable session.
+  const sts = session.claims.sts;
+  if (sts !== undefined && sts !== 'active') throw fail('UNAUTHENTICATED', INVALID_SESSION);
+
+  let email: string | null;
+  let emailVerified: boolean;
+  const claimEmail = session.claims.email;
+  const claimVerified = session.claims.email_verified;
+  if (typeof claimEmail === 'string' && typeof claimVerified === 'boolean') {
+    email = claimEmail.trim().toLowerCase() || null;
+    emailVerified = claimVerified;
+  } else {
+    const info = await auth.getUser(session.sub);
+    if (!info || info.banned || info.id !== session.sub) {
+      throw fail('UNAUTHENTICATED', INVALID_SESSION);
+    }
+    email = info.email;
+    emailVerified = info.email_verified;
+  }
+  const user: AuthUser = {
+    id: session.sub,
+    email,
+    email_confirmed: Boolean(email) && emailVerified,
+    is_anonymous: false,
+  };
   c.set('user', user);
-  c.set('token', token);
   return user;
 }
 
@@ -31,45 +68,57 @@ export const optionalSession: MiddlewareHandler<AppBindings> = async (c, next) =
   await next();
 };
 
-/** Any valid Supabase session, including provisional (anonymous) ones. */
+/** Any valid Clerk session (verified e-mail is checked by the routes that need it). */
 export const requireSession: MiddlewareHandler<AppBindings> = async (c, next) => {
   await resolveUser(c, true);
   await next();
 };
 
-/** Case-insensitive e-mail equality (Auth stores addresses lower-cased). */
+/** Case-insensitive e-mail equality. */
 export function sameEmail(a: string | null | undefined, b: string | null | undefined): boolean {
   return Boolean(a && b && a.trim().toLowerCase() === b.trim().toLowerCase());
 }
 
-/** Organizer = permanent identity with e-mail confirmed by Auth, re-checked in the database. */
-export async function assertOrganizer(c: Context<AppBindings>, user: AuthUser): Promise<void> {
-  if (user.is_anonymous || user.jwt_is_anonymous || !user.email_confirmed) {
-    throw fail('EMAIL_NOT_VERIFIED');
+/**
+ * Keeps `profiles.email_contact` equal to the VERIFIED primary e-mail in Clerk. Clerk only lets
+ * a verified address become primary, so a change made in the Clerk account UI is re-synced
+ * (audited without PII). Refused when another profile already holds that address.
+ */
+export async function syncProfileEmail(
+  c: Context<AppBindings>,
+  user: AuthUser,
+  profile: ProfileRow,
+): Promise<ProfileRow> {
+  if (!user.email || !user.email_confirmed || sameEmail(profile.email_contact, user.email)) {
+    return profile;
   }
   const { repo } = c.get('deps');
-  if (!(await repo.isEmailVerified(user.id))) throw fail('EMAIL_NOT_VERIFIED');
-  // QA-1 F01: an organizer must have a profile created through the guarded
-  // registration flow (Turnstile + consent), be active and have its e-mail state
-  // promoted by /auth/confirm-email. Auth-only accounts (direct GoTrue signup) are refused.
-  const profile = await repo.getProfile(user.id);
+  if (await repo.emailInUse(user.email, user.id)) {
+    throw fail('CONFLICT', 'Este e-mail já está associado a outro cadastro.');
+  }
+  const updated = await repo.updateProfile(user.id, { email_contact: user.email });
+  await repo.recordAudit({
+    actor: user.id,
+    action: 'profile.email_changed',
+    entity_type: 'profile',
+    entity_id: user.id,
+    request_id: c.get('requestId'),
+  });
+  return updated ?? profile;
+}
+
+/**
+ * Organizer = Clerk session with a verified primary e-mail + a profile created through the
+ * guarded registration flow (Turnstile + consent), active and verified.
+ */
+export async function assertOrganizer(c: Context<AppBindings>, user: AuthUser): Promise<void> {
+  if (!user.email_confirmed) throw fail('EMAIL_NOT_VERIFIED');
+  const profile = await c.get('deps').repo.getProfile(user.id);
+  // QA-1 F01: accounts that never went through POST /registrations cannot organize.
   if (!profile) throw fail('FORBIDDEN');
   if (profile.account_state !== 'active') throw fail('FORBIDDEN');
   if (profile.email_verification_state !== 'verified') throw fail('EMAIL_NOT_VERIFIED');
-  // QA2-01: the Auth address changed outside the Worker (e.g. GoTrue e-mail change) and the
-  // profile was not re-synced by /auth/confirm-email (which also revokes the other sessions
-  // and flags the profile for review). Never organize with a stale contact e-mail.
-  if (!sameEmail(profile.email_contact, user.email)) {
-    throw fail(
-      'FORBIDDEN',
-      'Seu e-mail mudou. Abra o link de confirmação e revise seus dados antes de continuar.',
-    );
-  }
-  // P-SEC-1: after a magic-link promotion the person must confirm/edit the profile
-  // data (which may have been entered by someone else) before acting as organizer.
-  if (profile.review_required_at) {
-    throw fail('FORBIDDEN', 'Confira seus dados de perfil antes de propor atividades.');
-  }
+  await syncProfileEmail(c, user, profile);
 }
 
 export const requireOrganizer: MiddlewareHandler<AppBindings> = async (c, next) => {
@@ -79,14 +128,10 @@ export const requireOrganizer: MiddlewareHandler<AppBindings> = async (c, next) 
 };
 
 /**
- * Returns true when the user may act as admin: permanent account, confirmed e-mail and listed
- * in app_private.admins. MFA is not required (D35) in any APP_ENV.
+ * Admin = Clerk session with a verified primary e-mail whose Clerk user id is listed in
+ * app_private.admins. MFA is not required (D35). The name is kept for call-site stability.
  */
 export async function isAdminWithMfa(c: Context<AppBindings>, user: AuthUser): Promise<boolean> {
-  // D35 (owner decision, 2026-10-09): MFA is no longer required for admins. An admin is a
-  // permanent (non-anonymous) account with a confirmed e-mail listed in app_private.admins.
-  // The function keeps its name so call sites and tests stay stable.
-  if (user.is_anonymous || user.jwt_is_anonymous) return false;
   if (!user.email_confirmed) return false;
   return c.get('deps').repo.isAdmin(user.id);
 }

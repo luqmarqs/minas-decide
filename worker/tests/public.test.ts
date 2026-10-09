@@ -353,7 +353,7 @@ describe('structured logging', () => {
       lines.push(args.map(String).join(' '));
     };
     try {
-      const s = users.anonymous();
+      const s = users.signedUp();
       await request('/api/v1/territories/search?q=mariana');
       await request('/api/v1/me', { token: s.token });
     } finally {

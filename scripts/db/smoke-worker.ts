@@ -1,32 +1,31 @@
 /**
  * End-to-end smoke of the Worker API (wrangler dev, APP_ENV=local) against the TARGET dev
- * project. Exercises the real Supabase repository + Auth gateway, then deletes everything
- * it created (users cascade profiles/admins/activities/rsvps).
+ * project and the Clerk DEVELOPMENT instance (ADR 0005). Exercises the real Supabase
+ * repository + Clerk gateway with a throw-away Clerk user (`qa-smoke-<tag>@example.org`) and
+ * a REAL session token minted through the Backend API, then deletes everything it created
+ * (svc_erase_user_data + Clerk deleteUser; sandbox territory cascades groups/proposals).
  *
- *   npx wrangler dev --env local --port 8797           # in another terminal (reads .dev.vars)
- *   npx tsx scripts/db/smoke-worker.ts http://127.0.0.1:8797
+ *   npx wrangler dev --env local --port 8793           # in another terminal (reads .dev.vars)
+ *   npx tsx scripts/db/smoke-worker.ts http://127.0.0.1:8793
  *
- * Round 2 adds: profile review (P-SEC-1), Origin guard (F14), MG/horizon bounds (F09/F12),
- * proposal re-submission after rejection (F11), suspension of activities/groups and the
- * audited contact reveal. D35: admins do not need MFA, so the reveal is exercised with the
- * plain (aal1) session. TOTP enrolment of the throwaway admin is kept as an OPTIONAL,
- * non-blocking step (RFC 6238 code computed locally) that only reports what GoTrue does.
- *
- * Uses the Cloudflare TEST Turnstile secret from .dev.vars (always passes) and +tag@example.org
- * addresses (Auth refuses to deliver to them, so the magic link click is simulated with
- * admin.generateLink + verifyOtp; no e-mail is sent).
+ * Covers: Clerk registration (verified e-mail, idempotent, e-mail must match), /me, removed
+ * Supabase Auth routes (404), Origin guard (F14), MG/horizon bounds (F09/F12), proposal
+ * re-submission after rejection (F11), admin by Clerk id (D35: no MFA), suspension of
+ * activities/groups and the audited contact reveal. Uses the Cloudflare TEST Turnstile secret
+ * from .dev.vars (always passes). No e-mail is sent by Clerk (users are created server-side).
  */
-import { createHmac } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+import { createClerkTestUser, deleteClerkTestUser, devClerk } from './clerk-test-users.ts';
 import { assertTargetUrl, loadDevVars, requireEnv } from './load-env.ts';
 
 loadDevVars();
-const base = (process.argv[2] ?? 'http://127.0.0.1:8797').replace(/\/$/, '');
+const base = (process.argv[2] ?? 'http://127.0.0.1:8793').replace(/\/$/, '');
 const url = requireEnv('SUPABASE_TARGET_URL');
 assertTargetUrl(url);
 const opts = { auth: { persistSession: false, autoRefreshToken: false } };
 const svc = createClient(url, requireEnv('SUPABASE_TARGET_SERVICE_ROLE_KEY'), opts);
 const tag = Date.now().toString(36);
+const clerk = devClerk();
 const createdUsers: string[] = [];
 let failures = 0;
 
@@ -35,28 +34,6 @@ type Res = {
   json: { data?: Record<string, unknown>; error?: { code: string } };
   headers: Headers;
 };
-
-function base32Decode(input: string): Buffer {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let bits = '';
-  for (const ch of input.replace(/=+$/, '').toUpperCase()) {
-    const v = alphabet.indexOf(ch);
-    if (v >= 0) bits += v.toString(2).padStart(5, '0');
-  }
-  const bytes: number[] = [];
-  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
-  return Buffer.from(bytes);
-}
-
-/** RFC 6238 TOTP (SHA-1, 30 s, 6 digits) for the throwaway smoke admin only. */
-function totp(secret: string, at = Date.now()): string {
-  const counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(at / 30_000)));
-  const h = createHmac('sha1', base32Decode(secret)).update(counter).digest();
-  const off = h[h.length - 1]! & 0xf;
-  const code = (h.readUInt32BE(off) & 0x7fffffff) % 1_000_000;
-  return String(code).padStart(6, '0');
-}
 
 async function call(
   method: string,
@@ -111,14 +88,24 @@ async function main() {
   expectStatus('GET groups', groups, 200, `fallback=${String(groups.json.data?.fallback)}`);
   expectStatus('GET activities', await call('GET', '/activities?territory_id=mg-3140001'), 200);
 
-  // provisional session + registration
-  const anon = createClient(url, requireEnv('SUPABASE_TARGET_ANON_KEY'), opts);
-  const { data: s } = await anon.auth.signInAnonymously();
-  if (!s.session || !s.user) throw new Error('anonymous sign-in failed');
-  createdUsers.push(s.user.id);
-  const email = `mm-smoke+${tag}@example.org`;
+  // Clerk session (ADR 0005): real dev-instance user + session token (Backend API)
+  const email = `qa-smoke-${tag}@example.org`;
+  const person = await createClerkTestUser(clerk, email);
+  createdUsers.push(person.id);
+  const orgToken = () => person.token();
+
+  expectStatus(
+    'GET me with an invalid token',
+    await call('GET', '/me', { token: 'eyJhbGciOiJSUzI1NiJ9.e30.invalidsignature' }),
+    401,
+  );
+  expectStatus(
+    'POST activities before registration (no profile, F01)',
+    await call('POST', '/activities', { token: await orgToken(), body: {} }),
+    403,
+  );
   const reg = await call('POST', '/registrations', {
-    token: s.session.access_token,
+    token: await orgToken(),
     body: {
       display_name: 'Smoke Teste',
       email,
@@ -131,13 +118,14 @@ async function main() {
     },
   });
   expectStatus(
-    'POST registrations',
+    'POST registrations (Clerk session, verified e-mail)',
     reg,
     201,
-    `state=${String(reg.json.data?.email_verification_state)}`,
+    `state=${String(reg.json.data?.email_verification_state)} session=${String(reg.json.data?.session_state)}`,
   );
+  if (reg.json.data?.email_verification_state !== 'verified') failures++;
   const reuse = await call('POST', '/registrations', {
-    token: s.session.access_token,
+    token: await orgToken(),
     body: {
       display_name: 'Smoke Teste',
       email,
@@ -145,76 +133,47 @@ async function main() {
       territory_id: 'mg-3140001',
       terms_accepted: true,
       consent_version: 'v1',
-      turnstile_token: `smoke-${tag}-1`,
+      turnstile_token: `smoke-${tag}-1b`,
     },
   });
-  // With the Cloudflare TEST secret + APP_ENV=local, single use is skipped on purpose (see
-  // SECURITY.md); the same registration re-sent is then answered idempotently (200).
+  expectStatus('POST registrations re-sent (idempotent)', reuse, 200);
+  const otherEmail = await call('POST', '/registrations', {
+    token: await orgToken(),
+    body: {
+      display_name: 'Smoke Teste',
+      email: `outra-${tag}@example.org`,
+      phone: '31999990001',
+      territory_id: 'mg-3140001',
+      terms_accepted: true,
+      consent_version: 'v1',
+      turnstile_token: `smoke-${tag}-1c`,
+    },
+  });
+  expectStatus('POST registrations with another e-mail', otherEmail, 400);
+  const me1 = await call('GET', '/me', { token: await orgToken() });
   expectStatus(
-    'POST registrations re-sent (idempotent; T17 skipped in local+test secret)',
-    reuse,
-    200,
-  );
-  expectStatus(
-    'POST activities as provisional (T06)',
-    await call('POST', '/activities', { token: s.session.access_token, body: {} }),
-    403,
-  );
-  const me1 = await call('GET', '/me', { token: s.session.access_token });
-  expectStatus(
-    'GET me (provisional)',
+    'GET me',
     me1,
     200,
-    `is_anonymous=${String(me1.json.data?.is_anonymous)}`,
+    `verified=${String(me1.json.data?.email_verified)} anon=${String(me1.json.data?.is_anonymous)} review=${String(me1.json.data?.profile_review_required)}`,
   );
-
-  // simulate the magic-link click, then promote
-  const link = await svc.auth.admin.generateLink({ type: 'magiclink', email });
-  const device = createClient(url, requireEnv('SUPABASE_TARGET_ANON_KEY'), opts);
-  const ver = await device.auth.verifyOtp({
-    type: 'magiclink',
-    token_hash: link.data.properties?.hashed_token ?? '',
+  if (me1.json.data?.email_verified !== true || me1.json.data?.is_anonymous !== false) failures++;
+  const phone = await call('PATCH', '/me', {
+    token: await orgToken(),
+    body: { phone: '(31) 99999-0003' },
   });
-  if (!ver.data.session) throw new Error('magic link verify failed');
-  const conf = await call('POST', '/auth/confirm-email', { token: ver.data.session.access_token });
-  expectStatus(
-    'POST auth/confirm-email',
-    conf,
-    200,
-    `is_anonymous=${String(conf.json.data?.is_anonymous)}`,
-  );
-  const old = await anon.auth.refreshSession();
-  console.log(
-    `${old.error ? 'PASS' : 'FAIL'} original provisional session revoked after promotion`,
-  );
-  if (!old.error) failures++;
-  const refreshed = await device.auth.refreshSession();
-  const orgToken = refreshed.data.session?.access_token ?? '';
-
-  // P-SEC-1: promotion flags the profile for review; only the owner edits the phone
-  const meReview = await call('GET', '/me', { token: orgToken });
-  expectStatus(
-    'GET me after promotion (review required)',
-    meReview,
-    200,
-    `review=${String(meReview.json.data?.profile_review_required)} phone=${String(meReview.json.data?.phone_masked)}`,
-  );
-  if (meReview.json.data?.profile_review_required !== true) failures++;
-  const reviewed = await call('PATCH', '/me', {
-    token: orgToken,
-    body: { phone: '(31) 99999-0003', profile_reviewed: true },
-  });
-  expectStatus(
-    'PATCH me {phone, profile_reviewed}',
-    reviewed,
-    200,
-    `review=${String(reviewed.json.data?.profile_review_required)} phone=${String(reviewed.json.data?.phone_masked)}`,
-  );
-  if (reviewed.json.data?.profile_review_required !== false) failures++;
+  expectStatus('PATCH me {phone}', phone, 200, `phone=${String(phone.json.data?.phone_masked)}`);
+  for (const path of ['/auth/send-link', '/auth/confirm-email']) {
+    expectStatus(
+      `POST ${path} (removed, ADR 0005)`,
+      await call('POST', path, { token: await orgToken(), body: { email } }),
+      404,
+    );
+  }
 
   const starts = new Date(Date.now() + 5 * 86_400_000).toISOString();
   const act = await call('POST', '/activities', {
-    token: orgToken,
+    token: await orgToken(),
     body: {
       title: 'SMOKE encontro de teste',
       type: 'encontro',
@@ -243,7 +202,7 @@ async function main() {
   expectStatus(
     'POST activities outside MG (F09)',
     await call('POST', '/activities', {
-      token: orgToken,
+      token: await orgToken(),
       body: { ...actBase, coordinates: [-38.5, -12.9], starts_at: starts },
     }),
     400,
@@ -251,7 +210,7 @@ async function main() {
   expectStatus(
     'POST activities 400 days ahead (F12)',
     await call('POST', '/activities', {
-      token: orgToken,
+      token: await orgToken(),
       body: {
         ...actBase,
         coordinates: [-43.41, -20.38],
@@ -272,27 +231,33 @@ async function main() {
     await call('GET', `/activities/${actId}`),
     404,
   );
-  expectStatus('GET my-activities', await call('GET', '/my-activities', { token: orgToken }), 200);
+  expectStatus(
+    'GET my-activities',
+    await call('GET', '/my-activities', { token: await orgToken() }),
+    200,
+  );
   expectStatus(
     'GET admin/queue as organizer (T22)',
-    await call('GET', '/admin/queue', { token: orgToken }),
+    await call('GET', '/admin/queue', { token: await orgToken() }),
     403,
   );
 
   // admin (D35: admins table + confirmed e-mail, no MFA) approves
-  await svc.rpc('svc_grant_admin', { p_user: s.user.id });
-  const approve = await call('POST', `/admin/activities/${actId}/approve`, { token: orgToken });
+  await svc.rpc('svc_grant_admin', { p_user: person.id });
+  const approve = await call('POST', `/admin/activities/${actId}/approve`, {
+    token: await orgToken(),
+  });
   expectStatus('POST admin/activities/:id/approve (admin aal1, D35)', approve, 200);
   const pub = await call('GET', `/activities/${actId}`);
   expectStatus(
     'GET activities/:id after approval',
     pub,
     200,
-    `has_creator=${JSON.stringify(pub.json).includes(s.user.id)}`,
+    `has_creator=${JSON.stringify(pub.json).includes(person.id)}`,
   );
   expectStatus(
     'GET admin/security-events',
-    await call('GET', '/admin/security-events', { token: orgToken }),
+    await call('GET', '/admin/security-events', { token: await orgToken() }),
     200,
   );
 
@@ -326,7 +291,7 @@ async function main() {
   );
 
   const patch = await call('PATCH', `/activities/${actId}`, {
-    token: orgToken,
+    token: await orgToken(),
     body: { version: 2, public_contact_opt_in: false },
   });
   expectStatus(
@@ -336,23 +301,26 @@ async function main() {
     `contact=${JSON.stringify(patch.json.data?.contact_public)}`,
   );
   const sens = await call('PATCH', `/activities/${actId}`, {
-    token: orgToken,
+    token: await orgToken(),
     body: { version: 3, title: 'SMOKE título alterado' },
   });
   expectStatus('PATCH sensitive (T21)', sens, 200, `status=${String(sens.json.data?.status)}`);
-  const cancel = await call('POST', `/activities/${actId}/cancel`, { token: orgToken, body: {} });
+  const cancel = await call('POST', `/activities/${actId}/cancel`, {
+    token: await orgToken(),
+    body: {},
+  });
   expectStatus('POST cancel', cancel, 200);
 
   // suspension of an activity (a cancelled one is still public until suspended)
   expectStatus(
     'POST admin/activities/:id/suspend without reason',
-    await call('POST', `/admin/activities/${actId}/suspend`, { token: orgToken, body: {} }),
+    await call('POST', `/admin/activities/${actId}/suspend`, { token: await orgToken(), body: {} }),
     400,
   );
   expectStatus(
     'POST admin/activities/:id/suspend',
     await call('POST', `/admin/activities/${actId}/suspend`, {
-      token: orgToken,
+      token: await orgToken(),
       body: { reason: 'smoke suspensão' },
     }),
     200,
@@ -364,7 +332,7 @@ async function main() {
     404,
   );
   const unsA = await call('POST', `/admin/activities/${actId}/unsuspend`, {
-    token: orgToken,
+    token: await orgToken(),
     body: { reason: 'smoke revisão' },
   });
   expectStatus(
@@ -412,15 +380,15 @@ async function main() {
   });
   expectStatus('POST groups/proposals', prop, 201);
   const propId = String(prop.json.data?.id);
-  const ap1 = await call('POST', `/admin/groups/${propId}/approve`, { token: orgToken });
-  const ap2 = await call('POST', `/admin/groups/${propId}/approve`, { token: orgToken });
+  const ap1 = await call('POST', `/admin/groups/${propId}/approve`, { token: await orgToken() });
+  const ap2 = await call('POST', `/admin/groups/${propId}/approve`, { token: await orgToken() });
   expectStatus('POST admin/groups/:id/approve', ap1, 200);
   expectStatus('POST admin/groups/:id/approve again (T28)', ap2, 409);
   const gid = String(ap1.json.data?.group_id);
   expectStatus(
     'POST admin/groups/:id/managers',
     await call('POST', `/admin/groups/${gid}/managers`, {
-      token: orgToken,
+      token: await orgToken(),
       body: { name: 'Resp Smoke', phone: '31999990002' },
     }),
     201,
@@ -435,7 +403,7 @@ async function main() {
   expectStatus(
     'PATCH admin/groups/:id',
     await call('PATCH', `/admin/groups/${gid}`, {
-      token: orgToken,
+      token: await orgToken(),
       body: { status: 'inactive', reason: 'smoke cleanup' },
     }),
     200,
@@ -444,7 +412,7 @@ async function main() {
   expectStatus(
     'PATCH admin/groups/:id back to active',
     await call('PATCH', `/admin/groups/${gid}`, {
-      token: orgToken,
+      token: await orgToken(),
       body: { status: 'active', reason: 'smoke reativar' },
     }),
     200,
@@ -452,7 +420,7 @@ async function main() {
   expectStatus(
     'POST admin/groups/:id/suspend',
     await call('POST', `/admin/groups/${gid}/suspend`, {
-      token: orgToken,
+      token: await orgToken(),
       body: { reason: 'smoke suspensão' },
     }),
     200,
@@ -464,7 +432,7 @@ async function main() {
   expectStatus(
     'POST admin/groups/:id/unsuspend',
     await call('POST', `/admin/groups/${gid}/unsuspend`, {
-      token: orgToken,
+      token: await orgToken(),
       body: { reason: 'smoke revisão' },
     }),
     200,
@@ -472,35 +440,19 @@ async function main() {
 
   // the queue carries group_id; reveal works with the aal1 admin session (D35), audited
   const qa = await call('GET', '/admin/queue?kind=groups&status=active&limit=50', {
-    token: orgToken,
+    token: await orgToken(),
   });
   const qItems = (qa.json.data?.items ?? []) as { id: string; group_id: string | null }[];
   const qItem = qItems.find((x) => x.id === propId);
   expectStatus('GET admin/queue (group_id)', qa, 200, `group_id_ok=${qItem?.group_id === gid}`);
   if (qItem?.group_id !== gid) failures++;
   const rev = await call('POST', `/admin/group-proposals/${propId}/reveal-contact`, {
-    token: orgToken,
+    token: await orgToken(),
     body: { reason: 'smoke validação' },
   });
   const revEmailOk = rev.json.data?.proposer_email === email;
   expectStatus('POST reveal-contact with aal1 (D35)', rev, 200, `email_ok=${revEmailOk}`);
   if (rev.status === 200 && !revEmailOk) failures++;
-
-  // OPTIONAL (D35: MFA is not required): try TOTP enrolment and report; never a failure.
-  try {
-    const enrolled = await device.auth.mfa.enroll({ factorType: 'totp' });
-    if (enrolled.error || !enrolled.data) {
-      console.log(`INFO optional mfa enroll: ${enrolled.error?.code ?? 'no data'}`);
-    } else {
-      const verified = await device.auth.mfa.challengeAndVerify({
-        factorId: enrolled.data.id,
-        code: totp(enrolled.data.totp.secret),
-      });
-      console.log(`INFO optional mfa TOTP verify: ${verified.error?.code ?? 'ok (aal2)'}`);
-    }
-  } catch (e) {
-    console.log(`INFO optional mfa step skipped: ${e instanceof Error ? e.name : 'error'}`);
-  }
 
   // F11: a rejected proposal re-sent with the same content becomes a new pending one
   const pBody = {
@@ -518,7 +470,7 @@ async function main() {
   });
   const pr1Id = String(pr1.json.data?.id);
   await call('POST', `/admin/groups/${pr1Id}/reject`, {
-    token: orgToken,
+    token: await orgToken(),
     body: { reason: 'smoke rejeição' },
   });
   const pr2 = await call('POST', '/groups/proposals', {
@@ -534,12 +486,6 @@ async function main() {
   // cascades: group, managers and the private proposal
   await svc.from('territories').delete().eq('id', `${sandbox}-centro`);
   await svc.from('territories').delete().eq('id', sandbox);
-
-  expectStatus(
-    'POST auth/send-link (neutral)',
-    await call('POST', '/auth/send-link', { body: { email, turnstile_token: `smoke-${tag}-3` } }),
-    202,
-  );
 }
 
 main()
@@ -548,7 +494,7 @@ main()
     console.error(`smoke: ${e instanceof Error ? e.message : 'failed'}`);
   })
   .finally(async () => {
-    for (const id of createdUsers) await svc.auth.admin.deleteUser(id);
+    for (const id of createdUsers) await deleteClerkTestUser(clerk, svc, id);
     console.log(
       `smoke: ${failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`}; deleted ${createdUsers.length} user(s)`,
     );

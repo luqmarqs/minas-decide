@@ -3,15 +3,22 @@
  *
  * Skipped unless QA_WORKER_URL is set AND TARGET credentials are present in .dev.vars.
  * Sandbox territory `mg-97xxxxx` (impossible IBGE code) removed by cascade in afterAll;
- * every Auth user created is deleted. Only @example.org addresses. Never prints secrets.
+ * ADR 0005: identities are throw-away users of the Clerk DEVELOPMENT instance with real session
+ * tokens (scripts/db/clerk-test-users.ts), erased in afterAll. Only @example.org addresses.
+ * Never prints secrets.
  *
  * `it.fails` = FINDING (assertion = secure expectation, fails today).
  * BE-3: Q02 fixed (confirm-email treats any profile -> verified transition as a promotion) and
- * flipped to `it`.
+ * flipped to `it`. BE-5: Q01–Q04 (Supabase Auth flows) replaced by their Clerk equivalents.
  */
-import { createHmac } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  createClerkTestUser,
+  deleteClerkTestUser,
+  devClerk,
+  type ClerkTestUser,
+} from '../../scripts/db/clerk-test-users.ts';
 import { loadDevVars } from '../../scripts/db/load-env.ts';
 
 loadDevVars();
@@ -20,28 +27,10 @@ const ANON = process.env.SUPABASE_TARGET_ANON_KEY ?? '';
 const SERVICE = process.env.SUPABASE_TARGET_SERVICE_ROLE_KEY ?? '';
 const WORKER = process.env.QA_WORKER_URL ?? '';
 const configured =
-  Boolean(URL_ && ANON && SERVICE && WORKER) &&
+  Boolean(URL_ && ANON && SERVICE && WORKER && process.env.CLERK_SECRET_KEY) &&
   new URL(URL_ || 'http://x').hostname.startsWith('wnclh');
 
 const opts = { auth: { persistSession: false, autoRefreshToken: false } };
-
-function base32Decode(s: string): Buffer {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let bits = '';
-  for (const ch of s.replace(/=+$/, '').toUpperCase())
-    bits += alphabet.indexOf(ch).toString(2).padStart(5, '0');
-  const bytes: number[] = [];
-  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
-  return Buffer.from(bytes);
-}
-function totp(secret: string, t = Date.now()): string {
-  const counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(t / 30_000)));
-  const h = createHmac('sha1', base32Decode(secret)).update(counter).digest();
-  const o = h[h.length - 1]! & 0xf;
-  const code = (h.readUInt32BE(o) & 0x7fffffff) % 1_000_000;
-  return String(code).padStart(6, '0');
-}
 
 describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
   const tag = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
@@ -81,12 +70,11 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
     return { res, text, json };
   }
 
-  async function anon(): Promise<{ client: SupabaseClient; token: string; id: string }> {
-    const client = createClient(URL_, ANON, opts);
-    const s = await client.auth.signInAnonymously();
-    if (s.error || !s.data.session) throw new Error(`anon: ${s.error?.code}`);
-    userIds.push(s.data.user!.id);
-    return { client, token: s.data.session.access_token, id: s.data.user!.id };
+  const clerk = configured ? devClerk() : null;
+  async function clerkUser(label: string): Promise<ClerkTestUser> {
+    const u = await createClerkTestUser(clerk!, `qa-clerk-qa2-${label}-${tag}@example.org`);
+    userIds.push(u.id);
+    return u;
   }
 
   const registration = (email: string) => ({
@@ -146,188 +134,45 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
     await svc.from('whatsapp_groups').delete().in('territory_id', [muni, hood]);
     await svc.from('territories').delete().eq('id', hood);
     await svc.from('territories').delete().eq('id', muni);
-    for (const id of userIds) await svc.auth.admin.deleteUser(id);
+    for (const id of userIds) await deleteClerkTestUser(clerk!, svc, id);
   });
 
-  it('Q01 P-SEC-1 core: after magic-link promotion the attacker access token is dead (cannot clear review)', async () => {
+  // ADR 0005: Q01/Q02 (magic-link promotion / GoTrue email_change pre-hijack) and Q03/Q04
+  // (Supabase MFA) targeted Supabase Auth flows that no longer exist. Their Clerk equivalents:
+  it('Q01 (Clerk): an attacker cannot register a profile with someone else’s e-mail', async () => {
+    const att = await clerkUser('att');
     const victimEmail = `mm-qa2-victim+${tag}@example.org`;
-    const att = await anon();
     const reg = await api('/registrations', {
       method: 'POST',
-      token: att.token,
+      token: await att.token(),
       json: registration(victimEmail),
     });
-    expect(reg.res.status).toBe(201);
-    // victim clicks the magic link (simulated server-side; example.org never gets mail)
-    const link = await svc.auth.admin.generateLink({ type: 'magiclink', email: victimEmail });
-    expect(link.error).toBeNull();
-    const vc = createClient(URL_, ANON, opts);
-    const ver = await vc.auth.verifyOtp({
-      type: 'magiclink',
-      token_hash: link.data.properties?.hashed_token ?? '',
-    });
-    expect(ver.error).toBeNull();
-    const conf = await api('/auth/confirm-email', {
+    expect(reg.res.status).toBe(400);
+    expect(reg.text).not.toContain(victimEmail);
+    const prof = await svc.rpc('svc_get_profile', { p_user: att.id });
+    expect(prof.data).toBeNull();
+    // with its own (Clerk-verified) e-mail the registration works and is verified at once
+    const ok = await api('/registrations', {
       method: 'POST',
-      token: ver.data.session!.access_token,
+      token: await att.token(),
+      json: registration(att.email),
     });
-    expect(conf.res.status).toBe(200);
-    expect(conf.json.data?.profile_review_required).toBe(true);
-    // attacker tries to clear the flag with the still-unexpired access token
-    const clear = await api('/me', {
-      method: 'PATCH',
-      token: att.token,
-      json: { profile_reviewed: true },
-    });
-    console.log('QA2_Q01_attacker_patch_status', clear.res.status, clear.json.error?.code);
-    expect(clear.res.status).toBe(401);
-    const refreshed = await att.client.auth.refreshSession();
-    expect(refreshed.data.session).toBeNull();
+    expect(ok.res.status).toBe(201);
+    expect(ok.json.data?.session_state).toBe('verified');
   });
 
-  it('Q02 P-SEC-1 (fixed BE-3): promotion by GoTrue email_change now flags review and kills the attacker session', async () => {
-    const attackerEmail = `mm-qa2-att+${tag}@example.org`;
-    const victimEmail = `mm-qa2-victim2+${tag}@example.org`;
-    const att = await anon();
-    const reg = await api('/registrations', {
+  it('Q03 (Clerk): Supabase Auth is closed to clients (anonymous sign-in disabled)', async () => {
+    const res = await fetch(`${URL_}/auth/v1/signup`, {
       method: 'POST',
-      token: att.token,
-      json: registration(attackerEmail),
+      headers: { apikey: ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
     });
-    expect(reg.res.status).toBe(201);
-    // Equivalent of att.client.auth.updateUser({ email: victimEmail }) + victim clicking the
-    // "confirm e-mail change" link (generated server-side: example.org never gets mail).
-    // Secure e-mail change: the attacker confirms the CURRENT address (its own inbox), the
-    // victim confirms the NEW one.
-    const linkNew = await svc.auth.admin.generateLink({
-      type: 'email_change_new',
-      email: attackerEmail,
-      newEmail: victimEmail,
-    });
-    const linkCur = await svc.auth.admin.generateLink({
-      type: 'email_change_current',
-      email: attackerEmail,
-      newEmail: victimEmail,
-    });
-    console.log('QA2_Q02_generateLink', linkNew.error?.code ?? 'ok', linkCur.error?.code ?? 'ok');
-    expect(linkNew.error).toBeNull();
-    const ac = createClient(URL_, ANON, opts);
-    const cur = await ac.auth.verifyOtp({
-      type: 'email_change',
-      email: attackerEmail,
-      token: linkCur.data.properties?.email_otp ?? '',
-    });
-    console.log('QA2_Q02_verify_current', cur.error?.code ?? 'ok');
-    const vc = createClient(URL_, ANON, opts);
-    const ver = await vc.auth.verifyOtp({
-      type: 'email_change',
-      email: victimEmail,
-      token: linkNew.data.properties?.email_otp ?? '',
-    });
-    console.log('QA2_Q02_verify', ver.error?.code ?? 'ok', 'anon=', ver.data.user?.is_anonymous);
-    expect(ver.error).toBeNull();
-    const victimTok = ver.data.session?.access_token;
-    // the victim's browser lands on /autenticacao/retorno -> confirm-email
-    const conf = await api('/auth/confirm-email', { method: 'POST', token: victimTok });
-    console.log(
-      'QA2_Q02_confirm',
-      conf.res.status,
-      conf.json.error?.code,
-      'review=',
-      conf.json.data?.profile_review_required,
-    );
-    // attacker refreshes its ORIGINAL session and acts as organizer
-    const r = await att.client.auth.refreshSession();
-    const attTok = r.data.session?.access_token;
-    console.log('QA2_Q02_attacker_refresh', r.error?.code ?? 'ok', 'session=', Boolean(attTok));
-    const act = attTok
-      ? await api('/activities', {
-          method: 'POST',
-          token: attTok,
-          json: {
-            title: 'Atividade QA2 atacante',
-            type: 'encontro',
-            description: 'Criada com a sessão do atacante após promoção externa.',
-            territory_id: hood,
-            public_address: 'Rua QA2, 1',
-            coordinates: [-43.9, -19.9],
-            location_confirmed: true,
-            starts_at: new Date(Date.now() + 3 * 86_400_000).toISOString(),
-            timezone: 'America/Sao_Paulo',
-          },
-        })
-      : null;
-    console.log('QA2_Q02_attacker_activity', act?.res.status, act?.json.error?.code);
-    if (act?.res.status === 201) {
-      await svc.from('activities').delete().eq('id', String(act.json.data?.id));
-    }
-    // secure expectation: review flagged AND attacker can no longer act
-    expect(conf.json.data?.profile_review_required).toBe(true);
-    expect(act?.res.status ?? 401).not.toBe(201);
-  });
-
-  it('Q03 MFA: anonymous session TOTP enrolment (report what GoTrue allows)', async () => {
-    const a = await anon();
-    const en = await a.client.auth.mfa.enroll({ factorType: 'totp', friendlyName: `qa2-${tag}` });
-    console.log('QA2_Q03_anon_enroll', en.error?.code ?? 'ok');
-    if (en.error || !en.data || en.data.type !== 'totp') return;
-    const ch = await a.client.auth.mfa.challenge({ factorId: en.data.id });
-    const vr = ch.data
-      ? await a.client.auth.mfa.verify({
-          factorId: en.data.id,
-          challengeId: ch.data.id,
-          code: totp(en.data.totp.secret),
-        })
-      : null;
-    console.log('QA2_Q03_anon_verify', ch.error?.code ?? 'ok', vr?.error?.code ?? 'ok');
-    const aal2Tok = vr?.data?.access_token;
-    if (aal2Tok) {
-      // aal2 anonymous session must still get nothing from admin routes
-      const q = await api('/admin/queue', { token: aal2Tok });
-      expect(q.res.status).toBe(403);
-      const rev = await api(
-        '/admin/group-proposals/00000000-0000-4000-8000-000000000001/reveal-contact',
-        { method: 'POST', token: aal2Tok },
-      );
-      expect(rev.res.status).toBe(403);
-    }
-    // Observed 2026-10-09: GoTrue answers 403 no_authorization ("Anonymous user not allowed").
-    expect(en.error).not.toBeNull();
-  });
-
-  it('Q04 MFA: removing a verified factor from an aal1 session is refused by GoTrue', async () => {
-    const email = `mm-qa2-mfa+${tag}@example.org`;
-    const cu = await svc.auth.admin.createUser({ email, email_confirm: true });
-    expect(cu.error).toBeNull();
-    userIds.push(cu.data.user!.id);
-    const login = async () => {
-      const l = await svc.auth.admin.generateLink({ type: 'magiclink', email });
-      const c = createClient(URL_, ANON, opts);
-      const v = await c.auth.verifyOtp({
-        type: 'magiclink',
-        token_hash: l.data.properties?.hashed_token ?? '',
-      });
-      if (v.error) throw new Error(`login ${v.error.code}`);
-      return c;
-    };
-    const c1 = await login();
-    const en = await c1.auth.mfa.enroll({ factorType: 'totp', friendlyName: `qa2b-${tag}` });
-    expect(en.error).toBeNull();
-    if (!en.data || en.data.type !== 'totp') return;
-    const ch = await c1.auth.mfa.challenge({ factorId: en.data.id });
-    const vr = await c1.auth.mfa.verify({
-      factorId: en.data.id,
-      challengeId: ch.data!.id,
-      code: totp(en.data.totp.secret),
-    });
-    expect(vr.error).toBeNull();
-    // a second, aal1 session (magic link only) tries to remove the factor / enrol another
-    const c2 = await login();
-    const un = await c2.auth.mfa.unenroll({ factorId: en.data.id });
-    console.log('QA2_Q04_unenroll_from_aal1', un.error?.code ?? 'ok');
-    expect(un.error).not.toBeNull();
-    const en2 = await c2.auth.mfa.enroll({ factorType: 'totp', friendlyName: `qa2c-${tag}` });
-    console.log('QA2_Q04_second_enroll_from_aal1', en2.error?.code ?? 'ok');
+    const j = (await res.json()) as { error_code?: string; code?: string | number };
+    console.log('QA2_Q03_anonymous_signin', res.status, j.error_code ?? j.code ?? null);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    // a Supabase-issued token (if any) is not a Clerk session for the Worker
+    const r = await api('/me', { token: ANON });
+    expect(r.res.status).toBe(401);
   });
 
   it('Q05 Origin live: null / look-alike refused; loopback accepted in local', async () => {
@@ -341,23 +186,9 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
   });
 
   it('Q06 edge cache live: HIT on public GET; approve purges /groups; suspend purges fallback and busted URLs (BE-3)', async () => {
-    const adm = await svc.auth.admin.createUser({
-      email: `mm-qa2-admin+${tag}@example.org`,
-      email_confirm: true,
-    });
-    userIds.push(adm.data.user!.id);
-    const g = await svc.rpc('svc_grant_admin', { p_user: adm.data.user!.id });
+    const adm = await clerkUser('admin');
+    const g = await svc.rpc('svc_grant_admin', { p_user: adm.id }); // admin by Clerk id
     expect(g.error).toBeNull();
-    const l = await svc.auth.admin.generateLink({
-      type: 'magiclink',
-      email: `mm-qa2-admin+${tag}@example.org`,
-    });
-    const ac = createClient(URL_, ANON, opts);
-    const av = await ac.auth.verifyOtp({
-      type: 'magiclink',
-      token_hash: l.data.properties?.hashed_token ?? '',
-    });
-    const adminTok = av.data.session!.access_token; // aal1: MFA not required (D35)
 
     const muniUrl = `/groups?territory_id=${muni}`;
     const hoodUrl = `/groups?territory_id=${encodeURIComponent(hood)}`;
@@ -383,7 +214,7 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
     expect(prop.res.status).toBe(201);
     const ap = await api(`/admin/groups/${String(prop.json.data?.id)}/approve`, {
       method: 'POST',
-      token: adminTok,
+      token: await adm.token(),
     });
     expect(ap.res.status).toBe(200);
     const groupId = String(ap.json.data?.group_id);
@@ -402,7 +233,7 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
     expect(h1.json.data?.items?.length).toBe(1);
     const sus = await api(`/admin/groups/${groupId}/suspend`, {
       method: 'POST',
-      token: adminTok,
+      token: await adm.token(),
       json: { reason: 'QA2 suspensão' },
     });
     expect(sus.res.status).toBe(200);
@@ -425,13 +256,13 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
     expect(h2.json.data?.items?.length).toBe(0);
     expect(b2.json.data?.items?.length).toBe(0);
     // private routes never cached
-    const me1 = await api('/me', { token: adminTok });
-    const me2 = await api('/me', { token: adminTok });
+    const me1 = await api('/me', { token: await adm.token() });
+    const me2 = await api('/me', { token: await adm.token() });
     expect(me2.res.headers.get('x-cache')).toBeNull();
     expect(me1.res.headers.get('cache-control')).toBe('no-store');
     const rv = await api(`/admin/group-proposals/${String(prop.json.data?.id)}/reveal-contact`, {
       method: 'POST',
-      token: adminTok,
+      token: await adm.token(),
     });
     // D35: an aal1 admin may reveal the contact. The 'proposal.reveal_contact' audit row is
     // written inside svc_reveal_proposal_contact (same transaction, 0010), and app_private is

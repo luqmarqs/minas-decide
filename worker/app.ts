@@ -7,10 +7,10 @@ import { originGuard } from './middleware/origin.ts';
 import { SlidingWindowLimiter } from './middleware/rate-limit.ts';
 import { requestContext } from './middleware/request-id.ts';
 import { writesEnabled } from './middleware/writes-enabled.ts';
-import { SupabaseAuthGateway, SupabaseRepo } from './repositories/supabase.ts';
+import { ClerkAuthGateway } from './repositories/clerk.ts';
+import { SupabaseRepo } from './repositories/supabase.ts';
 import { activities } from './routes/activities.ts';
 import { admin } from './routes/admin.ts';
-import { authRoutes } from './routes/auth.ts';
 import { groups } from './routes/groups.ts';
 import { health } from './routes/health.ts';
 import { me } from './routes/me.ts';
@@ -37,7 +37,7 @@ export function createApp(opts: CreateAppOptions = {}) {
     opts.deps ??
     ((env: Env): Deps => ({
       repo: new SupabaseRepo(env),
-      auth: new SupabaseAuthGateway(env),
+      auth: new ClerkAuthGateway(env),
       turnstile,
       limiter,
       now: Date.now,
@@ -65,7 +65,6 @@ export function createApp(opts: CreateAppOptions = {}) {
   v1.route('/', activities);
   v1.route('/', registrations);
   v1.route('/', me);
-  v1.route('/', authRoutes);
   v1.route('/', admin);
   app.route('/api/v1', v1);
 

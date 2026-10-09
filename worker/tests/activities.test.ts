@@ -82,9 +82,9 @@ describe('public activities', () => {
 });
 
 describe('organizer flow (T06, T07, T16, T21, T27)', () => {
-  it('T06: provisional (anonymous) session cannot create -> 403 EMAIL_NOT_VERIFIED; no session -> 401', async () => {
+  it('T06: Clerk session with unverified e-mail cannot create -> 403 EMAIL_NOT_VERIFIED; no session -> 401', async () => {
     const { request, users, repo } = setup();
-    const anon = users.anonymous();
+    const anon = users.unverified();
     const res = await request('/api/v1/activities', {
       method: 'POST',
       token: anon.token,
@@ -98,10 +98,10 @@ describe('organizer flow (T06, T07, T16, T21, T27)', () => {
     expect(repo.activities).toHaveLength(0);
   });
 
-  it('confirmed in Auth but not in the database check -> 403', async () => {
+  it('verified in Clerk but the profile is not verified in the database -> 403', async () => {
     const { request, users, repo } = setup();
     const v = users.verified();
-    repo.verified.delete(v.user.id);
+    repo.profiles.get(v.user.id)!.email_verification_state = 'pending';
     const res = await request('/api/v1/activities', {
       method: 'POST',
       token: v.token,
@@ -257,7 +257,7 @@ describe('organizer flow (T06, T07, T16, T21, T27)', () => {
     const { request, users } = setup();
     expect((await request('/api/v1/my-activities')).status).toBe(401);
     expect(
-      (await request('/api/v1/my-activities', { token: users.anonymous().token })).status,
+      (await request('/api/v1/my-activities', { token: users.unverified().token })).status,
     ).toBe(403);
     const ok = await request('/api/v1/my-activities', { token: users.verified().token });
     expect(ok.status).toBe(200);
@@ -327,10 +327,10 @@ describe('RSVP (T09, T10, T11)', () => {
     expect(repo.rsvps.filter((r) => r.status === 'going')).toHaveLength(1);
   });
 
-  it('session RSVP uses the user id (idempotent across devices of the same user)', async () => {
+  it('Clerk session RSVP uses the Clerk user id (idempotent across devices of the same user)', async () => {
     const { request, repo, users } = setup();
     const a = repo.seedActivity(repo.uuid());
-    const s = users.anonymous();
+    const s = users.signedUp();
     await request(`/api/v1/activities/${a.id}/rsvp`, { method: 'POST', token: s.token });
     const r = await request(`/api/v1/activities/${a.id}/rsvp`, {
       method: 'POST',

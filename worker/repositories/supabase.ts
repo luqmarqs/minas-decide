@@ -1,5 +1,5 @@
 /**
- * Supabase (TARGET) implementation of Repo and AuthGateway.
+ * Supabase (TARGET) implementation of Repo (identity lives in Clerk — see ./clerk.ts).
  *
  * - Public tables/views (`territories`, `whatsapp_groups`, `activities`, `*_public`) are
  *   accessed through PostgREST with the service role, AFTER the route authorized the call.
@@ -10,20 +10,17 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { ActivityStatus } from '../../shared/contracts/activities.ts';
 import type { Database } from '../../shared/types/database.ts';
-import type { AuthUser, Env } from '../env.ts';
+import type { Env } from '../env.ts';
 import { type AppError, fail } from '../errors.ts';
-import { decodeJwtPayload } from '../services/crypto.ts';
 import type {
   ActivityRow,
   ActivityUpdate,
   ActivityWrite,
-  AuthGateway,
   Cursor,
   GroupPatch,
   GroupProposalRow,
   GroupRow,
   GroupStatusRow,
-  LinkEmailResult,
   NewGroupManager,
   NewGroupProposal,
   NewProfile,
@@ -52,10 +49,6 @@ export function serviceClient(env: Env): Db {
     env.SUPABASE_TARGET_SERVICE_ROLE_KEY,
     CLIENT_OPTS,
   );
-}
-
-function anonClient(env: Env): Db {
-  return createClient<Database>(env.SUPABASE_TARGET_URL, env.SUPABASE_TARGET_ANON_KEY, CLIENT_OPTS);
 }
 
 /** Maps a PostgREST/Postgres error to a public AppError. Logs only the SQLSTATE. */
@@ -104,6 +97,11 @@ const PUBLIC_GROUP_COLS = 'id,display_name,territory_id,join_url,status,updated_
 /** PostgREST filter values must not contain reserved characters. */
 function safeIso(v: string): string {
   if (!/^[0-9T:.+\-Z]+$/.test(v)) throw fail('VALIDATION_ERROR');
+  return v;
+}
+/** Clerk user id (`user_…`), safe inside PostgREST filters. */
+function safeUserId(v: string): string {
+  if (!/^user_[A-Za-z0-9]{1,64}$/.test(v)) throw fail('VALIDATION_ERROR');
   return v;
 }
 function safeUuid(v: string): string {
@@ -296,7 +294,7 @@ export class SupabaseRepo implements Repo {
     let query = this.db
       .from('activities')
       .select(ACTIVITY_COLS)
-      .eq('creator_user_id', safeUuid(creatorId));
+      .eq('creator_user_id', safeUserId(creatorId));
     if (cursor) {
       const at = safeIso(cursor.at);
       const id = safeUuid(cursor.id);
@@ -382,7 +380,6 @@ export class SupabaseRepo implements Repo {
       p_contact_opt_in: patch.contact_opt_in ?? null,
       p_email_state: patch.email_state ?? null,
       p_phone: patch.phone ?? null,
-      p_review_required: patch.review_required ?? null,
       p_email_contact: patch.email_contact ?? null,
     });
   }
@@ -566,68 +563,5 @@ export class SupabaseRepo implements Repo {
       p_hash: tokenHash,
       p_ttl_seconds: ttlSeconds,
     });
-  }
-}
-
-/** Supabase Auth adapter. Behaviour validated by scripts/db/spike-anon-email-link.ts. */
-export class SupabaseAuthGateway implements AuthGateway {
-  constructor(private readonly env: Env) {}
-
-  async getUser(accessToken: string): Promise<AuthUser | null> {
-    const { data, error } = await anonClient(this.env).auth.getUser(accessToken);
-    if (error || !data.user) return null;
-    const claims = decodeJwtPayload(accessToken);
-    if (claims.sub !== data.user.id) return null;
-    const jwtAnon = claims.is_anonymous === true;
-    const amr = Array.isArray(claims.amr)
-      ? claims.amr
-          .map((m: unknown) =>
-            m && typeof m === 'object' ? (m as { method?: unknown }).method : m,
-          )
-          .filter((m): m is string => typeof m === 'string')
-      : [];
-    return {
-      id: data.user.id,
-      email: data.user.email ?? null,
-      email_confirmed: Boolean(data.user.email_confirmed_at),
-      is_anonymous: data.user.is_anonymous === true || jwtAnon,
-      jwt_is_anonymous: jwtAnon,
-      aal: typeof claims.aal === 'string' ? claims.aal : 'aal1',
-      amr_methods: amr,
-    };
-  }
-
-  async linkEmail(userId: string, email: string): Promise<LinkEmailResult> {
-    const { error } = await serviceClient(this.env).auth.admin.updateUserById(userId, {
-      email,
-      email_confirm: false,
-    });
-    return error ? { ok: false, reason: 'error' } : { ok: true };
-  }
-
-  async promoteVerified(userId: string, email: string): Promise<boolean> {
-    const { data, error } = await serviceClient(this.env).auth.admin.updateUserById(userId, {
-      email,
-      email_confirm: true,
-    });
-    return !error && data.user?.is_anonymous === false;
-  }
-
-  async signOutOthers(accessToken: string): Promise<boolean> {
-    const { error } = await serviceClient(this.env).auth.admin.signOut(accessToken, 'others');
-    return !error;
-  }
-
-  async sendMagicLink(
-    email: string,
-    redirectTo: string,
-  ): Promise<{ ok: boolean; code: string | null }> {
-    const { error } = await anonClient(this.env).auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
-    });
-    return error
-      ? { ok: false, code: error.code ?? String(error.status ?? 'unknown') }
-      : { ok: true, code: null };
   }
 }

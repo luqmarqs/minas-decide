@@ -61,15 +61,3 @@ export function decodeCursor(
     return null;
   }
 }
-
-/** Decodes a JWT payload WITHOUT verifying it. Only call after Auth validated the token. */
-export function decodeJwtPayload(token: string): Record<string, unknown> {
-  const part = token.split('.')[1];
-  if (!part) return {};
-  try {
-    const parsed: unknown = JSON.parse(base64UrlDecodeToString(part));
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}

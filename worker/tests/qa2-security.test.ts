@@ -3,8 +3,9 @@
  *   - `it(...)`       = control verified OK (regression).
  *   - `it.fails(...)` = FINDING: the assertion encodes the SECURE expectation and fails today.
  *     When the finding is fixed the test starts passing and vitest reports it -> flip to `it`.
- * BE-3 (2026-10-09): QA2-01, 01b, 02, 03, 04, 04b, 05 fixed and flipped to `it`; 01b now
- * asserts the secure outcome. QA2-06 belongs to the extractor (other agent).
+ * BE-3 (2026-10-09): QA2-01, 01b, 02, 03, 04, 04b, 05 fixed and flipped to `it`. BE-5 (ADR 0005):
+ * QA2-01/01b/02 replaced by Clerk controls (no promotion/revocation flow any more).
+ * QA2-06 belongs to the extractor (other agent).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { body, setup } from './fakes.ts';
@@ -49,101 +50,52 @@ const proposal = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const future = (days: number) =>
-  new Date(Date.parse('2026-10-08T12:00:00Z') + days * 86_400_000).toISOString();
-const activityInput = () => ({
-  title: 'Panfletagem na praça',
-  type: 'panfletagem',
-  description: 'Vamos distribuir material na praça central.',
-  territory_id: 'mg-3140001-centro',
-  public_address: 'Praça Gomes Freire, Mariana',
-  coordinates: [-43.41, -20.38],
-  location_confirmed: true,
-  starts_at: future(3),
-  ends_at: future(3.1),
-  timezone: 'America/Sao_Paulo',
-  public_contact_opt_in: false,
-});
-
-/** Provisional profile registered with the victim's e-mail, then made permanent by GoTrue
- *  itself (email_change verified) BEFORE the Worker's /auth/confirm-email runs. */
-async function promotedOutsideWorker() {
-  const s = setup();
-  const a = s.users.anonymous();
-  const reg = await s.request('/api/v1/registrations', {
-    method: 'POST',
-    token: a.token,
-    json: registration(),
-  });
-  expect(reg.status).toBe(201);
-  a.user.email = 'vitima@example.org';
-  a.user.email_confirmed = true;
-  a.user.is_anonymous = false;
-  a.user.jwt_is_anonymous = false;
-  a.user.amr_methods = ['otp'];
-  s.repo.verified.add(a.user.id);
-  const conf = await s.request('/api/v1/auth/confirm-email', { method: 'POST', token: a.token });
-  expect(conf.status).toBe(200);
-  return { s, a, conf };
-}
-
-describe('QA-2 P-SEC-1', () => {
-  it('QA2-01: promotion done outside the Worker must still flag review and revoke other sessions', async () => {
-    const { s, conf } = await promotedOutsideWorker();
-    expect((await body(conf)).data?.profile_review_required).toBe(true);
-    expect(s.auth.signedOutOthers.length).toBe(1);
-  });
-
-  it('QA2-01b (impact, fixed): in that path the account can no longer organize before review', async () => {
-    const { s, a } = await promotedOutsideWorker();
-    const act = await s.request('/api/v1/activities', {
-      method: 'POST',
-      token: a.token,
-      json: activityInput(),
-    });
-    expect(act.status).toBe(403);
-    expect(s.auth.signedOutOthers).toHaveLength(1);
-    expect(s.repo.activities).toHaveLength(0);
-  });
-
-  it('QA2-02: confirm-email must fail closed when revoking other sessions fails', async () => {
+// ADR 0005: QA2-01/01b/02 targeted the Supabase Auth promotion (provisional -> permanent) and
+// the revocation of other sessions. With Clerk the e-mail is verified BEFORE any session exists,
+// so the pre-hijack path is closed at the source; these controls keep it that way.
+describe('QA-2 P-SEC-1 (Clerk): no profile can be created for an e-mail the caller does not own', () => {
+  it('control: attacker registering with the victim e-mail -> 400, no profile', async () => {
     const s = setup();
-    const a = s.users.anonymous();
-    await s.request('/api/v1/registrations', {
+    const attacker = s.users.signedUp('atacante@example.org');
+    const reg = await s.request('/api/v1/registrations', {
       method: 'POST',
-      token: a.token,
+      token: attacker.token,
       json: registration(),
     });
-    s.auth.signOutOthers = async () => false; // GoTrue error / timeout
-    a.user.email = 'vitima@example.org';
-    a.user.email_confirmed = true;
-    a.user.amr_methods = ['otp'];
-    const conf = await s.request('/api/v1/auth/confirm-email', {
-      method: 'POST',
-      token: a.token,
-    });
-    expect(conf.status).not.toBe(200);
+    expect(reg.status).toBe(400);
+    expect(s.repo.profiles.size).toBe(0);
   });
 
-  it('control: PATCH /me only edits the caller (anon attacker without profile -> 404)', async () => {
+  it('control: attacker whose Clerk e-mail is not verified -> 403, no profile', async () => {
+    const s = setup();
+    const attacker = s.users.unverified('vitima@example.org');
+    const reg = await s.request('/api/v1/registrations', {
+      method: 'POST',
+      token: attacker.token,
+      json: registration(),
+    });
+    expect(reg.status).toBe(403);
+    expect(s.repo.profiles.size).toBe(0);
+  });
+
+  it('control: PATCH /me only edits the caller (attacker without profile -> 404)', async () => {
     const s = setup();
     const victim = s.users.verified();
-    await s.repo.updateProfile(victim.user.id, { review_required: true });
-    const attacker = s.users.anonymous();
+    const attacker = s.users.signedUp();
     const r = await s.request('/api/v1/me', {
       method: 'PATCH',
       token: attacker.token,
       json: { profile_reviewed: true, phone: '(31) 95555-0000' },
     });
     expect(r.status).toBe(404);
-    expect(s.repo.profiles.get(victim.user.id)?.review_required_at).not.toBeNull();
+    expect(s.repo.profiles.get(victim.user.id)?.phone_e164).toBe('+5531999990000');
   });
 
-  it('control: PATCH own activity and /my-activities are blocked while review is pending', async () => {
+  it('control: a suspended profile cannot PATCH its activity nor list /my-activities', async () => {
     const s = setup();
     const v = s.users.verified();
     const row = s.repo.seedActivity(v.user.id);
-    await s.repo.updateProfile(v.user.id, { review_required: true });
+    s.repo.profiles.get(v.user.id)!.account_state = 'suspended';
     const p = await s.request(`/api/v1/activities/${row.id}`, {
       method: 'PATCH',
       token: v.token,

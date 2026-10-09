@@ -26,27 +26,32 @@ export const RegistrationInput = z.object({
 });
 export type RegistrationInput = z.infer<typeof RegistrationInput>;
 
+/** Clerk user id (ADR 0005) */
+export const ClerkUserId = z.string().regex(/^user_[A-Za-z0-9]{1,64}$/, 'id de usuário inválido');
+
 export const RegistrationResult = z.object({
-  profile_id: z.string().uuid(),
+  profile_id: ClerkUserId,
   territory_id: TerritoryId,
-  email_verification_state: z.enum(['unverified', 'pending', 'verified']),
-  session_state: z.enum(['provisional', 'verified']),
+  /** Clerk verifies the e-mail before any session exists (ADR 0005) */
+  email_verification_state: z.literal('verified'),
+  session_state: z.literal('verified'),
 });
 export type RegistrationResult = z.infer<typeof RegistrationResult>;
 
 export const MeResponse = z.object({
-  user_id: z.string().uuid(),
+  user_id: ClerkUserId,
   display_name: z.string().nullable(),
   email_masked: z.string().nullable(),
   email_verified: z.boolean(),
+  /** always false since Clerk (kept for compatibility) */
   is_anonymous: z.boolean(),
   selected_territory_id: TerritoryId.nullable(),
   is_admin: z.boolean(),
   account_state: z.enum(['active', 'suspended']),
   /** masked E.164, e.g. +55 (31) 9****-**88 */
   phone_masked: z.string().nullable(),
-  /** true after promotion by magic link until the person confirms/edits their data (P-SEC-1) */
-  profile_review_required: z.boolean(),
+  /** @deprecated always false since Clerk (ADR 0005) */
+  profile_review_required: z.boolean().optional().default(false),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 
@@ -55,10 +60,11 @@ export const MePatch = z.object({
   selected_territory_id: TerritoryId.optional(),
   contact_opt_in: z.boolean().optional(),
   phone: BrazilPhone.optional(),
-  /** clears profile_review_required after the person confirmed/edited their data */
+  /** @deprecated ignored since Clerk (ADR 0005) */
   profile_reviewed: z.literal(true).optional(),
 });
 
+/** @deprecated removed with Clerk (ADR 0005); kept until the frontend migration lands */
 export const SendLinkInput = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   turnstile_token: z.string().min(1).max(2048),

@@ -58,18 +58,16 @@ const TEN_MIN = 10 * 60 * 1000;
 export const RATE_LIMITS = {
   /** per IP — runs before the session is resolved (protects Auth from token spraying) */
   registrations_ip: { limit: 30, windowMs: TEN_MIN },
-  /** per IP + provisional (anonymous) user id */
+  /** per IP + Clerk user id */
   registrations: { limit: 5, windowMs: TEN_MIN },
   proposals: { limit: 5, windowMs: TEN_MIN },
   /** per IP — ceiling for every RSVP from one network */
   rsvp_ip: { limit: 120, windowMs: TEN_MIN },
   /** per IP + activity + identity (user id or device HMAC) */
   rsvp_identity: { limit: 10, windowMs: TEN_MIN },
-  send_link: { limit: 3, windowMs: TEN_MIN },
   activities_write: { limit: 20, windowMs: TEN_MIN },
   /** QA-1 F16: light limits on account endpoints */
   me_write: { limit: 60, windowMs: TEN_MIN },
-  confirm_email: { limit: 60, windowMs: TEN_MIN },
 } as const;
 
 export type RateBucket = keyof typeof RATE_LIMITS;

@@ -16,7 +16,6 @@ export function requestContext(
     c.set('requestId', requestId);
     c.set('deps', deps);
     c.set('user', null);
-    c.set('token', null);
     c.set('rateLimited', false);
     c.set('startedAt', deps.now());
 

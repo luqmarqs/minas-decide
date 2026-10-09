@@ -13,6 +13,12 @@ export function configProblems(env: Env): string[] {
   if (secret.length < RSVP_SECRET_MIN_LENGTH || secret === RSVP_SECRET_PLACEHOLDER) {
     problems.push('RSVP_DEVICE_SECRET');
   }
+  // ADR 0005: the Clerk secret must exist; production requires a live-instance key.
+  const clerk = env.CLERK_SECRET_KEY ?? '';
+  if (!/^sk_(test|live)_[A-Za-z0-9]{10,}$/.test(clerk)) problems.push('CLERK_SECRET_KEY');
+  else if (env.APP_ENV === 'production' && !clerk.startsWith('sk_live_')) {
+    problems.push('CLERK_SECRET_KEY');
+  }
   return problems;
 }
 
@@ -27,7 +33,11 @@ export function configCheck(): MiddlewareHandler<AppBindings> {
   let checkedFor: string | null = null;
   let problems: string[] = [];
   return async (c, next) => {
-    const fingerprint = c.env.RSVP_DEVICE_SECRET ?? '';
+    const fingerprint = [
+      c.env.RSVP_DEVICE_SECRET ?? '',
+      c.env.CLERK_SECRET_KEY ?? '',
+      c.env.APP_ENV,
+    ].join('|');
     if (checkedFor !== fingerprint) {
       problems = configProblems(c.env);
       checkedFor = fingerprint;

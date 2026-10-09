@@ -1,69 +1,53 @@
-# Segurança — backend (BE-1 rodada 1, BE-2 rodada 2)
+# Segurança — backend (BE-1 rodada 1, BE-2 rodada 2, BE-5 Clerk)
 
-## Matriz RLS / grants testada no TARGET dev
-Rodada `npm run test:db` (`supabase/tests/rls.test.ts`) em 2026-10-08: **27 de 27 passaram, 0 pulados**.
-
-Códigos observados:
+## Matriz de grants testada no TARGET dev (BE-5, migration 0012)
+Rodada `QA_WORKER_URL=http://127.0.0.1:8793 npm run test:db` em 2026-10-09: `supabase/tests/rls.test.ts` **27 de 27 passaram**. Desde a 0012 o navegador não fala com o Supabase (ADR 0005): o papel `anon` não alcança nada, e não existem mais sessões `authenticated` (sign-in anônimo e signup do Supabase Auth desligados).
 
 | Tentativa | Resultado real |
 |---|---|
-| anon lê `app_private.*` pelo caminho público (`/rest/v1/profiles`) | 404 `PGRST205` |
-| anon lê `app_private.*` com `Accept-Profile: app_private` | 406 `PGRST106` |
-| anon `select=*` em `whatsapp_groups` / `activities` (base) | 401 `42501` |
-| anon lê colunas internas (`creator_user_id`, `review_reason`, `description`, `public_contact_value`, `reviewed_by`, `created_by`, `approved_by`…) | negado |
-| anon / sessão anônima vê grupo pendente (view ou colunas públicas da base) | 0 linhas |
-| anon / sessão anônima vê atividade pendente (base ou view) | 0 linhas |
-| organizador verificado vê a própria pendente / a de outro | 1 linha (colunas públicas) / 0 |
-| anon INSERT em `activities` / `whatsapp_groups` | 401 `42501` |
-| sessão anônima (e até organizador verificado) INSERT em `activities` | 403 `42501` |
-| anon / sessão anônima chama `svc_*` (inclusive `svc_grant_admin`) | 401 / 403 `42501` |
-| view `activities_public` expõe criador, motivo ou contato bruto | não; `select=creator_user_id` é negado |
+| anon lê `app_private.*` pelo caminho público / com `Accept-Profile: app_private` | negado (404 `PGRST205` / 406 `PGRST106`) |
+| anon lê `territories`, `whatsapp_groups`, `whatsapp_groups_public`, `activities`, `activities_public` | negado (401/403 `42501`) — grants revogados em 0012 |
+| anon INSERT/UPDATE em `activities` / `whatsapp_groups` | negado; nada muda |
+| anon chama `svc_*` (inclusive `svc_grant_admin`, `svc_erase_user_data`, `svc_dev_wipe_identities`) e `activity_rsvp_count` | negado (401/403) |
+| `POST /auth/v1/signup` com a anon key (e-mail+senha) | 422 `signup_disabled`, nenhum usuário criado (L13) |
+| sign-in anônimo no Supabase Auth | recusado (Q03) |
+| view `activities_public` (lida pelo Worker com service role) expõe criador, motivo ou contato bruto | não |
 | contato público desligado | some imediatamente da view (colunas geradas, T27) |
-| `upsert_rsvp` repetido pela mesma identidade | 1 linha; outra identidade cancelando → `PT404`; atividade cancelada → `PT409` |
+| id de usuário fora do formato Clerk (`uuid`, injeção) em perfil/admin | `23514` (CHECK `*_clerk_id_check`) |
+| `upsert_rsvp` repetido pela mesma identidade (cookie ou id do Clerk) | 1 linha; outra identidade cancelando → `PT404`; atividade cancelada → `PT409` |
 | T28: dois admins aprovando a mesma proposta em paralelo | 1 sucesso, 1 `PT409`, 1 grupo |
 | não admin chamando a aprovação | `PT403` (rechecagem dentro da função) |
 | `consume_turnstile_token` com o mesmo hash 2× | `true`, `false` |
 
-Resíduos dos testes: todo o resto é limpo por cascata a partir de um território sandbox `mg-99xxxxx` e pela exclusão dos usuários de teste.
-- `audit_events` fica (append-only, sem PII).
-- O hash de Turnstile dos testes expira em minutos.
+Resíduos dos testes: território sandbox `mg-9xxxxxx` apagado por cascata; identidades sintéticas e usuários de teste do Clerk apagados com `svc_erase_user_data` + `users.deleteUser`. `audit_events` fica (append-only, sem PII).
 
-## Auth — spike real (2026-10-08)
-`scripts/db/spike-anon-email-link.ts`. Os usuários de teste foram apagados ao final.
+## Autenticação — Clerk (ADR 0005, BE-5)
 
-| Passo | Observado |
-|---|---|
-| A1 `signInAnonymously()` | `is_anonymous=true`, JWT `aal1` |
-| A2 `admin.updateUserById(uid, {email, email_confirm:false})` | e-mail gravado sem confirmação, identity `email`, **segue anônimo**. A API admin **não envia** e-mail. |
-| A3 refresh do JWT | `is_anonymous=true` |
-| A4 `signInWithOtp` / `updateUser({email})` para `@example.org` | 1ª tentativa: 400 `email_address_invalid` (o Auth recusa o domínio example.org). Depois: 429 `over_email_send_rate_limit` (cota do SMTP padrão). **Entrega real de e-mail NÃO VALIDADA.** |
-| A5 clique no magic link simulado (`generateLink` + `verifyOtp`) | mesmo usuário, `email_confirmed_at` preenchido, **`is_anonymous` continua true** (usuário e JWT); `amr=[otp]` |
-| B1 / G1 vincular e-mail já usado por outro usuário (confirmado **ou** pendente) | **500 "Error updating user"** (não 422) |
-| C1 `updateUserById({email, email_confirm:true})` em anônimo | `is_anonymous=false` |
-| E2 `updateUserById({email_confirm:true})` sozinho | **não** promove |
-| H1 `updateUserById({mesmo email, email_confirm:true})` após o clique | `is_anonymous=false`; refresh da sessão do link → JWT `is_anonymous=false` |
-| E4/E5 `admin.signOut(token, 'others')` | a sessão anônima original fica revogada (`refresh_token_not_found`) |
+**Desenho.** Identidade = Clerk (instância dev `pk_test_`/`sk_test_` em local e staging; produção exige instância `live`). Supabase é só banco: o Worker usa `service_role`; o navegador não recebe chave do Supabase para dados. O cadastro verifica o e-mail **antes** de existir sessão (código por e-mail no Clerk), então desaparecem a sessão provisória, o vínculo de e-mail sem confirmação, o magic link do Supabase, a promoção e a revisão de perfil (P-SEC-1). Rotas `POST /auth/send-link` e `POST /auth/confirm-email` removidas (404).
 
-**Desenho resultante:**
-1. `POST /registrations` vincula o e-mail sem confirmação. Antes, checa no banco se o e-mail já é usado (`email_in_use`), porque o Auth responde 500; nesse caso devolve 409 neutro.
-2. Em seguida dispara o magic link (`shouldCreateUser:false`). Se o envio falhar, o estado informado é `unverified`, sem sucesso falso.
-3. `POST /auth/confirm-email` só promove se a **sessão atual** foi criada por prova de posse da caixa (`amr` contém `otp`/`magiclink`) e o e-mail está confirmado. A promoção revoga as demais sessões.
+**Verificação no Worker** (`worker/middleware/auth.ts` + `worker/repositories/clerk.ts`):
+1. `Authorization: Bearer <session token>` (JWT RS256, 60 s). `verifyToken` do `@clerk/backend` com `CLERK_SECRET_KEY` (JWKS buscado na Backend API e cacheado no isolate; opcional `CLERK_JWT_KEY` com a chave PEM para verificar sem rede). Folga de relógio 5 s (60 s só com `APP_ENV=local`: a máquina de dev estava ~33 s atrasada).
+2. `sub` precisa ser `user_…`; `sts`, se presente, `active`; `azp` precisa estar em `PUBLIC_ORIGIN` + `ALLOWED_ORIGINS`. Token **sem** `azp` (emitido pela Backend API com a chave secreta — só usado pelos testes ao vivo) é aceito apenas em `local`/`test`.
+3. E-mail e verificação: claims `email`/`email_verified` se o template de sessão as incluir (hoje **não** inclui — claims observadas: `exp, fva, iat, iss, nbf, sid, sts, sub, v`); senão `users.getUser(sub)` na Backend API, uma vez por requisição (memoizado no contexto). Medido: ~0,27–0,42 s por `GET /me` autenticado em dev (inclui banco). Usuário apagado/banido/bloqueado → 401; falha da API do Clerk → 500 genérico (fail closed).
+4. Nenhum token, e-mail ou id completo vai para log.
 
-Isso neutraliza uma sessão anônima antiga de quem tenha "ocupado" o e-mail: ela nunca vira organizadora.
+**Níveis.**
+- *Organizador:* e-mail principal verificado no Clerk + perfil criado por `POST /registrations` (Turnstile + consentimento) com `email_verification_state='verified'` e conta `active`. O cadastro exige que o `email` do formulário seja o e-mail do Clerk (perfil nunca guarda e-mail que a pessoa não provou). Se o e-mail principal mudar no Clerk (o Clerk só aceita principal verificado), `email_contact` é ressincronizado e auditado (`profile.email_changed`, sem PII); se outro perfil já usa o endereço → 409.
+- *Admin (D35):* e-mail principal verificado + id do Clerk em `app_private.admins`, conferido a cada requisição em qualquer `APP_ENV`. **MFA não é exigido** (decisão do proprietário, contrária à spec §8.7); o Clerk permite ativar MFA na conta, mas o Worker não o exige. **Risco aceito:** quem comprometer o e-mail de um admin ganha moderação e contatos completos de proponentes. Mitigações: tabela mínima, ações e revelações auditadas, negações em `abuse_events` (`admin_denied`), remoção efetiva na requisição seguinte.
+- **Promoção a admin:** sem rota pública. `scripts/db/bootstrap-admin.ts` (exige `APP_ENV=local` e chave `sk_test_`) resolve o id pelo e-mail na Backend API (`users.getUserList`), cria o usuário no Clerk se não existir (e-mail criado pela Backend API nasce verificado) e chama `svc_grant_admin`. Executado em 2026-10-09 para o e-mail do proprietário (`lu***@gmail.com`): usuário criado no Clerk e admin = true.
 
-**Risco residual (rodada 1):** alguém pode vincular o e-mail de outra pessoa a um perfil provisório próprio. Se essa pessoa depois entrar por magic link, herda esse perfil (nome, telefone, território).
+**Segredos.** `CLERK_SECRET_KEY` só no Worker (`.dev.vars` local; `wrangler secret put CLERK_SECRET_KEY --env <env>` em staging/produção), validada na primeira requisição (formato `sk_test_`/`sk_live_`; `sk_live_` obrigatório com `APP_ENV=production`, senão 500 + log `misconfigured` com o nome). `VITE_CLERK_PUBLISHABLE_KEY` é pública. `CLERK_JWT_KEY` (opcional) é a chave **pública** PEM da instância.
 
-**P-SEC-1 (rodada 2, CORRIGIDO no backend):** a promoção em `/auth/confirm-email` grava `profiles.review_required_at = now()`; `GET /me` devolve `profile_review_required: true` e `phone_masked`; `PATCH /me` aceita `phone` (E.164) e `profile_reviewed: true`, que limpa o flag. Só o dono da sessão edita o próprio perfil (não existe rota admin que altere telefone/nome). As mudanças são auditadas sem PII (`profile.phone_change`, `profile.review`: só ator e id). As sessões do invasor continuam revogadas na promoção. O frontend exibe a etapa de revisão enquanto o flag estiver ligado e **o backend bloqueia** as ações de organizador com o flag ligado: `assertOrganizer` responde 403 (criar/editar/cancelar atividade, `/my-activities`) até `PATCH /me {profile_reviewed:true}` (correção do texto anterior — QA2-10).
+**Supabase Auth.** `enable_anonymous_sign_ins = false` e `enable_signup = false` (`supabase/config.toml`, aplicado com `supabase config push` em 2026-10-09). Usuários antigos do Supabase Auth do dev foram apagados (`cleanup-dev-data.ts --yes --all`).
 
-**QA2-01 (BE-3, CORRIGIDO):** a promoção não depende mais de a sessão estar anônima no momento do `confirm-email`. O GoTrue pode tornar a identidade permanente sozinho (troca segura de e-mail de um usuário provisório: o invasor confirma o endereço atual, a vítima o novo) e então o Worker via `promoted=false` e não revisava nem revogava nada. Agora **qualquer** transição do perfil para `verified` — e qualquer divergência entre `profiles.email_contact` e o e-mail do Auth (sem diferenciar maiúsculas) — é tratada como promoção: revoga as outras sessões, liga `review_required_at` e re-sincroniza `email_contact` (auditoria `profile.email_changed`, só ator e id). Enquanto o e-mail do Auth divergir do perfil, `assertOrganizer` responde 403 pedindo a confirmação/revisão; `PATCH /me` **não** re-sincroniza o e-mail (só o `confirm-email`, que revoga as sessões). Validado ao vivo (Q02 em `supabase/tests/qa2-live.test.ts`: `review=true`, refresh do invasor → `refresh_token_not_found`). **QA2-02:** se a revogação das outras sessões falhar (com uma nova tentativa), o `confirm-email` responde 500 `INTERNAL_ERROR` e o perfil **não** vira `verified`; a próxima chamada refaz a promoção.
+**Riscos e pendências (BE-5).**
+- Dependência do Clerk (disponibilidade da Backend API a cada requisição autenticada; JWKS). Mitigação possível: template de sessão com `email`/`email_verified` (zero chamadas por requisição) e/ou `CLERK_JWT_KEY` — exige alteração no painel do Clerk (não feita).
+- Revogação: um token já emitido vale até 60 s; banimento/exclusão no Clerk é refletido na hora pela consulta `getUser` (sem template de claims).
+- LGPD: Clerk é novo operador (EUA) — registrar em `PRIVACY_LGPD_DRAFT.md` (fora do escopo do backend).
+- Exclusão de conta no Clerk não apaga dados no banco (sem FK); falta webhook `user.deleted` → `svc_erase_user_data` (pendente).
+- O RSVP anônimo (cookie) não é migrado para a conta após o cadastro (inalterado).
 
-**Risco residual (QA2-01):** se o próprio invasor tiver uma sessão permanente com prova de e-mail (`amr` `otp`) anterior à troca e chamar o `confirm-email` antes da vítima, ele revoga a sessão da vítima e mantém a sua; o perfil fica com revisão pendente e o e-mail da vítima. Exige que a vítima clique no link de **troca de e-mail** de uma conta que não criou. Mitigação futura: exigir que a prova de e-mail da sessão seja posterior à troca (timestamp do `amr`) ou desabilitar a troca de e-mail para usuários provisórios. E-mail informativo ao dono: não implementado (depende de SMTP próprio, P-SEC-3).
-
-## Organizador e admin
-- **Organizador:** `!is_anonymous` (registro do usuário **e** claim do JWT) + `email_confirmed` (Auth) + `is_email_verified` (banco) + conta não suspensa.
-- **Admin (D35, 2026-10-09):** conta permanente (`!is_anonymous` no usuário **e** no JWT) + `email_confirmed` (Auth) + linha em `app_private.admins`, verificado no servidor a cada requisição, em qualquer `APP_ENV`. **MFA não é exigido** (nem `aal2`, nem fator TOTP): decisão do proprietário, contrária à spec §8.7. TOTP continua habilitado no projeto e `/conta/seguranca` permite enrolá-lo, de forma opcional. **Risco aceito pelo proprietário:** quem comprometer a conta de e-mail de um admin (ou interceptar um magic link) ganha acesso à moderação e aos contatos completos de proponentes. Mitigações que restam: tabela de admins mínima, toda ação de admin e toda revelação de contato auditadas em `audit_events`, negações registradas em `abuse_events` (`admin_denied`), remoção de admin efetiva na requisição seguinte.
-- **Bypass de MFA local:** removido (D35) — não há mais exigência de MFA a contornar; a regra de admin é a mesma em `local`, `staging` e produção.
-- **Promoção a admin:** não existe rota pública. Só `scripts/db/bootstrap-admin.ts` (exige `APP_ENV=local`) ou a RPC `svc_grant_admin`, executável apenas pelo service_role.
+> Histórico (rodadas 1–3, Supabase Auth): spike de sessão anônima, P-SEC-1, QA2-01/02 e riscos residuais deixaram de se aplicar com a 0012/ADR 0005. Ver versões anteriores deste arquivo no histórico do repositório.
 
 ## Turnstile
 Siteverify com `secret`, `response` e `remoteip` (`CF-Connecting-IP`). Checa:
@@ -93,18 +77,16 @@ Janela deslizante em memória **por isolate**, chave = bucket + sujeito (IP de `
 | Bucket | Sujeito | Limite |
 |---|---|---|
 | registrations_ip | IP (antes de resolver a sessão) | 30/10min |
-| registrations | IP + usuário provisório | 5/10min |
+| registrations | IP + usuário (id do Clerk) | 5/10min |
 | proposals | IP | 5/10min |
 | rsvp_ip | IP | 120/10min |
 | rsvp_identity | IP + atividade + identidade (`user_id` ou HMAC do dispositivo) | 10/10min |
-| send_link | IP | 3/10min |
 | activities_write | IP | 20/10min |
 | me_write (`PATCH /me`) | IP | 60/10min |
-| confirm_email | IP | 60/10min |
 
 **CGNAT / Wi-Fi de evento (F05).** Operadoras móveis brasileiras colocam muitos clientes atrás do mesmo IP público (CGNAT), e um ato presencial concentra dezenas de pessoas numa mesma rede. Por isso RSVP e cadastro são chaveados por IP **+ identidade**, com um teto por IP bem mais alto: 40 pessoas no mesmo IP marcando "Eu vou" na mesma atividade não se bloqueiam (teste `F05: 40 identities…`), enquanto a mesma identidade repetindo além de 10/10 min recebe 429. Limitações: (a) quem não envia cookie ganha identidade nova a cada pedido, então para esse caso só vale o teto por IP (120); (b) um evento com mais de ~120 RSVPs em 10 min atrás de um único IP será limitado; (c) contadores por isolate. Se isso aparecer em campo, o caminho é WAF/Rate Limiting da Cloudflare por rota (P-INFRA-1).
 
-Isolates e colos não compartilham estado, então o limite global efetivo pode ser maior. As garantias reais são os únicos no banco e a idempotência. Cada bloqueio gera um `abuse_event` com o HMAC do IP. O Auth do Supabase tem limites próprios (e-mail, sign-in anônimo 30/h por IP).
+Isolates e colos não compartilham estado, então o limite global efetivo pode ser maior. As garantias reais são os únicos no banco e a idempotência. Cada bloqueio gera um `abuse_event` com o HMAC do IP. O Clerk tem limites próprios de cadastro/login (bot protection da instância).
 
 ## Outros
 - **Logs:** `{request_id, route, method, status, ms, rate_limited}`; erros registram só nome da classe ou SQLSTATE. Smoke real: 0 ocorrências de `eyJ`, e-mails, `Bearer` ou `sb_` no log do wrangler.
@@ -114,7 +96,7 @@ Isolates e colos não compartilham estado, então o limite global efetivo pode s
 - **Sanitização:** título, descrição, endereço e nomes passam por `sanitizePlainText`; o front nunca renderiza HTML de usuário.
 - **Sem CORS:** a SPA é servida pelo mesmo Worker.
 - **Origin (F14):** mutações com header `Origin` fora de `PUBLIC_ORIGIN` + `ALLOWED_ORIGINS` (lista opcional separada por vírgula, variável de ambiente) → 403 e `abuse_event` `origin_denied`. Sem `Origin` (curl, scripts) passa; `Origin: null` é recusado. Com `APP_ENV=local`, origens loopback (`localhost`, `127.0.0.1`, `[::1]`, qualquer porta) são aceitas para Vite/wrangler. É defesa em profundidade: a autenticação é Bearer (não ambiente) e o cookie `mm_device` é `SameSite=Lax`.
-- **Configuração (I03):** na primeira requisição de cada isolate o Worker valida `RSVP_DEVICE_SECRET` (≥ 32 caracteres e diferente do placeholder `change-me-to-a-random-32-byte-string` do `.dev.vars.example`). Se inválido, toda rota `/api/*` responde 500 `INTERNAL_ERROR` e registra `{"event":"misconfigured","settings":["RSVP_DEVICE_SECRET"]}` (nome, nunca valor).
+- **Configuração (I03):** na primeira requisição de cada isolate o Worker valida `RSVP_DEVICE_SECRET` (≥ 32 caracteres e diferente do placeholder `change-me-to-a-random-32-byte-string` do `.dev.vars.example`) e `CLERK_SECRET_KEY` (BE-5). Se inválido, toda rota `/api/*` responde 500 `INTERNAL_ERROR` e registra `{"event":"misconfigured","settings":["RSVP_DEVICE_SECRET"]}` (nome, nunca valor).
 - **Cache de borda (F16):** GETs públicos em `caches.default` por 60 s. **Chave canônica (QA2-04):** origem + caminho + só os parâmetros conhecidos da rota, em ordem fixa (parâmetros extras como `&x=1` não criam entrada que escape da purga). A invalidação após mutação é por colo: aprovação/rejeição de proposta (QA2-03), PATCH/suspensão/reativação de grupo purgam o território, o município e, para grupo municipal, todos os bairros do município (fallback); atividades purgam `/activities/:id`. Logo, um grupo/atividade suspenso some do banco/view na hora e do cache **no mesmo colo após a purga; até 60 s em outros colos** (aceito e documentado). Listas de atividades com bbox/datas/cursor também expiram em até 60 s.
 - **Suspensão:** `POST /admin/groups/:id/suspend|unsuspend` e `/admin/activities/:id/suspend|unsuspend`, motivo obrigatório, admin (sem MFA, D35), auditados na mesma transação. Desde 0011 (QA2-09) o status anterior fica em `status_before_suspension`: grupo volta a `inactive` se estava inativo (senão `active`); atividade volta a `cancelled` se estava cancelada (senão `pending_review`, nova moderação).
 - **Revelação de contato:** `POST /admin/group-proposals/:id/reveal-contact` exige admin; desde D35 **não exige `aal2`**. A leitura e o `audit_events` (`proposal.reveal_contact`, `retention_class='security'`) continuam na mesma transação (`svc_reveal_proposal_contact`).
@@ -131,7 +113,7 @@ Auditoria adversarial executada por agente independente (`qa-security`, Opus) so
 | F01 | médio | Usuário verificado sem perfil (signup direto no GoTrue) virava organizador | **CORRIGIDO** — `assertOrganizer` exige perfil ativo com `email_verification_state='verified'` (teste F01 agora passa) |
 | F02 | médio | PATCH do contato público em atividade publicada sem remoderação | **CORRIGIDO** — contato ligado/alterado e `type` são sensíveis; desligar continua imediato (T27) |
 | F03 | médio | `wrangler.jsonc` publicava `APP_ENV=local` (bypass de MFA) | **CORRIGIDO**, depois **política alterada por D35** — top-level = produção (escritas suspensas), `env.local`/`env.staging` explícitos; `npm run dev:worker` usa `--env local`. O bypass de MFA deixou de existir porque MFA não é mais exigido |
-| F04 | médio | Cota global de e-mail do Auth esgotável via `send-link`/cadastro | **PENDENTE** (P-SEC-3): SMTP próprio + throttle por e-mail + captcha nativo do Auth |
+| F04 | médio | Cota global de e-mail do Auth esgotável via `send-link`/cadastro | **SUPERADO (BE-5)** — `send-link` removida e e-mails enviados pelo Clerk (cota e bot protection do Clerk); o Supabase Auth não envia mais e-mail |
 | F05 | médio | Rate limit só por IP penaliza CGNAT/Wi-Fi de evento | **CORRIGIDO** (BE-2) — RSVP por IP+atividade+identidade (10/10min) com teto por IP 120/10min; cadastro por IP+sujeito (5) com teto por IP 30; testes `F05: 40 identities…`, `F05: the same identity…`, `registration rate limit (F05)…` |
 | F06 | médio | CLI provisiona "login role" temporário no SOURCE ao consultar | **CONFIRMADO e DOCUMENTADO** (`DATA_SOURCE_AUDIT.md` §7); próxima extração com usuário SELECT-only (P-DATA-2) |
 | F07 | baixo | Secret de teste do Turnstile aceito em staging | **CORRIGIDO** — recusado fora de `local`/`test` |

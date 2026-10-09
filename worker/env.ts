@@ -17,11 +17,16 @@ export interface Env {
   ALLOWED_ORIGINS?: string;
   TURNSTILE_EXPECTED_HOSTNAMES: string;
   SUPABASE_TARGET_URL: string;
-  SUPABASE_TARGET_ANON_KEY: string;
+  /** legacy (Supabase Auth); no longer used by the Worker since ADR 0005 */
+  SUPABASE_TARGET_ANON_KEY?: string;
   SUPABASE_TARGET_SERVICE_ROLE_KEY: string;
   TURNSTILE_SECRET_KEY: string;
   RSVP_DEVICE_SECRET: string;
   ADMIN_EMAILS?: string;
+  /** Clerk Backend secret (ADR 0005). Verifies session tokens and reads users. Worker only. */
+  CLERK_SECRET_KEY: string;
+  /** optional PEM public key of the Clerk instance: networkless token verification (no JWKS fetch) */
+  CLERK_JWT_KEY?: string;
 }
 
 /** Subset of the Workers Cache API used for public GETs (QA-1 F16). */
@@ -42,23 +47,22 @@ export interface Deps {
   edgeCache: EdgeCache | null;
 }
 
+/** Authenticated person, resolved from a verified Clerk session token. */
 export interface AuthUser {
+  /** Clerk user id (`user_…`) */
   id: string;
+  /** primary e-mail (lower-cased) from Clerk */
   email: string | null;
+  /** Clerk verified the primary e-mail */
   email_confirmed: boolean;
-  /** true if either the Auth user record or the JWT claim says anonymous */
-  is_anonymous: boolean;
-  /** raw JWT claim (false only for permanent users) */
-  jwt_is_anonymous: boolean;
-  aal: string;
-  amr_methods: string[];
+  /** always false: there are no anonymous sessions with Clerk (kept for contract stability) */
+  is_anonymous: false;
 }
 
 export interface Vars {
   requestId: string;
   deps: Deps;
   user: AuthUser | null;
-  token: string | null;
   rateLimited: boolean;
   startedAt: number;
 }

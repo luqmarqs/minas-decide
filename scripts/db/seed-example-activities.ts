@@ -9,7 +9,7 @@
  * - Dev only: refuses without APP_ENV=local and unless SUPABASE_TARGET_URL is the TARGET.
  * - Idempotent by title: an existing "[EXEMPLO] …" row is updated (dates, place, status),
  *   never duplicated.
- * - Creator = the dev admin (admin.dev@minasemmovimento.local); status `published`,
+ * - Creator = the first ADMIN_EMAILS admin found in Clerk (ADR 0005); status `published`,
  *   reviewed by the same admin; `public_contact_opt_in = false` (no contact is published).
  * - Dates: 7, 10 and 14 days from today, 09:00 America/Sao_Paulo (UTC−3, no DST).
  * - Coordinates confirmed on 2026-10-09 through Nominatim (OSM) lookups:
@@ -20,9 +20,10 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import { sanitizePlainText } from '../../shared/schemas/sanitize.ts';
+import type { Env } from '../../worker/env.ts';
+import { ClerkAuthGateway } from '../../worker/repositories/clerk.ts';
 import { assertTargetUrl, loadDevVars, requireEnv } from './load-env.ts';
 
-const ADMIN_EMAIL = 'admin.dev@minasemmovimento.local';
 const dryRun = process.argv.includes('--dry-run');
 
 interface Example {
@@ -97,15 +98,25 @@ async function main(): Promise<void> {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // ADR 0005: creator/reviewer = the Clerk id of the first ADMIN_EMAILS entry that exists in
+  // Clerk AND is listed in app_private.admins (run scripts/db/bootstrap-admin.ts first).
+  const gateway = new ClerkAuthGateway({
+    APP_ENV: 'local',
+    CLERK_SECRET_KEY: requireEnv('CLERK_SECRET_KEY'),
+  } as Env);
   let adminId: string | null = null;
-  for (let page = 1; page <= 50 && !adminId; page++) {
-    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw new Error(`listUsers failed (${error.code ?? error.status ?? 'unknown'})`);
-    adminId = data.users.find((u) => u.email?.toLowerCase() === ADMIN_EMAIL)?.id ?? null;
-    if (data.users.length < 1000) break;
+  for (const email of (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim())) {
+    if (!email) continue;
+    const u = await gateway.findUserByEmail(email);
+    if (!u) continue;
+    const { data: isAdmin } = await db.rpc('svc_is_admin', { p_user: u.id });
+    if (isAdmin === true) {
+      adminId = u.id;
+      break;
+    }
   }
   if (!adminId)
-    throw new Error('Dev admin user not found: run scripts/db/bootstrap-admin.ts first.');
+    throw new Error('No admin found in Clerk: run scripts/db/bootstrap-admin.ts first.');
 
   for (const ex of EXAMPLES) {
     const { starts, ends } = nineAmSaoPaulo(ex.daysAhead);
@@ -149,7 +160,7 @@ async function main(): Promise<void> {
         .update({ ...row, version: (cur.version as number) + 1 })
         .eq('id', cur.id);
       if (error) throw new Error(`update failed (${error.code ?? 'unknown'})`);
-      console.log(`seed-example: updated "${ex.title}" (${cur.id}) → ${starts}`);
+      console.log(`seed-example: updated "${ex.title}" → ${starts}`);
     } else {
       const { data, error } = await db
         .from('activities')

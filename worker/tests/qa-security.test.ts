@@ -13,6 +13,19 @@ import { body, setup } from './fakes.ts';
 const future = (days: number) =>
   new Date(Date.parse('2026-10-08T12:00:00Z') + days * 86_400_000).toISOString();
 
+// Turnstile-guarded public route for the Turnstile controls (send-link removed, ADR 0005).
+const proposalInput = (turnstile_token: string, n = 1) => ({
+  territory_id: 'mg-3140001',
+  name_proposed: 'Grupo Mariana',
+  join_url_proposed: `https://chat.whatsapp.com/AbCdEfGhIjKlMn${n}`,
+  proposer_name: 'Proponente',
+  proposer_email: `p${n}@example.org`,
+  proposer_phone: '(31) 97777-1234',
+  responsibility_accepted: true,
+  consent_version: 'v1',
+  turnstile_token,
+});
+
 const activityInput = (over: Record<string, unknown> = {}) => ({
   title: 'Panfletagem na praça',
   type: 'panfletagem',
@@ -56,7 +69,7 @@ async function withProfile(s: Setup, userId: string, email: string): Promise<voi
 }
 
 describe('QA-1 findings (it.fails = vulnerable today; it = fixed, kept as regression)', () => {
-  it('F01: verified user WITHOUT profile (direct Supabase Auth signup) must not organize', async () => {
+  it('F01: verified user WITHOUT profile (Clerk account that skipped POST /registrations) must not organize', async () => {
     const s = setup();
     const { token, user } = s.users.verified(); // permanent, email confirmed
     s.repo.profiles.delete(user.id); // simulate a direct GoTrue signup: no profile row
@@ -95,20 +108,20 @@ describe('QA-1 findings (it.fails = vulnerable today; it = fixed, kept as regres
       TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
     });
     // FakeTurnstile returns hostname "evil.example" for tokens starting with "wronghost".
-    const res = await s.request('/api/v1/auth/send-link', {
+    const res = await s.request('/api/v1/groups/proposals', {
       method: 'POST',
-      json: { email: 'x@example.org', turnstile_token: 'wronghost-123' },
+      json: proposalInput('wronghost-123'),
     });
     expect(res.status).toBe(400);
   });
 
   it('F04: Siteverify response WITHOUT action must not satisfy an expected action', async () => {
     const s = setup(); // non-test secret; FakeTurnstile always returns action=null
-    const res = await s.request('/api/v1/auth/send-link', {
+    const res = await s.request('/api/v1/groups/proposals', {
       method: 'POST',
-      json: { email: 'x@example.org', turnstile_token: 'tok-no-action' },
+      json: proposalInput('tok-no-action'),
     });
-    expect(res.status).not.toBe(202);
+    expect(res.status).not.toBe(201);
   });
 
   it('F05: activity coordinates far outside Minas Gerais must be rejected', async () => {
@@ -123,26 +136,26 @@ describe('QA-1 findings (it.fails = vulnerable today; it = fixed, kept as regres
     expect(res.status).toBe(400);
   });
 
-  it.fails(
-    'F06: registration must not reveal whether an e-mail already has an account (409 vs 201)',
-    async () => {
-      const s = setup();
-      s.users.verified(undefined, 'existe@example.org'); // existing auth user
-      const a = s.users.anonymous();
-      const b = s.users.anonymous();
-      const taken = await s.request('/api/v1/registrations', {
-        method: 'POST',
-        token: a.token,
-        json: registration({ email: 'existe@example.org' }),
-      });
-      const free = await s.request('/api/v1/registrations', {
-        method: 'POST',
-        token: b.token,
-        json: registration({ email: 'naoexiste@example.org' }),
-      });
-      expect(taken.status).toBe(free.status);
-    },
-  );
+  // ADR 0005: the form e-mail must be the caller's VERIFIED Clerk e-mail, so probing someone
+  // else's address answers exactly like probing a free one (400 on the e-mail field).
+  it('F06: registration must not reveal whether an e-mail already has an account', async () => {
+    const s = setup();
+    s.users.verified(undefined, 'existe@example.org'); // existing profile
+    const a = s.users.signedUp('atacante-a@example.org');
+    const b = s.users.signedUp('atacante-b@example.org');
+    const taken = await s.request('/api/v1/registrations', {
+      method: 'POST',
+      token: a.token,
+      json: registration({ email: 'existe@example.org' }),
+    });
+    const free = await s.request('/api/v1/registrations', {
+      method: 'POST',
+      token: b.token,
+      json: registration({ email: 'naoexiste@example.org' }),
+    });
+    expect(taken.status).toBe(free.status);
+    expect(taken.status).toBe(400);
+  });
 
   it('F07: starts_at absurdly far in the future must be rejected', async () => {
     const s = setup();
@@ -167,10 +180,10 @@ describe('QA-1 controls (verified OK)', () => {
     }
   });
 
-  it('non-admin verified user and anonymous session are denied on admin routes', async () => {
+  it('non-admin verified user and unverified Clerk session are denied on admin routes', async () => {
     const s = setup();
     const v = s.users.verified();
-    const an = s.users.anonymous();
+    const an = s.users.unverified();
     for (const t of [v.token, an.token]) {
       expect((await s.request('/api/v1/admin/queue?kind=activities', { token: t })).status).toBe(
         403,
@@ -237,14 +250,14 @@ describe('QA-1 controls (verified OK)', () => {
   it('Turnstile token reuse fails on second use', async () => {
     const s = setup();
     const t = 'tok-reuse-1234567890';
-    const r1 = await s.request('/api/v1/auth/send-link', {
+    const r1 = await s.request('/api/v1/groups/proposals', {
       method: 'POST',
-      json: { email: 'a@example.org', turnstile_token: t },
+      json: proposalInput(t, 1),
     });
-    expect(r1.status).toBe(202);
-    const r2 = await s.request('/api/v1/auth/send-link', {
+    expect(r1.status).toBe(201);
+    const r2 = await s.request('/api/v1/groups/proposals', {
       method: 'POST',
-      json: { email: 'b@example.org', turnstile_token: t },
+      json: proposalInput(t, 2),
     });
     expect(r2.status).toBe(400);
     expect((await body(r2)).error?.code).toBe('TURNSTILE_FAILED');

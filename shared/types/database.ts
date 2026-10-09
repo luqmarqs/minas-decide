@@ -776,6 +776,10 @@ export type Database = {
         Returns: Json;
       };
       svc_delete_profile: { Args: { p_user: string }; Returns: undefined };
+      svc_dev_wipe_identities: {
+        Args: { p_request_id?: string };
+        Returns: Json;
+      };
       svc_email_in_use: {
         Args: { p_email: string; p_exclude: string };
         Returns: boolean;
@@ -783,6 +787,10 @@ export type Database = {
       svc_erase_group_proposals: {
         Args: { p_admin?: string; p_ids: string[]; p_request_id?: string };
         Returns: number;
+      };
+      svc_erase_user_data: {
+        Args: { p_request_id?: string; p_user: string };
+        Returns: Json;
       };
       svc_get_profile: { Args: { p_user: string }; Returns: Json };
       svc_grant_admin: {
@@ -899,7 +907,6 @@ export type Database = {
           p_email_contact?: string;
           p_email_state?: string;
           p_phone?: string;
-          p_review_required?: boolean;
           p_territory_id?: string;
           p_user: string;
         };

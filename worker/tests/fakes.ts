@@ -18,7 +18,7 @@ import type {
   GroupProposalRow,
   GroupRow,
   GroupStatusRow,
-  LinkEmailResult,
+  ClerkUserInfo,
   NewGroupManager,
   NewGroupProposal,
   NewProfile,
@@ -32,6 +32,7 @@ import type {
   RsvpIdentity,
   SecurityEventRow,
   TerritoryRow,
+  VerifiedSession,
 } from '../repositories/types.ts';
 import type { SiteverifyResult, TurnstileVerifier } from '../services/turnstile.ts';
 
@@ -91,7 +92,6 @@ export class FakeRepo implements Repo {
   profiles = new Map<string, ProfileRow>();
   admins = new Set<string>();
   verified = new Set<string>();
-  authEmails = new Map<string, string>(); // email -> user id (mirror of auth.users)
   audit: {
     actor: string | null;
     action: string;
@@ -347,14 +347,15 @@ export class FakeRepo implements Repo {
     if (patch.contact_opt_in !== undefined)
       p.contact_opt_in_at = patch.contact_opt_in ? iso(this.clock()) : null;
     if (patch.phone !== undefined) p.phone_e164 = patch.phone;
-    if (patch.review_required !== undefined)
-      p.review_required_at = patch.review_required ? iso(this.clock()) : null;
     if (patch.email_contact !== undefined) p.email_contact = patch.email_contact;
     return p;
   }
+  /** Mirrors app_private.email_in_use (0012): another PROFILE holds this contact e-mail. */
   async emailInUse(email: string, exclude: string) {
-    const owner = this.authEmails.get(email);
-    return owner !== undefined && owner !== exclude;
+    const lower = email.toLowerCase();
+    return [...this.profiles.values()].some(
+      (p) => p.user_id !== exclude && p.email_contact.toLowerCase() === lower,
+    );
   }
   async isAdmin(id: string) {
     return this.admins.has(id);
@@ -568,54 +569,49 @@ export class FakeRepo implements Repo {
   }
 }
 
+/**
+ * Fake Clerk gateway: `verify` stands in for `verifyToken` (JWKS) and `getUser` for the Backend
+ * API. Tokens map to sessions; people map Clerk ids to their primary e-mail state.
+ */
 export class FakeAuth implements AuthGateway {
-  users = new Map<string, AuthUser>(); // token -> user
-  linked: { userId: string; email: string }[] = [];
-  promoted: string[] = [];
-  signedOutOthers: string[] = [];
-  magicLinks: string[] = [];
-  magicLinkOk = true;
-  linkOk = true;
+  sessions = new Map<string, VerifiedSession>(); // token -> verified session
+  people = new Map<string, ClerkUserInfo>(); // clerk id -> user
+  verifyCalls = 0;
+  getUserCalls = 0;
+  /** simulate a Clerk Backend API outage */
+  outage = false;
 
-  constructor(private readonly repo: FakeRepo) {}
-
-  add(token: string, user: Partial<AuthUser> & { id: string }): AuthUser {
+  add(
+    token: string,
+    user: Partial<AuthUser> & { id: string },
+    opts: { claims?: Record<string, unknown>; banned?: boolean } = {},
+  ): AuthUser {
     const u: AuthUser = {
       email: null,
       email_confirmed: false,
-      is_anonymous: false,
-      jwt_is_anonymous: false,
-      aal: 'aal1',
-      amr_methods: ['password'],
       ...user,
+      is_anonymous: false,
     };
-    this.users.set(token, u);
-    if (u.email) this.repo.authEmails.set(u.email, u.id);
+    this.sessions.set(token, { sub: u.id, claims: { sub: u.id, sts: 'active', ...opts.claims } });
+    this.people.set(u.id, {
+      id: u.id,
+      email: u.email,
+      email_verified: u.email_confirmed,
+      banned: opts.banned ?? false,
+    });
     return u;
   }
-  async getUser(token: string) {
-    return this.users.get(token) ?? null;
+  async verify(token: string) {
+    this.verifyCalls += 1;
+    return this.sessions.get(token) ?? null;
   }
-  async linkEmail(userId: string, email: string): Promise<LinkEmailResult> {
-    if (!this.linkOk) return { ok: false, reason: 'error' };
-    this.linked.push({ userId, email });
-    this.repo.authEmails.set(email, userId);
-    return { ok: true };
+  async getUser(id: string) {
+    this.getUserCalls += 1;
+    if (this.outage) throw fail('INTERNAL_ERROR');
+    return this.people.get(id) ?? null;
   }
-  async promoteVerified(userId: string) {
-    this.promoted.push(userId);
-    this.repo.verified.add(userId);
-    return true;
-  }
-  async signOutOthers(token: string) {
-    this.signedOutOthers.push(token);
-    return true;
-  }
-  async sendMagicLink(email: string) {
-    this.magicLinks.push(email);
-    return this.magicLinkOk
-      ? { ok: true, code: null }
-      : { ok: false, code: 'over_email_send_rate_limit' };
+  async findUserByEmail(email: string) {
+    return [...this.people.values()].find((p) => p.email === email.toLowerCase()) ?? null;
   }
 }
 
@@ -655,7 +651,10 @@ export function testEnv(over: Partial<Env> = {}): Env {
     PUBLIC_ORIGIN: 'http://127.0.0.1:8787',
     TURNSTILE_EXPECTED_HOSTNAMES: 'localhost,127.0.0.1',
     SUPABASE_TARGET_URL: 'http://supabase.invalid',
-    SUPABASE_TARGET_ANON_KEY: 'anon-placeholder',
+    CLERK_SECRET_KEY:
+      over.APP_ENV === 'production'
+        ? 'sk_live_placeholderplaceholder'
+        : 'sk_test_placeholderplaceholder',
     SUPABASE_TARGET_SERVICE_ROLE_KEY: 'service-placeholder',
     TURNSTILE_SECRET_KEY: 'non-test-secret-placeholder',
     RSVP_DEVICE_SECRET: 'device-secret-placeholder-0123456789',
@@ -686,7 +685,7 @@ export function setup(envOver: Partial<Env> = {}, opts: { edgeCache?: boolean } 
   let now = Date.parse('2026-10-08T12:00:00Z');
   const clock = () => now;
   const repo = new FakeRepo(clock);
-  const auth = new FakeAuth(repo);
+  const auth = new FakeAuth();
   const turnstile = new FakeTurnstile();
   const limiter = new SlidingWindowLimiter();
   const edgeCache = opts.edgeCache ? new FakeEdgeCache() : null;
@@ -712,23 +711,25 @@ export function setup(envOver: Partial<Env> = {}, opts: { edgeCache?: boolean } 
     );
   };
 
+  let idSeq = 0;
+  /** Clerk-like user id (`user_` + base62), unique per setup(). */
+  const clerkId = () => `user_test${(++idSeq).toString().padStart(6, '0')}`;
+
   const users = {
-    anonymous(id = repo.uuid()) {
-      const token = `tok-anon-${++tokenSeq}-padding-padding`;
-      return {
-        token,
-        user: auth.add(token, {
-          id,
-          is_anonymous: true,
-          jwt_is_anonymous: true,
-          amr_methods: ['anonymous'],
-        }),
-      };
+    /** Clerk session whose primary e-mail is verified, WITHOUT a profile (pre-registration). */
+    signedUp(email = `new${idSeq + 1}@example.org`, id = clerkId()) {
+      const token = `tok-signed-${++tokenSeq}-padding-padding`;
+      return { token, user: auth.add(token, { id, email, email_confirmed: true }) };
     },
-    verified(id = repo.uuid(), email = `org${tokenSeq + 1}@example.org`) {
+    /** Clerk session whose primary e-mail is NOT verified (negative cases). */
+    unverified(email = `pending${idSeq + 1}@example.org`, id = clerkId()) {
+      const token = `tok-unverified-${++tokenSeq}-padding-padding`;
+      return { token, user: auth.add(token, { id, email, email_confirmed: false }) };
+    },
+    /** Registered organizer: verified Clerk e-mail + active verified profile. */
+    verified(id = clerkId(), email = `org${tokenSeq + 1}@example.org`) {
       const token = `tok-verified-${++tokenSeq}-padding-padding`;
       repo.verified.add(id);
-      // Real flow: profile created at registration, promoted by /auth/confirm-email.
       if (!repo.profiles.has(id)) {
         void repo.createProfile({
           user_id: id,
@@ -741,20 +742,14 @@ export function setup(envOver: Partial<Env> = {}, opts: { edgeCache?: boolean } 
           contact_opt_in: false,
         });
       }
-      return {
-        token,
-        user: auth.add(token, { id, email, email_confirmed: true, amr_methods: ['otp'] }),
-      };
+      return { token, user: auth.add(token, { id, email, email_confirmed: true }) };
     },
     /**
-     * Admin (D35: admins table + confirmed e-mail; MFA not required). `aal` only records the
-     * session assurance level; `opts` builds negative cases (anonymous / unconfirmed e-mail).
+     * Admin (D35: admins table by Clerk id + verified e-mail; MFA not required). `_aal` is kept
+     * for call-site compatibility (Clerk session tokens carry no AAL); `opts.emailConfirmed`
+     * builds the negative case.
      */
-    admin(
-      aal: 'aal1' | 'aal2' = 'aal1',
-      id = repo.uuid(),
-      opts: { emailConfirmed?: boolean; anonymous?: boolean } = {},
-    ) {
+    admin(_aal: 'aal1' | 'aal2' = 'aal1', id = clerkId(), opts: { emailConfirmed?: boolean } = {}) {
       const token = `tok-admin-${++tokenSeq}-padding-padding`;
       repo.admins.add(id);
       repo.verified.add(id);
@@ -764,9 +759,6 @@ export function setup(envOver: Partial<Env> = {}, opts: { edgeCache?: boolean } 
           id,
           email: `admin${tokenSeq}@example.org`,
           email_confirmed: opts.emailConfirmed ?? true,
-          is_anonymous: opts.anonymous ?? false,
-          jwt_is_anonymous: opts.anonymous ?? false,
-          aal,
         }),
       };
     },

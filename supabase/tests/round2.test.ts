@@ -1,8 +1,10 @@
 /**
  * Migration 0010 (BE-2) against the TARGET dev project (never the SOURCE): suspension,
- * audited reveal, profile review flag, proposal idempotency (F11), MG/duration CHECKs and
- * privileges of the new svc_* functions. Everything lives under a sandbox territory
- * (`mg-99xxxxx`) removed in afterAll; test users are deleted.
+ * audited reveal, profile phone (review flag discontinued in 0012), proposal idempotency (F11),
+ * MG/duration CHECKs and privileges of the new svc_* functions. Everything lives under a
+ * sandbox territory (`mg-99xxxxx`) removed in afterAll. ADR 0005: user ids are synthetic
+ * Clerk-format ids (no FK to any identity table), erased with svc_erase_user_data. Public
+ * views are read with the service role (0012 revoked every anon grant).
  *
  * Run: npm run test:db
  */
@@ -28,14 +30,10 @@ describe.skipIf(!configured)('migrations 0010/0011 on TARGET dev', () => {
   let adminId = '';
   let userId = '';
 
-  async function createUser(label: string): Promise<string> {
-    const { data, error } = await svc.auth.admin.createUser({
-      email: `mm-qa-r2-${label}+${tag}@example.org`,
-      email_confirm: true,
-    });
-    if (error || !data.user) throw new Error(`createUser ${label}: ${error?.code}`);
-    userIds.push(data.user.id);
-    return data.user.id;
+  function createUser(label: string): string {
+    const id = `user_r2${label}${tag}`;
+    userIds.push(id);
+    return id;
   }
 
   async function activity(status: string, over: Record<string, unknown> = {}) {
@@ -86,8 +84,8 @@ describe.skipIf(!configured)('migrations 0010/0011 on TARGET dev', () => {
       data_quality: 'demo',
     });
     if (t.error) throw new Error(`territory: ${t.error.code}`);
-    adminId = await createUser('admin');
-    userId = await createUser('user');
+    adminId = createUser('admin');
+    userId = createUser('user');
     const g = await svc.rpc('svc_grant_admin', { p_user: adminId });
     if (g.error) throw new Error(`grant: ${g.error.code}`);
   });
@@ -95,7 +93,9 @@ describe.skipIf(!configured)('migrations 0010/0011 on TARGET dev', () => {
   afterAll(async () => {
     if (!svc) return;
     await svc.from('territories').delete().eq('id', muni); // cascades groups/proposals/activities
-    for (const id of userIds) await svc.auth.admin.deleteUser(id);
+    for (const id of userIds) {
+      await svc.rpc('svc_erase_user_data', { p_user: id, p_request_id: 'r2-test-cleanup' });
+    }
   });
 
   it('new svc_* functions are not executable by anon', async () => {
@@ -113,7 +113,7 @@ describe.skipIf(!configured)('migrations 0010/0011 on TARGET dev', () => {
     }
   });
 
-  it('P-SEC-1: svc_update_profile sets/clears review_required_at and phone', async () => {
+  it('svc_update_profile sets the phone; review_required_at stays null (0012)', async () => {
     const c = await svc.rpc('svc_create_profile', {
       p_user_id: userId,
       p_display_name: 'Perfil R2',
@@ -125,16 +125,13 @@ describe.skipIf(!configured)('migrations 0010/0011 on TARGET dev', () => {
       p_email_state: 'pending',
     });
     expect(c.error).toBeNull();
-    const on = await svc.rpc('svc_update_profile', {
-      p_user: userId,
-      p_email_state: 'verified',
-      p_review_required: true,
-    });
-    expect((on.data as { review_required_at: string | null }).review_required_at).not.toBeNull();
+    // the review flag parameter no longer exists (P-SEC-1 discontinued by ADR 0005)
+    const gone = await svc.rpc('svc_update_profile', { p_user: userId, p_review_required: true });
+    expect(gone.error).not.toBeNull();
     const off = await svc.rpc('svc_update_profile', {
       p_user: userId,
+      p_email_state: 'verified',
       p_phone: '+5531966665544',
-      p_review_required: false,
     });
     const row = off.data as { review_required_at: string | null; phone_e164: string };
     expect(row.review_required_at).toBeNull();
@@ -156,7 +153,7 @@ describe.skipIf(!configured)('migrations 0010/0011 on TARGET dev', () => {
       .single();
     const gid = ins.data!.id as string;
     const visible = async () =>
-      (await anon.from('whatsapp_groups_public').select('id').eq('id', gid)).data?.length;
+      (await svc.from('whatsapp_groups_public').select('id').eq('id', gid)).data?.length;
     expect(await visible()).toBe(1);
     const noAdmin = await svc.rpc('svc_suspend_group', {
       p_id: gid,
@@ -179,7 +176,7 @@ describe.skipIf(!configured)('migrations 0010/0011 on TARGET dev', () => {
     expect((s1.data as { status: string }).status).toBe('suspended');
     expect(await visible()).toBe(0);
     const base = await anon.from('whatsapp_groups').select('id').eq('id', gid);
-    expect(base.data ?? []).toHaveLength(0);
+    expect(base.data).toBeNull(); // 0012: no anon grant at all
     const s2 = await svc.rpc('svc_suspend_group', {
       p_id: gid,
       p_admin: adminId,
@@ -204,7 +201,7 @@ describe.skipIf(!configured)('migrations 0010/0011 on TARGET dev', () => {
       p_reason: 'denúncia',
     });
     expect(typeof s.data).toBe('number');
-    expect((await anon.from('activities_public').select('id').eq('id', id)).data).toHaveLength(0);
+    expect((await svc.from('activities_public').select('id').eq('id', id)).data).toHaveLength(0);
     const rsvp = await svc.rpc('svc_upsert_rsvp', {
       p_activity: id,
       p_user: null,
@@ -328,14 +325,14 @@ describe.skipIf(!configured)('migrations 0010/0011 on TARGET dev', () => {
       p_reason: 'ok q2',
     });
     expect(missing.error?.code).toBe('PT404');
-    // the new column is not part of the anon column grants
+    // 0012: anon has no grant on these tables at all
     const leak = await anon.from('activities').select('status_before_suspension').limit(1);
     expect(leak.error).not.toBeNull();
     const leakG = await anon.from('whatsapp_groups').select('status_before_suspension').limit(1);
     expect(leakG.error).not.toBeNull();
   });
 
-  it('0011 QA2-03: reject returns the territory; QA2-01: p_email_contact re-syncs the profile', async () => {
+  it('0011 QA2-03: reject returns the territory; p_email_contact re-syncs the profile', async () => {
     const p = (await proposal(null, 'rej')).data as { id: string };
     const rej = await svc.rpc('svc_reject_group_proposal', {
       p_id: p.id,

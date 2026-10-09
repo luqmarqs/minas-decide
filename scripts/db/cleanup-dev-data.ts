@@ -1,27 +1,38 @@
 /**
  * Removes TEST data from the TARGET dev project (never the SOURCE, never production).
  *
- *   APP_ENV=local npx tsx scripts/db/cleanup-dev-data.ts            # dry run (default)
- *   APP_ENV=local npx tsx scripts/db/cleanup-dev-data.ts --yes      # executes
+ *   APP_ENV=local npx tsx scripts/db/cleanup-dev-data.ts              # dry run (default)
+ *   APP_ENV=local npx tsx scripts/db/cleanup-dev-data.ts --yes        # executes
+ *   APP_ENV=local npx tsx scripts/db/cleanup-dev-data.ts --yes --all  # + wipe ALL identities
  *
- * Targets:
- *   - Auth users whose e-mail matches `fe2-*@…`, `*@example.org`, `mm-qa*`, `qa-*`
- *     (cascade: profiles, admins, activities they created, their RSVPs);
+ * Targets (default):
+ *   - Clerk users (ADR 0005) whose e-mails all match `fe2-*@…`, `*@example.org`, `mm-qa*`,
+ *     `qa-*`: their DB rows are erased with `svc_erase_user_data` (RSVPs, activities, profile,
+ *     admin row) and the Clerk user is deleted;
+ *   - legacy Supabase Auth users with the same patterns (before 0012 the FK cascade removes
+ *     profiles, admins, activities and RSVPs);
  *   - group proposals whose proposer e-mail matches the same patterns (audited erasure via
- *     svc_erase_group_proposals) and the groups created from them / by those users;
+ *     svc_erase_group_proposals) and the groups created from them;
  *   - sandbox territories `mg-98*` / `mg-99*` (cascade: groups, proposals, activities, RSVPs).
- * Keeps: `admin.dev@minasemmovimento.local`, `audit_events`, `abuse_events`.
+ * `--all` (BE-5, migration to Clerk): additionally deletes EVERY legacy Supabase Auth user,
+ * EVERY profile/admin/activity/session RSVP (`svc_dev_wipe_identities` after 0012; before it,
+ * the auth.users cascade + a direct delete of activities) and EVERY group proposal. Clerk users
+ * that are not test users are kept (the owner's admin row is re-created by
+ * scripts/db/bootstrap-admin.ts). Keeps `audit_events`, `abuse_events`, groups that did not
+ * come from a test proposal and the territories.
  *
- * Secrets come only from `.dev.vars` (service role over HTTPS); nothing secret is passed in
- * argv and no e-mail/PII is printed — only counts.
+ * Secrets come only from `.dev.vars` (service role / Clerk dev secret over HTTPS); nothing
+ * secret is passed in argv and no e-mail/PII/id is printed — only counts.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createClerkClient } from '@clerk/backend';
 import { createClient } from '@supabase/supabase-js';
 import { assertTargetUrl, loadDevVars, requireEnv } from './load-env.ts';
 
 const KEEP = new Set(['admin.dev@minasemmovimento.local']);
 const execute = process.argv.includes('--yes');
+const wipeAll = process.argv.includes('--all');
 
 export function isTestEmail(raw: string | null | undefined): boolean {
   const email = (raw ?? '').trim().toLowerCase();
@@ -41,6 +52,11 @@ function chunks<T>(list: T[], size = 100): T[][] {
   return out;
 }
 
+/** PostgREST "function not found" (svc_* created by a migration not applied yet). */
+function missingFunction(err: { code?: string } | null): boolean {
+  return err?.code === 'PGRST202' || err?.code === '42883';
+}
+
 async function main(): Promise<void> {
   if (process.env.APP_ENV !== 'local') {
     throw new Error('Refusing: set APP_ENV=local explicitly (dev TARGET only).');
@@ -55,44 +71,43 @@ async function main(): Promise<void> {
       'Refusing: linked project ref and SUPABASE_TARGET_URL do not match the TARGET.',
     );
   }
+  const clerkKey = process.env.CLERK_SECRET_KEY ?? '';
+  if (clerkKey && !clerkKey.startsWith('sk_test_')) {
+    throw new Error('Refusing: CLERK_SECRET_KEY is not a development (sk_test_) key.');
+  }
   console.log(
-    `cleanup-dev-data: TARGET ${ref.slice(0, 5)}… mode=${execute ? 'EXECUTE' : 'dry-run'}`,
+    `cleanup-dev-data: TARGET ${ref.slice(0, 5)}… mode=${execute ? 'EXECUTE' : 'dry-run'}${wipeAll ? ' +all' : ''}`,
   );
 
   const svc = createClient(url, requireEnv('SUPABASE_TARGET_SERVICE_ROLE_KEY'), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  const clerk = clerkKey ? createClerkClient({ secretKey: clerkKey }) : null;
 
-  // ---------------------------------------------------------------- users
-  const users: { id: string; email: string | null; is_anonymous: boolean }[] = [];
+  // ---------------------------------------------------------------- Clerk users (test only)
+  const clerkTestUsers: string[] = [];
+  let clerkTotal = 0;
+  if (clerk) {
+    for (let offset = 0; ; offset += 100) {
+      const page = await clerk.users.getUserList({ limit: 100, offset });
+      clerkTotal += page.data.length;
+      for (const u of page.data) {
+        const emails = u.emailAddresses.map((e) => e.emailAddress);
+        if (emails.length > 0 && emails.every((e) => isTestEmail(e))) clerkTestUsers.push(u.id);
+      }
+      if (page.data.length < 100) break;
+    }
+  }
+
+  // ---------------------------------------------------------------- legacy Supabase Auth users
+  const legacyUsers: { id: string; email: string | null }[] = [];
   for (let page = 1; ; page++) {
     const { data, error } = await svc.auth.admin.listUsers({ page, perPage: 1000 });
     if (error) throw new Error(`listUsers: ${error.code ?? error.status}`);
-    users.push(
-      ...data.users.map((u) => ({
-        id: u.id,
-        email: u.email ?? null,
-        is_anonymous: u.is_anonymous === true,
-      })),
-    );
+    legacyUsers.push(...data.users.map((u) => ({ id: u.id, email: u.email ?? null })));
     if (data.users.length < 1000) break;
   }
-  const targetUsers = users.filter((u) => isTestEmail(u.email)).map((u) => u.id);
-  const anonymousNoEmail = users.filter((u) => u.is_anonymous && !u.email).length;
-
-  let profiles = 0;
-  for (const id of targetUsers) {
-    const r = await svc.rpc('svc_get_profile', { p_user: id });
-    if (r.data) profiles++;
-  }
-  let userActivities = 0;
-  for (const part of chunks(targetUsers)) {
-    const r = await svc
-      .from('activities')
-      .select('id', { count: 'exact', head: true })
-      .in('creator_user_id', part);
-    userActivities += r.count ?? 0;
-  }
+  const legacyTargets = legacyUsers.filter((u) => wipeAll || isTestEmail(u.email)).map((u) => u.id);
 
   // ---------------------------------------------------------------- proposals
   type P = { id: string; proposer_email: string; group_id: string | null; created_at: string };
@@ -112,18 +127,15 @@ async function main(): Promise<void> {
     const last = page[page.length - 1]!;
     cursor = { at: last.created_at, id: last.id };
   }
-  const targetProposals = proposals.filter((p) => isTestEmail(p.proposer_email));
-  const proposalIds = targetProposals.map((p) => p.id);
+  const testProposals = proposals.filter((p) => isTestEmail(p.proposer_email));
+  const proposalIds = (wipeAll ? proposals : testProposals).map((p) => p.id);
 
+  // groups are removed only when they came from a TEST proposal (public records otherwise)
   const groupIds = new Set<string>(
-    targetProposals.map((p) => p.group_id).filter((g): g is string => Boolean(g)),
+    testProposals.map((p) => p.group_id).filter((g): g is string => Boolean(g)),
   );
-  for (const part of chunks(proposalIds)) {
+  for (const part of chunks(testProposals.map((p) => p.id))) {
     const r = await svc.from('whatsapp_groups').select('id').in('source_proposal_id', part);
-    for (const g of r.data ?? []) groupIds.add(g.id as string);
-  }
-  for (const part of chunks(targetUsers)) {
-    const r = await svc.from('whatsapp_groups').select('id').in('created_by', part);
     for (const g of r.data ?? []) groupIds.add(g.id as string);
   }
 
@@ -134,38 +146,27 @@ async function main(): Promise<void> {
     .or('id.like.mg-98*,id.like.mg-99*');
   if (sandbox.error) throw new Error(`territories: ${sandbox.error.code}`);
   const sandboxIds = (sandbox.data ?? []).map((t) => t.id as string);
-  let sandboxActivities = 0;
-  let sandboxGroups = 0;
-  for (const part of chunks(sandboxIds)) {
-    sandboxActivities +=
-      (
-        await svc
-          .from('activities')
-          .select('id', { count: 'exact', head: true })
-          .in('territory_id', part)
-      ).count ?? 0;
-    sandboxGroups +=
-      (
-        await svc
-          .from('whatsapp_groups')
-          .select('id', { count: 'exact', head: true })
-          .in('territory_id', part)
-      ).count ?? 0;
-  }
 
-  const summary = {
-    auth_users_total: users.length,
-    test_users: targetUsers.length,
-    test_profiles: profiles,
-    activities_by_test_users: userActivities,
-    test_proposals: proposalIds.length,
-    groups_linked_to_test_data: groupIds.size,
-    sandbox_territories: sandboxIds.length,
-    sandbox_activities: sandboxActivities,
-    sandbox_groups: sandboxGroups,
-    anonymous_users_without_email_kept: anonymousNoEmail,
-  };
-  console.log(JSON.stringify(summary, null, 2));
+  const activitiesTotal =
+    (await svc.from('activities').select('id', { count: 'exact', head: true })).count ?? 0;
+
+  console.log(
+    JSON.stringify(
+      {
+        clerk_users_total: clerkTotal,
+        clerk_test_users: clerkTestUsers.length,
+        legacy_auth_users_total: legacyUsers.length,
+        legacy_auth_users_targeted: legacyTargets.length,
+        activities_total: activitiesTotal,
+        proposals_total: proposals.length,
+        proposals_targeted: proposalIds.length,
+        groups_linked_to_test_proposals: groupIds.size,
+        sandbox_territories: sandboxIds.length,
+      },
+      null,
+      2,
+    ),
+  );
   if (!execute) {
     console.log('dry-run: nothing deleted. Re-run with --yes to execute.');
     return;
@@ -187,10 +188,40 @@ async function main(): Promise<void> {
     if (r.error) throw new Error(`erase proposals: ${r.error.code}`);
     erasedProposals += Number(r.data ?? 0);
   }
-  let deletedUsers = 0;
-  for (const id of targetUsers) {
+  let deletedClerkUsers = 0;
+  if (clerk) {
+    for (const id of clerkTestUsers) {
+      const r = await svc.rpc('svc_erase_user_data', {
+        p_user: id,
+        p_request_id: 'cleanup-dev-data',
+      });
+      if (r.error && !missingFunction(r.error)) throw new Error(`erase user: ${r.error.code}`);
+      try {
+        await clerk.users.deleteUser(id);
+        deletedClerkUsers++;
+      } catch {
+        // already gone
+      }
+    }
+  }
+  let deletedLegacy = 0;
+  for (const id of legacyTargets) {
     const r = await svc.auth.admin.deleteUser(id);
-    if (!r.error) deletedUsers++;
+    if (!r.error) deletedLegacy++;
+  }
+  let wiped: unknown = 'skipped';
+  if (wipeAll) {
+    const r = await svc.rpc('svc_dev_wipe_identities', { p_request_id: 'cleanup-dev-data' });
+    if (r.error && !missingFunction(r.error)) throw new Error(`wipe: ${r.error.code}`);
+    if (r.error) {
+      // Before 0012: profiles/admins/RSVPs cascaded from auth.users (deleted above); remove
+      // any activity left so the 0012 guard passes.
+      const d = await svc.from('activities').delete({ count: 'exact' }).not('id', 'is', null);
+      if (d.error) throw new Error(`delete activities: ${d.error.code}`);
+      wiped = { pre_0012_activities_deleted: d.count ?? 0 };
+    } else {
+      wiped = r.data;
+    }
   }
   // neighborhoods first (parent FK is RESTRICT), then municipalities
   const children = (sandbox.data ?? []).filter((t) => t.parent_id).map((t) => t.id as string);
@@ -208,7 +239,9 @@ async function main(): Promise<void> {
       {
         deleted_groups: deletedGroups,
         erased_proposals: erasedProposals,
-        deleted_users: deletedUsers,
+        deleted_clerk_test_users: deletedClerkUsers,
+        deleted_legacy_auth_users: deletedLegacy,
+        wiped_identities: wiped,
         deleted_sandbox_territories: deletedTerritories,
       },
       null,
