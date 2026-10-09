@@ -405,3 +405,23 @@ A seção 6 deste relatório (sessão provisória do Supabase Auth, magic link, 
 
 **Pendências que ficam:** criar o webhook no painel do Clerk (`user.deleted` → `https://<host>/api/v1/webhooks/clerk`) e `wrangler secret put CLERK_WEBHOOK_SIGNING_SECRET --env staging` (`STAGING_PLAYBOOK.md` §1c); produção precisa de `CLERK_ISSUER` da instância `live`; perfis órfãos sem usuário no Clerk e sem atividade não são alcançados pela limpeza de dev (documentado); `DATA_DICTIONARY.md` atualizado para a 0013.
 
+---
+
+# ADENDO — RODADA 4d: CLERK FORA DO CAMINHO CRÍTICO (2026-10-09)
+
+**Motivo:** a meta de LCP ≤ 3 s no celular não foi atingida na rodada 4b porque o `@clerk/clerk-react` entrou no chunk principal e o `clerk-js` era baixado antes da primeira pintura em todas as páginas. **Commit:** `fa7195c`. **Staging:** redeployado (versão `b5fe27f3…`).
+
+| Medida (home, mobile) | Antes | Depois |
+|---|---|---|
+| Chunk principal (`index-*.js`) | 491,7 KB (gzip 150,7) | **410,7 KB (gzip 130,1)**; `ClerkRoot` em chunk próprio de 83,1 KB (gzip 21,7) |
+| Lighthouse LCP (CPU 4×, 3 rodadas, estático) | 2,9 / 4,2 / 4,4 s | **2,9 / 2,9 / 2,9 s** |
+| Lighthouse desempenho | 84 / 74 / 71 | **89 / 88 / 87** |
+| TBT | 390–450 ms | 240–290 ms |
+| 1ª requisição ao Clerk (Pixel 7, sem sessão) | 399 ms, antes do FCP (696 ms) | 1.803 ms, depois do idle (FCP 752 ms) |
+
+**Como:** o `ClerkProvider` passou para `src/app/ClerkRoot.tsx`, montado **ao lado** do app (não em volta), por import dinâmico; a sessão vive num store (`useSyncExternalStore`) alimentado por uma ponte dentro do chunk, então carregar o Clerk depois não remonta a página (mapa e texto digitado permanecem — testado). O chunk é pedido na hora em rotas de sessão (`/entrar`, `/participar`, `/criar-atividade`, `/minhas-atividades`, `/propor-grupo`, `/conta*`, `/admin*`) ou quando há indício de sessão (cookie `__client_uat` > 0 ou flag booleana própria, sem token); fora disso, só após o idle. Formulários de código por e-mail esperam o Clerk ficar pronto (timeout de 20 s, mensagem genérica, nunca sucesso falso).
+
+**Validação:** `npm run ci` **493/493** (8 testes novos), isolamento OK; e2e local **40 passam** com 3 flakes de carga nos testes antigos da home (passam isolados 16/16 e 30/30; folga de tempo adicionada); contra o staging: **35/35** (mobile, rodada 3, cadastro, home); probe no staging dos fluxos entrar/cadastrar: **0 violações de CSP**, Clerk carregado sob demanda e `/v1/client/sign_ins` alcançado.
+
+**Ressalvas:** pessoa com sessão mas sem indício (cookies e armazenamento apagados) vê "Entrar" numa página pública até o idle; nas rotas de sessão o estado é `loading`, nada é negado por engano. O chunk principal ainda está ~15 KB acima do valor anterior ao Clerk por outras mudanças da rodada (não investigado). Login real ponta a ponta com código por e-mail continua **pendente do proprietário**.
+
