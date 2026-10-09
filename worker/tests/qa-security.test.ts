@@ -158,22 +158,13 @@ describe('QA-1 findings (it.fails = vulnerable today; it = fixed, kept as regres
 });
 
 describe('QA-1 controls (verified OK)', () => {
-  it('admin with aal1 is denied outside local; MFA bypass only with APP_ENV=local', async () => {
-    const s = setup({ APP_ENV: 'staging' });
-    const a = s.users.admin('aal1');
-    expect((await s.request('/api/v1/admin/queue?kind=groups', { token: a.token })).status).toBe(
-      403,
-    );
-    const p = setup({ APP_ENV: 'production' });
-    const c = p.users.admin('aal1');
-    expect((await p.request('/api/v1/admin/queue?kind=groups', { token: c.token })).status).toBe(
-      403,
-    );
-    const l = setup({ APP_ENV: 'local' });
-    const b = l.users.admin('aal1');
-    expect((await l.request('/api/v1/admin/queue?kind=groups', { token: b.token })).status).toBe(
-      200,
-    );
+  it('D35: admin with aal1 is accepted in every APP_ENV (MFA not required)', async () => {
+    for (const APP_ENV of ['local', 'staging', 'production']) {
+      const s = setup({ APP_ENV });
+      const a = s.users.admin('aal1');
+      const r = await s.request('/api/v1/admin/queue?kind=groups', { token: a.token });
+      expect([APP_ENV, r.status]).toEqual([APP_ENV, 200]);
+    }
   });
 
   it('non-admin verified user and anonymous session are denied on admin routes', async () => {

@@ -141,7 +141,7 @@ activities.post(
   },
 );
 
-/** Loads an activity the caller may manage: its author (verified organizer) or an admin with MFA. */
+/** Loads an activity the caller may manage: its author (verified organizer) or an admin (D35: no MFA). */
 async function loadManageable(
   c: Context<AppBindings>,
   user: AuthUser,

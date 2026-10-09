@@ -1,6 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import type { AppBindings, AuthUser } from '../env.ts';
-import { isLocal } from '../env.ts';
 import { fail } from '../errors.ts';
 import { clientIp } from '../http.ts';
 import { subjectHash } from './rate-limit.ts';
@@ -80,36 +79,16 @@ export const requireOrganizer: MiddlewareHandler<AppBindings> = async (c, next) 
 };
 
 /**
- * Returns true when the user may act as admin: admins table + aal2 + (outside local) at least
- * one VERIFIED TOTP factor confirmed through the Auth admin API (QA2-12; cached per request).
- * APP_ENV=local keeps the explicit, logged MFA bypass.
+ * Returns true when the user may act as admin: permanent account, confirmed e-mail and listed
+ * in app_private.admins. MFA is not required (D35) in any APP_ENV.
  */
 export async function isAdminWithMfa(c: Context<AppBindings>, user: AuthUser): Promise<boolean> {
-  if (user.is_anonymous) return false;
-  if (!(await c.get('deps').repo.isAdmin(user.id))) return false;
-  if (isLocal(c.env)) {
-    if (user.aal === 'aal2') return true;
-    // Explicit, logged bypass. APP_ENV=local only — impossible in staging/production.
-    console.warn(
-      JSON.stringify({
-        level: 'warn',
-        event: 'ADMIN_MFA_BYPASS_LOCAL',
-        request_id: c.get('requestId'),
-      }),
-    );
-    return true;
-  }
-  if (user.aal !== 'aal2') return false;
-  let totp = c.get('adminTotpVerified');
-  if (totp === undefined) {
-    try {
-      totp = await c.get('deps').auth.hasVerifiedTotp(user.id);
-    } catch {
-      totp = false; // fail closed
-    }
-    c.set('adminTotpVerified', totp);
-  }
-  return totp;
+  // D35 (owner decision, 2026-10-09): MFA is no longer required for admins. An admin is a
+  // permanent (non-anonymous) account with a confirmed e-mail listed in app_private.admins.
+  // The function keeps its name so call sites and tests stay stable.
+  if (user.is_anonymous || user.jwt_is_anonymous) return false;
+  if (!user.email_confirmed) return false;
+  return c.get('deps').repo.isAdmin(user.id);
 }
 
 export const requireAdmin: MiddlewareHandler<AppBindings> = async (c, next) => {

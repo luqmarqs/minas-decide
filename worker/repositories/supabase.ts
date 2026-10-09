@@ -618,12 +618,6 @@ export class SupabaseAuthGateway implements AuthGateway {
     return !error;
   }
 
-  async hasVerifiedTotp(userId: string): Promise<boolean> {
-    const { data, error } = await serviceClient(this.env).auth.admin.mfa.listFactors({ userId });
-    if (error || !data) return false; // fail closed
-    return data.factors.some((f) => f.factor_type === 'totp' && f.status === 'verified');
-  }
-
   async sendMagicLink(
     email: string,
     redirectTo: string,

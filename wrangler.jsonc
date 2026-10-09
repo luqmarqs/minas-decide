@@ -4,7 +4,7 @@
   // NOTE: no SOURCE (legacy electoral Supabase) variable may ever appear here.
   //
   // SAFE-BY-DEFAULT: top-level vars are the PRODUCTION posture (writes suspended,
-  // MFA required, real Turnstile required). Local development must use
+  // admin sem MFA (D35), real Turnstile required). Local development must use
   // `wrangler dev --env local` (npm run dev:worker). Staging uses `--env staging`.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "minas-em-movimento",

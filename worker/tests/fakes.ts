@@ -576,9 +576,6 @@ export class FakeAuth implements AuthGateway {
   magicLinks: string[] = [];
   magicLinkOk = true;
   linkOk = true;
-  /** user ids with a VERIFIED TOTP factor (QA2-12) */
-  totpVerified = new Set<string>();
-  totpChecks = 0;
 
   constructor(private readonly repo: FakeRepo) {}
 
@@ -613,10 +610,6 @@ export class FakeAuth implements AuthGateway {
   async signOutOthers(token: string) {
     this.signedOutOthers.push(token);
     return true;
-  }
-  async hasVerifiedTotp(userId: string) {
-    this.totpChecks += 1;
-    return this.totpVerified.has(userId);
   }
   async sendMagicLink(email: string) {
     this.magicLinks.push(email);
@@ -753,18 +746,26 @@ export function setup(envOver: Partial<Env> = {}, opts: { edgeCache?: boolean } 
         user: auth.add(token, { id, email, email_confirmed: true, amr_methods: ['otp'] }),
       };
     },
-    /** `totp`: has a verified TOTP factor (default: only when aal2, as in GoTrue). */
-    admin(aal: 'aal1' | 'aal2' = 'aal2', id = repo.uuid(), totp = aal === 'aal2') {
+    /**
+     * Admin (D35: admins table + confirmed e-mail; MFA not required). `aal` only records the
+     * session assurance level; `opts` builds negative cases (anonymous / unconfirmed e-mail).
+     */
+    admin(
+      aal: 'aal1' | 'aal2' = 'aal1',
+      id = repo.uuid(),
+      opts: { emailConfirmed?: boolean; anonymous?: boolean } = {},
+    ) {
       const token = `tok-admin-${++tokenSeq}-padding-padding`;
       repo.admins.add(id);
       repo.verified.add(id);
-      if (totp) auth.totpVerified.add(id);
       return {
         token,
         user: auth.add(token, {
           id,
           email: `admin${tokenSeq}@example.org`,
-          email_confirmed: true,
+          email_confirmed: opts.emailConfirmed ?? true,
+          is_anonymous: opts.anonymous ?? false,
+          jwt_is_anonymous: opts.anonymous ?? false,
           aal,
         }),
       };

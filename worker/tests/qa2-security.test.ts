@@ -270,10 +270,10 @@ describe('QA-2 idempotency / origin / admin / RSVP', () => {
     }
   });
 
-  it('control: admin aal1 denied on every admin route in staging/production', async () => {
+  it('control (D35): unconfirmed-e-mail admin denied on every admin route in staging/production', async () => {
     for (const APP_ENV of ['staging', 'production']) {
       const s = setup({ APP_ENV, WRITES_ENABLED: 'true' });
-      const t = s.users.admin('aal1').token;
+      const t = s.users.admin('aal1', undefined, { emailConfirmed: false }).token;
       const id = '00000000-0000-4000-8000-000000000001';
       const routes: [string, string][] = [
         ['GET', '/api/v1/admin/queue'],

@@ -13,7 +13,7 @@ Decisões e desvios: `docs/DECISIONS.md` e `docs/adr/`.
 - Dados pessoais (responsáveis de grupo, e-mail/telefone de proponente, perfis) **jamais** em resposta pública. Projeções públicas estão em `shared/contracts/`.
 - Turnstile validado no servidor; chaves de teste oficiais da Cloudflare em local/dev (rotuladas).
 - "Eu vou" sem login, idempotente por cookie assinado (HMAC) + unique no banco; é **intenção**, não presença.
-- Sessão provisória (Supabase anonymous sign-in) ≠ e-mail verificado. Criar atividade exige `email_verified` real do Auth, nunca campo editável.
+- Autenticação = **Clerk** (ADR 0005): cadastro com código por e-mail (verificado antes da sessão), login sem senha, token verificado no Worker; Supabase é só banco (service role). Admin = `app_private.admins` + e-mail verificado; MFA opcional (D35, risco aceito pelo proprietário).
 - Sem deploy de produção, sem domínio, sem contratação de serviço sem autorização humana.
 
 ## Stack

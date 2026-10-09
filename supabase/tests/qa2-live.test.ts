@@ -357,7 +357,7 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
       type: 'magiclink',
       token_hash: l.data.properties?.hashed_token ?? '',
     });
-    const adminTok = av.data.session!.access_token; // aal1: local MFA bypass applies
+    const adminTok = av.data.session!.access_token; // aal1: MFA not required (D35)
 
     const muniUrl = `/groups?territory_id=${muni}`;
     const hoodUrl = `/groups?territory_id=${encodeURIComponent(hood)}`;
@@ -433,8 +433,12 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
       method: 'POST',
       token: adminTok,
     });
-    expect(rv.res.status).toBe(403); // aal1 refused even in local
-    expect(rv.text).not.toContain('qa2-prop');
+    // D35: an aal1 admin may reveal the contact. The 'proposal.reveal_contact' audit row is
+    // written inside svc_reveal_proposal_contact (same transaction, 0010), and app_private is
+    // not exposed through PostgREST, so a 200 here implies the audited read.
+    expect(rv.res.status).toBe(200);
+    expect(rv.res.headers.get('cache-control')).toBe('no-store');
+    expect(rv.text).toContain(`qa2-prop+${tag}@example.org`);
   });
 
   it('Q07 errors never leak SQL/stack', async () => {

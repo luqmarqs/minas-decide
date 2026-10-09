@@ -373,36 +373,31 @@ describe('QA2-09: unsuspend restores the previous state', () => {
   });
 });
 
-describe('QA2-12: admin outside local needs a VERIFIED TOTP factor', () => {
-  for (const APP_ENV of ['staging', 'production']) {
-    it(`${APP_ENV}: aal2 without verified factor -> 403; with factor -> 200; aal1 with factor -> 403`, async () => {
+describe('D35 (replaces QA2-12): admin = admins table + confirmed e-mail, MFA not required', () => {
+  for (const APP_ENV of ['local', 'staging', 'production']) {
+    it(`${APP_ENV}: admin aal1/aal2 -> 200; non-admin, anonymous, unconfirmed e-mail -> 403`, async () => {
       const s = setup({ APP_ENV, WRITES_ENABLED: 'true' });
-      const noFactor = s.users.admin('aal2', undefined, false);
-      expect((await s.request('/api/v1/admin/queue', { token: noFactor.token })).status).toBe(403);
-      const withFactor = s.users.admin('aal2');
-      const ok = await s.request('/api/v1/admin/queue', { token: withFactor.token });
-      expect(ok.status).toBe(200);
-      const aal1 = s.users.admin('aal1', undefined, true);
-      expect((await s.request('/api/v1/admin/queue', { token: aal1.token })).status).toBe(403);
+      const q = (token: string) => s.request('/api/v1/admin/queue', { token });
+      expect((await q(s.users.admin('aal1').token)).status).toBe(200);
+      expect((await q(s.users.admin('aal2').token)).status).toBe(200);
+      expect((await q(s.users.verified().token)).status).toBe(403);
+      expect((await q(s.users.anonymous().token)).status).toBe(403);
+      // listed in app_private.admins, but the session is anonymous / e-mail not confirmed
+      expect((await q(s.users.admin('aal1', undefined, { anonymous: true }).token)).status).toBe(
+        403,
+      );
+      expect(
+        (await q(s.users.admin('aal1', undefined, { emailConfirmed: false }).token)).status,
+      ).toBe(403);
+      expect((await s.request('/api/v1/admin/queue')).status).toBe(401);
     });
   }
 
-  it('factor lookup is done once per request and fails closed on error', async () => {
-    const s = setup({ APP_ENV: 'staging', WRITES_ENABLED: 'true' });
-    const a = s.users.admin('aal2');
-    const before = s.auth.totpChecks;
+  it('a removed admin (row deleted from admins) is denied on the next request', async () => {
+    const s = setup({ APP_ENV: 'production', WRITES_ENABLED: 'true' });
+    const a = s.users.admin('aal1');
     expect((await s.request('/api/v1/admin/queue', { token: a.token })).status).toBe(200);
-    expect(s.auth.totpChecks - before).toBe(1);
-    s.auth.hasVerifiedTotp = async () => {
-      throw new Error('auth down');
-    };
+    s.repo.admins.delete(a.user.id);
     expect((await s.request('/api/v1/admin/queue', { token: a.token })).status).toBe(403);
-  });
-
-  it('local keeps the logged bypass (aal1, no factor) and never asks the factor API', async () => {
-    const s = setup({ APP_ENV: 'local' });
-    const a = s.users.admin('aal1', undefined, false);
-    expect((await s.request('/api/v1/admin/queue', { token: a.token })).status).toBe(200);
-    expect(s.auth.totpChecks).toBe(0);
   });
 });

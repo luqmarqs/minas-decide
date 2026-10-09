@@ -360,8 +360,6 @@ export interface AuthGateway {
   promoteVerified(userId: string, email: string): Promise<boolean>;
   /** Revoke every other session (refresh token) of the token's user. */
   signOutOthers(accessToken: string): Promise<boolean>;
-  /** QA2-12: true when the user has at least one VERIFIED TOTP factor (Auth admin API). */
-  hasVerifiedTotp(userId: string): Promise<boolean>;
   /** Magic link for an EXISTING user only (shouldCreateUser: false). Result is never shown verbatim. */
   sendMagicLink(email: string, redirectTo: string): Promise<{ ok: boolean; code: string | null }>;
 }

@@ -372,8 +372,8 @@ describe('I03: RSVP_DEVICE_SECRET validated on first request', () => {
   });
 });
 
-describe('suspension (admin, aal2, audited)', () => {
-  it('group: reason required, non-admin/aal1 denied, disappears publicly, unsuspend -> active', async () => {
+describe('suspension (admin, audited)', () => {
+  it('group: reason required, non-admin/anonymous denied, disappears publicly, unsuspend -> active', async () => {
     const s = setup();
     const g = s.repo.addGroup('mg-3140001');
     const path = `/api/v1/admin/groups/${g.id}/suspend`;
@@ -392,7 +392,7 @@ describe('suspension (admin, aal2, audited)', () => {
       (
         await s.request(path, {
           method: 'POST',
-          token: s.users.admin('aal1').token,
+          token: s.users.anonymous().token,
           json: { reason: 'abuso' },
         })
       ).status,
@@ -474,7 +474,7 @@ describe('audited contact reveal', () => {
     return { s, id: String(p.data?.id) };
   }
 
-  it('aal2 admin gets full contact; the reveal is audited', async () => {
+  it('admin gets full contact; the reveal is audited', async () => {
     const { s, id } = await withProposal();
     const admin = s.users.admin('aal2');
     const r = await s.request(`/api/v1/admin/group-proposals/${id}/reveal-contact`, {
@@ -498,17 +498,47 @@ describe('audited contact reveal', () => {
     ).toBe(true);
   });
 
-  it('aal1 admin is refused even in local (no MFA bypass); non-admin 403; unknown 404', async () => {
+  it('D35: aal1 admin gets the contact (audited) in staging/production too', async () => {
+    for (const APP_ENV of ['staging', 'production']) {
+      const s = setup({ APP_ENV, WRITES_ENABLED: 'true' });
+      const p = await body(
+        await s.request('/api/v1/groups/proposals', { method: 'POST', json: proposal() }),
+      );
+      const id = String(p.data?.id);
+      const admin = s.users.admin('aal1');
+      const r = await s.request(`/api/v1/admin/group-proposals/${id}/reveal-contact`, {
+        method: 'POST',
+        token: admin.token,
+      });
+      expect([APP_ENV, r.status]).toEqual([APP_ENV, 200]);
+      expect(AdminRevealContactResponse.parse((await body(r)).data).proposer_email).toBe(
+        'proponente@example.org',
+      );
+      expect(
+        s.repo.audit.some(
+          (e) =>
+            e.action === 'proposal.reveal_contact' &&
+            e.entity_id === id &&
+            e.actor === admin.user.id,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('non-admin, anonymous and unconfirmed-e-mail admin -> 403 without leak or audit; unknown 404', async () => {
     const { s, id } = await withProposal();
     const path = `/api/v1/admin/group-proposals/${id}/reveal-contact`;
-    const aal1 = await s.request(path, { method: 'POST', token: s.users.admin('aal1').token });
-    expect(aal1.status).toBe(403);
-    expect(JSON.stringify(await body(aal1))).not.toContain('proponente@');
+    expect((await s.request(path, { method: 'POST' })).status).toBe(401);
+    for (const token of [
+      s.users.verified().token,
+      s.users.anonymous().token,
+      s.users.admin('aal1', undefined, { emailConfirmed: false }).token,
+    ]) {
+      const r = await s.request(path, { method: 'POST', token });
+      expect(r.status).toBe(403);
+      expect(JSON.stringify(await body(r))).not.toContain('proponente@');
+    }
     expect(s.repo.audit.some((e) => e.action === 'proposal.reveal_contact')).toBe(false);
-    expect(s.repo.abuse.some((e) => e.event_type === 'reveal_denied_aal')).toBe(true);
-    expect(
-      (await s.request(path, { method: 'POST', token: s.users.verified().token })).status,
-    ).toBe(403);
     expect(
       (
         await s.request(

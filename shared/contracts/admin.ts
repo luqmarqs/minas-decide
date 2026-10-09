@@ -78,7 +78,7 @@ export const AdminQueueResponse = z.object({
 });
 export type AdminQueueResponse = z.infer<typeof AdminQueueResponse>;
 
-/** POST /admin/group-proposals/:id/reveal-contact — audited, aal2 only. */
+/** POST /admin/group-proposals/:id/reveal-contact — admin only, audited (no aal2 since D35). */
 export const AdminRevealContactResponse = z.object({
   proposal_id: z.string().uuid(),
   proposer_email: z.string(),

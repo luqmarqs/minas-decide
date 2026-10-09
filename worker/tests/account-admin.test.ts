@@ -314,13 +314,13 @@ describe('admin (T22, T15, T28 logic)', () => {
     expect(JSON.stringify(repo.abuse)).not.toContain(v.user.id);
   });
 
-  it('T15: admin without MFA (aal1) -> 403 outside local; allowed with explicit local bypass', async () => {
-    const remote = setup({ APP_ENV: 'staging' });
-    const a1 = remote.users.admin('aal1');
-    expect((await remote.request('/api/v1/admin/queue', { token: a1.token })).status).toBe(403);
-    const local = setup({ APP_ENV: 'local' });
-    const a2 = local.users.admin('aal1');
-    expect((await local.request('/api/v1/admin/queue', { token: a2.token })).status).toBe(200);
+  it('T15 (D35): admin without MFA (aal1) is accepted in local, staging and production', async () => {
+    for (const APP_ENV of ['local', 'staging', 'production']) {
+      const s = setup({ APP_ENV });
+      const a = s.users.admin('aal1');
+      const r = await s.request('/api/v1/admin/queue', { token: a.token });
+      expect([APP_ENV, r.status]).toEqual([APP_ENV, 200]);
+    }
   });
 
   it('queue masks proposer contact; approve twice -> second 409 (no duplicate group)', async () => {

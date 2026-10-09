@@ -13,17 +13,16 @@ import { normalizeBrazilPhone } from '../../shared/schemas/phone.ts';
 import { sanitizePlainText } from '../../shared/schemas/sanitize.ts';
 import type { AppBindings } from '../env.ts';
 import { fail } from '../errors.ts';
-import { clientIp, ok, parse, parseBody, readJson, uuidParam } from '../http.ts';
+import { ok, parse, parseBody, readJson, uuidParam } from '../http.ts';
 import { requireAdmin } from '../middleware/auth.ts';
 import { activityPaths, noStore, purgeGroups, purgePublic } from '../middleware/cache.ts';
-import { subjectHash } from '../middleware/rate-limit.ts';
 import { decodeCursor, encodeCursor } from '../services/crypto.ts';
 import { toAdminActivity, toAdminProposal } from '../services/projections.ts';
 import type { Cursor, GroupPatch } from '../repositories/types.ts';
 
 export const admin = new Hono<AppBindings>();
 
-// Every admin route: no-store + admins table + MFA (aal2). Denials are logged (T22).
+// Every admin route: no-store + admins table (MFA not required — D35). Denials are logged (T22).
 admin.use('/admin/*', noStore, requireAdmin);
 
 function cursorOrThrow(raw: string | undefined): Cursor | null {
@@ -220,25 +219,11 @@ admin.post('/admin/activities/:id/unsuspend', async (c) => {
 const RevealInput = z.object({ reason: z.string().trim().min(3).max(500).optional() });
 
 /**
- * Full proposer e-mail/phone. Requires a REAL aal2 session even with APP_ENV=local (the
- * local MFA bypass of requireAdmin does not apply here). The read and the audit row
- * (`proposal.reveal_contact`, retention `security`) commit in the same transaction.
+ * Full proposer e-mail/phone. Admin only (MFA not required — D35). The read and the audit
+ * row (`proposal.reveal_contact`, retention `security`) commit in the same transaction.
  */
 admin.post('/admin/group-proposals/:id/reveal-contact', async (c) => {
-  const user = c.get('user')!;
-  if (user.aal !== 'aal2') {
-    try {
-      await c.get('deps').repo.recordAbuse({
-        subject_hash: await subjectHash(c.env.RSVP_DEVICE_SECRET, clientIp(c)),
-        route: 'admin',
-        event_type: 'reveal_denied_aal',
-        block_code: 'FORBIDDEN',
-      });
-    } catch {
-      // best effort
-    }
-    throw fail('FORBIDDEN', 'Confirme o segundo fator (MFA) para ver o contato.');
-  }
+  const user = c.get('user')!; // D35: no MFA requirement; the read stays audited
   const id = uuidParam(c);
   const { reason } = RevealInput.parse(await readJson(c, true));
   const r = await c

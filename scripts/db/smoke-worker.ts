@@ -8,8 +8,9 @@
  *
  * Round 2 adds: profile review (P-SEC-1), Origin guard (F14), MG/horizon bounds (F09/F12),
  * proposal re-submission after rejection (F11), suspension of activities/groups and the
- * audited contact reveal, which needs a REAL aal2 session even in local: the smoke enrols a
- * TOTP factor for the throwaway admin and computes the code locally (RFC 6238).
+ * audited contact reveal. D35: admins do not need MFA, so the reveal is exercised with the
+ * plain (aal1) session. TOTP enrolment of the throwaway admin is kept as an OPTIONAL,
+ * non-blocking step (RFC 6238 code computed locally) that only reports what GoTrue does.
  *
  * Uses the Cloudflare TEST Turnstile secret from .dev.vars (always passes) and +tag@example.org
  * addresses (Auth refuses to deliver to them, so the magic link click is simulated with
@@ -278,10 +279,10 @@ async function main() {
     403,
   );
 
-  // admin (local MFA bypass) approves
+  // admin (D35: admins table + confirmed e-mail, no MFA) approves
   await svc.rpc('svc_grant_admin', { p_user: s.user.id });
   const approve = await call('POST', `/admin/activities/${actId}/approve`, { token: orgToken });
-  expectStatus('POST admin/activities/:id/approve (ADMIN_MFA_BYPASS_LOCAL)', approve, 200);
+  expectStatus('POST admin/activities/:id/approve (admin aal1, D35)', approve, 200);
   const pub = await call('GET', `/activities/${actId}`);
   expectStatus(
     'GET activities/:id after approval',
@@ -469,7 +470,7 @@ async function main() {
     200,
   );
 
-  // the queue carries group_id; reveal needs a real aal2 session even in local
+  // the queue carries group_id; reveal works with the aal1 admin session (D35), audited
   const qa = await call('GET', '/admin/queue?kind=groups&status=active&limit=50', {
     token: orgToken,
   });
@@ -477,33 +478,28 @@ async function main() {
   const qItem = qItems.find((x) => x.id === propId);
   expectStatus('GET admin/queue (group_id)', qa, 200, `group_id_ok=${qItem?.group_id === gid}`);
   if (qItem?.group_id !== gid) failures++;
-  expectStatus(
-    'POST reveal-contact with aal1 in local (no bypass)',
-    await call('POST', `/admin/group-proposals/${propId}/reveal-contact`, { token: orgToken }),
-    403,
-  );
-  const enrolled = await device.auth.mfa.enroll({ factorType: 'totp' });
-  if (enrolled.error || !enrolled.data) {
-    failures++;
-    console.log(`FAIL mfa enroll: ${enrolled.error?.code ?? 'no data'}`);
-  } else {
-    const verified = await device.auth.mfa.challengeAndVerify({
-      factorId: enrolled.data.id,
-      code: totp(enrolled.data.totp.secret),
-    });
-    const aal2Token = (await device.auth.getSession()).data.session?.access_token ?? '';
-    console.log(`${verified.error ? 'FAIL' : 'PASS'} mfa TOTP verify -> aal2`);
-    if (verified.error) failures++;
-    const rev = await call('POST', `/admin/group-proposals/${propId}/reveal-contact`, {
-      token: aal2Token,
-      body: { reason: 'smoke validação' },
-    });
-    expectStatus(
-      'POST reveal-contact with aal2',
-      rev,
-      200,
-      `email_ok=${rev.json.data?.proposer_email === email}`,
-    );
+  const rev = await call('POST', `/admin/group-proposals/${propId}/reveal-contact`, {
+    token: orgToken,
+    body: { reason: 'smoke validação' },
+  });
+  const revEmailOk = rev.json.data?.proposer_email === email;
+  expectStatus('POST reveal-contact with aal1 (D35)', rev, 200, `email_ok=${revEmailOk}`);
+  if (rev.status === 200 && !revEmailOk) failures++;
+
+  // OPTIONAL (D35: MFA is not required): try TOTP enrolment and report; never a failure.
+  try {
+    const enrolled = await device.auth.mfa.enroll({ factorType: 'totp' });
+    if (enrolled.error || !enrolled.data) {
+      console.log(`INFO optional mfa enroll: ${enrolled.error?.code ?? 'no data'}`);
+    } else {
+      const verified = await device.auth.mfa.challengeAndVerify({
+        factorId: enrolled.data.id,
+        code: totp(enrolled.data.totp.secret),
+      });
+      console.log(`INFO optional mfa TOTP verify: ${verified.error?.code ?? 'ok (aal2)'}`);
+    }
+  } catch (e) {
+    console.log(`INFO optional mfa step skipped: ${e instanceof Error ? e.name : 'error'}`);
   }
 
   // F11: a rejected proposal re-sent with the same content becomes a new pending one
