@@ -380,3 +380,28 @@ A seção 6 deste relatório (sessão provisória do Supabase Auth, magic link, 
 
 **Ressalvas honestas:** a meta de LCP ≤ 3 s **não foi atingida** — o `clerk-js` entra no bundle inicial (395 → 491 KB) e é baixado no início; o build de controle só com o Clerk já chegava a 4,3 s. Mitigado parcialmente com `preload` da imagem do hero e remoção do `preload` da Bungee Outline; a correção definitiva é carregar o Clerk sob demanda (pendência). Com o mapa rolado sob o cabeçalho fixo, sobra 1 violação `target-size` do botão "Quero participar" (pré-existente). Sem tela cheia `/mapa` (não foi preciso); gestos cooperativos (dois dedos) mantidos para a página continuar rolando. O mapa expõe um evento `mm-test-jump` só para os e2e moverem a câmera (sem dados).
 
+---
+
+# ADENDO — RODADA 4c: AUDITORIA QA-3 DA AUTENTICAÇÃO (CLERK) E CORREÇÕES (2026-10-09)
+
+**Auditoria independente** (agente `qa-security`, só leitura; relatório completo fora do repo). **Veredito:** nenhum bypass de autenticação ou autorização; `verifyToken` real rejeitou `alg:none`, HS256 com a chave pública, RS512, token sem `sub`, `sub` com `org_`, expirado, `azp` estrangeiro/vazio/maiúsculo; staging respondeu 401 genérico sem token/token inválido, 403 a `Origin` maliciosa, 404 sem stack. **Correções:** commit `e9b75ed` (backend), `5a182f5` (CSP), `bc6a181` (fixture do admin); staging redeployado (versão `ee5d2685…`); migration **0013 aplicada no TARGET dev**.
+
+| ID | Sev. | Achado | Correção | Evidência |
+|---|---|---|---|---|
+| QA3-01 | média | toda requisição autenticada consultava a API do Clerk (`getUser`), sem limite nos GET autenticados; 429 do Clerk virava 500 | cache por isolate de 60 s (≤ 500 entradas, LRU; invalidado em `PATCH /me` e no webhook); bucket `account_read` 120/min por IP+usuário em `GET /me`, `GET /my-activities` e `/admin/*`; cadastro e `reveal-contact` sempre consultam o Clerk na hora (cobre QA3-03) | `worker/services/user-cache.ts`, `worker/tests/qa3-clerk.test.ts` |
+| QA3-02 | média | sem webhook `user.deleted`: perfil órfão trava cadastro (409) e `GET /me` (409) de quem assumir o e-mail | `POST /api/v1/webhooks/clerk` com assinatura Svix (`verifyWebhook` do `@clerk/backend`), `user.deleted` → `svc_erase_user_data` + auditoria `system:clerk-webhook`; sem secret → 404 (desativado); `GET /me` passa a responder 200 com `email_sync_conflict: true` e `warn` sem PII | testes com assinatura HMAC real; staging: `POST /webhooks/clerk` → 404 até o secret existir |
+| QA3-04 | baixa | `iss` não verificado; `sub` só precisava começar com `user_` | `iss` obrigatório (`CLERK_ISSUER` ou derivado da publishable key; fora de local/test, ausência = 500 `misconfigured`); `sub` validado pelo regex `ClerkUserId` | `worker/repositories/clerk.ts`; staging com `CLERK_ISSUER` público |
+| QA3-05 | baixa | falha de rede/JWKS virava 401 ("entre novamente") | novo código `SERVICE_UNAVAILABLE` (503, `Retry-After: 5`) para rede/JWKS/429/5xx do Clerk; token inválido continua 401 | `worker/tests/clerk-gateway-outage.test.ts` |
+| QA3-06 | baixa | admin com perfil suspenso continuava admin; organizador suspenso editava `/me` | conta `suspended` nunca é admin (`/me` devolve `is_admin=false`); `PATCH /me` suspensa → 403 | testes do worker |
+| QA3-07 | baixa | mensagens "já tem cadastro"/"não encontramos" permitem enumeração | **aceito** (D38): a API do Clerk já distingue; instância com `enumeration_protection=bulk`, bloqueio após 10 tentativas e captcha | `~/.minas-em-movimento/clerk-config-now.json` |
+| QA3-08 | baixa | CSP com `*.clerk.accounts.dev` e `*.clerk.com` | só o host exato da instância (D39) | probe local dos fluxos entrar/cadastrar: 0 violações; só host exato + `challenges.cloudflare.com` |
+| QA3-09 | baixa | `svc_dev_wipe_identities` ia para qualquer banco que recebesse as migrations | migration 0013 remove a função; limpeza de dev só em `scripts/db/cleanup-dev-data.ts --all` com guardas (`APP_ENV=local`, ref `wnclh…`, chave `sk_test_`) | aplicada; `rls.test.ts` espera `PGRST202` |
+| QA3-10 | média | 2 testes do admin falhavam (fixture com id uuid após o contrato passar a `ClerkUserId`) | fixture corrigida | `src/tests/admin.test.tsx` 9/9 |
+| QA3-11 | info | sem e-mail primário usava o primeiro da lista | e-mail nulo | `worker/repositories/clerk.ts` |
+
+**Validação:** worker + contratos **186/186**; front **235/235**; `test:db` **58/58 ao vivo** (RLS + fluxo Clerk completo contra Worker local: cadastro → `/me` → atividade → RSVP, com usuários de teste criados e apagados); isolamento OK (3.867 arquivos); `check:isolation` e `prettier` OK; `wrangler deploy --dry-run` com o bundle do webhook.
+
+**Decisões do agente registradas:** o webhook é isento de `WRITES_ENABLED` (só apaga dados; o Svix reenviaria por dias); ações de organizador com conflito de e-mail continuam 409 (só `GET /me` deixou de falhar) — **decisão pendente do proprietário** se isso deve mudar. **Janela aceita:** banimento/troca de e-mail no Clerk demora até 60 s para refletir nas rotas com cache; cache e limites são por isolate (best-effort).
+
+**Pendências que ficam:** criar o webhook no painel do Clerk (`user.deleted` → `https://<host>/api/v1/webhooks/clerk`) e `wrangler secret put CLERK_WEBHOOK_SIGNING_SECRET --env staging` (`STAGING_PLAYBOOK.md` §1c); produção precisa de `CLERK_ISSUER` da instância `live`; perfis órfãos sem usuário no Clerk e sem atividade não são alcançados pela limpeza de dev (documentado); `DATA_DICTIONARY.md` atualizado para a 0013.
+
