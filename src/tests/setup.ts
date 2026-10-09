@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
+
+// CI runners are slow: form flows load supabase-js dynamically before submitting.
+// 1 s (default) flakes on GitHub Actions; 8 s keeps assertions meaningful.
+configure({ asyncUtilTimeout: 8000 });
 
 afterEach(() => {
   cleanup();
