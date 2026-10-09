@@ -1,0 +1,26 @@
+# dependencies / build
+node_modules/
+dist/
+.wrangler/
+coverage/
+playwright-report/
+test-results/
+
+# secrets & env (never commit)
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+
+# supabase local state (contains linked project ref/pooler url)
+supabase/.temp/
+supabase/.branches/
+
+# private ETL extracts: NEVER public, NEVER committed
+data/private/
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.log

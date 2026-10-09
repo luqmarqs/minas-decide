@@ -1,0 +1,219 @@
+/*
+ * Minas em Movimento — design tokens (spec §12.11)
+ * Identidade PROVISÓRIA, retematizável: a arte oficial chegará depois. Toda cor,
+ * fonte, espaçamento e duração usados por componentes passa por estes tokens.
+ * Direção: editorial, terroso, contemporâneo. Verde-serra como ação, areia como
+ * superfície, ocre como destaque. Escala de mapa sequencial neutra (não moral).
+ */
+:root {
+  color-scheme: light dark;
+
+  /* ---- superfícies e texto ---- */
+  --color-surface: #f6f3ee;
+  --color-surface-alt: #ece7de;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: rgb(20 19 15 / 0.55);
+  --color-text-primary: #1b1a16;
+  --color-text-secondary: #43413a;
+  --color-text-muted: #6e6b61;
+  --color-text-on-action: #f6f3ee;
+  --color-border: #d8d2c6;
+  --color-border-strong: #b9b1a1;
+
+  /* ---- ação e estados ---- */
+  --color-action-primary: #1f4e3d;
+  --color-action-hover: #173d30;
+  --color-action-active: #112c23;
+  --color-action-soft: #dfe9e3;
+  --color-accent: #c2771a;
+  --color-accent-soft: #f4e3cb;
+  --color-success: #2f7a4f;
+  --color-success-soft: #dcefe3;
+  --color-warning: #a8651a;
+  --color-warning-soft: #f7e7d0;
+  --color-error: #a83a2e;
+  --color-error-soft: #f6dcd8;
+  --color-info: #2f5d8a;
+  --color-info-soft: #dbe6f2;
+  --color-focus: #c2771a;
+  --color-demo: #6b4ea8;
+  --color-demo-soft: #e8e1f5;
+
+  /* ---- mapa (escala sequencial acessível, não moral) ---- */
+  --map-fill-none: #d8d2c6;
+  --map-fill-low: #e9efe8;
+  --map-fill-mid-low: #a8c7b4;
+  --map-fill-mid: #5f9a7c;
+  --map-fill-mid-high: #2f6d53;
+  --map-fill-high: #163e2f;
+  --map-diverging-neg: #b4572f;
+  --map-diverging-zero: #ece7de;
+  --map-diverging-pos: #2f6d53;
+  --map-stroke: #1b1a16;
+  --map-selected: #c2771a;
+  --map-activity: #c2771a;
+  --map-activity-halo: rgb(194 119 26 / 0.25);
+
+  /* ---- tipografia ---- */
+  --font-display:
+    'Fraunces', 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --font-body:
+    'Inter', 'InterVariable', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --text-4xl: 3rem;
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
+  --leading-normal: 1.5;
+  --tracking-display: -0.015em;
+
+  /* ---- espaçamento (4pt) ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --gutter: 1rem;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --touch-target: 44px;
+
+  /* ---- raios e sombras ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-card: 14px;
+  --radius-sheet: 20px;
+  --radius-pill: 999px;
+  --shadow-raised: 0 1px 2px rgb(27 26 22 / 0.06), 0 6px 20px rgb(27 26 22 / 0.08);
+  --shadow-sheet: 0 -8px 32px rgb(27 26 22 / 0.18);
+
+  /* ---- motion (spec §12.13) ---- */
+  --duration-fast: 140ms;
+  --duration-base: 200ms;
+  --duration-panel: 240ms;
+  --duration-sheet: 300ms;
+  --duration-map: 500ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --easing-emphasized: cubic-bezier(0.3, 0, 0, 1);
+  --easing-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ---- camadas ---- */
+  --z-map: 0;
+  --z-panel: 10;
+  --z-header: 20;
+  --z-sheet: 30;
+  --z-dialog: 40;
+  --z-toast: 50;
+
+  /* ---- layout ---- */
+  --header-height: 56px;
+  --panel-width: 400px;
+  --content-max: 1200px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-surface: #14130f;
+    --color-surface-alt: #1e1c17;
+    --color-surface-raised: #262319;
+    --color-surface-overlay: rgb(0 0 0 / 0.6);
+    --color-text-primary: #f1ede5;
+    --color-text-secondary: #cfc9bc;
+    --color-text-muted: #9f998b;
+    --color-text-on-action: #0f1a15;
+    --color-border: #37332a;
+    --color-border-strong: #57513f;
+    --color-action-primary: #8fcba9;
+    --color-action-hover: #a8d8bd;
+    --color-action-active: #c3e4d1;
+    --color-action-soft: #1f3a2d;
+    --color-accent: #e8a24a;
+    --color-accent-soft: #3e2c12;
+    --color-success: #7fcf9b;
+    --color-success-soft: #1d3a2a;
+    --color-warning: #e3a85a;
+    --color-warning-soft: #3d2b12;
+    --color-error: #ef8b7d;
+    --color-error-soft: #431d18;
+    --color-info: #8db6e3;
+    --color-info-soft: #1c2d40;
+    --color-focus: #e8a24a;
+    --color-demo: #b9a4e8;
+    --color-demo-soft: #2b2340;
+    --map-fill-none: #37332a;
+    --map-fill-low: #26302a;
+    --map-fill-mid-low: #345546;
+    --map-fill-mid: #4d8a6a;
+    --map-fill-mid-high: #7fbf9c;
+    --map-fill-high: #c3e4d1;
+    --map-diverging-neg: #e58a5f;
+    --map-diverging-zero: #2a2820;
+    --map-diverging-pos: #7fbf9c;
+    --map-stroke: #f1ede5;
+    --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.45);
+    --shadow-sheet: 0 -8px 32px rgb(0 0 0 / 0.6);
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-surface: #14130f;
+  --color-surface-alt: #1e1c17;
+  --color-surface-raised: #262319;
+  --color-surface-overlay: rgb(0 0 0 / 0.6);
+  --color-text-primary: #f1ede5;
+  --color-text-secondary: #cfc9bc;
+  --color-text-muted: #9f998b;
+  --color-text-on-action: #0f1a15;
+  --color-border: #37332a;
+  --color-border-strong: #57513f;
+  --color-action-primary: #8fcba9;
+  --color-action-hover: #a8d8bd;
+  --color-action-active: #c3e4d1;
+  --color-action-soft: #1f3a2d;
+  --color-accent: #e8a24a;
+  --color-accent-soft: #3e2c12;
+  --color-success: #7fcf9b;
+  --color-success-soft: #1d3a2a;
+  --color-warning: #e3a85a;
+  --color-warning-soft: #3d2b12;
+  --color-error: #ef8b7d;
+  --color-error-soft: #431d18;
+  --color-info: #8db6e3;
+  --color-info-soft: #1c2d40;
+  --color-focus: #e8a24a;
+  --color-demo: #b9a4e8;
+  --color-demo-soft: #2b2340;
+  --map-fill-none: #37332a;
+  --map-fill-low: #26302a;
+  --map-fill-mid-low: #345546;
+  --map-fill-mid: #4d8a6a;
+  --map-fill-mid-high: #7fbf9c;
+  --map-fill-high: #c3e4d1;
+  --map-diverging-neg: #e58a5f;
+  --map-diverging-zero: #2a2820;
+  --map-diverging-pos: #7fbf9c;
+  --map-stroke: #f1ede5;
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.45);
+  --shadow-sheet: 0 -8px 32px rgb(0 0 0 / 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-panel: 0ms;
+    --duration-sheet: 0ms;
+    --duration-map: 0ms;
+  }
+}

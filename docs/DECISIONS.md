@@ -1,0 +1,19 @@
+# DECISIONS — registro de decisões e riscos (rodada 1)
+
+| # | Data | Decisão | Motivo | Risco/Trade-off |
+|---|---|---|---|---|
+| D01 | 2026-10-08 | SOURCE = `dashboard-eleicoes-2026`, somente leitura via CLI autenticado em workdir isolado fora do repo | Confirmado pelo proprietário; evita qualquer `db push` acidental | Role `postgres` via Management API; guard é `BEGIN READ ONLY` (verificado). Recomendar usuário SELECT-only. |
+| D02 | 2026-10-08 | TARGET = novo projeto `minas-em-movimento-dev` (sa-east-1), criado com autorização de projeto pago | Proprietário autorizou; sem Docker local disponível | Custo de compute do projeto; senha fora do repo em `~/.minas-em-movimento/target-dev.env` |
+| D03 | 2026-10-08 | Testes de banco/RLS rodam contra o TARGET dev remoto (não há Docker) | Docker daemon indisponível | Testes criam/limpam dados no dev; nunca em produção |
+| D04 | 2026-10-08 | Dados eleitorais distribuídos como snapshot estático em `public/data/<release>/…` + `manifest.json` com SHA-256; Worker não serve métricas | Spec §4.5/§4.12; zero consultas públicas ao SOURCE | Arquivos por município (853) → muitos arquivos pequenos; CDN cacheia |
+| D05 | 2026-10-08 | Bairro = texto do endereço do local de votação, representado por ponto (centroide dos locais) e rotulado "aproximado"; sem polígonos de bairro | SOURCE não tem geometria; spec §4.4 proíbe inventar limites | Usuários podem esperar polígonos; legenda explica |
+| D06 | 2026-10-08 | Malha municipal: GeoJSON oficial IBGE (API malhas v3, qualidade mínima) carregado sob demanda, com atribuição | Fonte pública oficial; permite choropleth real | Peso ~1–3 MB; lazy load; fallback por centroides |
+| D07 | 2026-10-08 | Snapshot público inclui: totais por território (5 cargos), todas as candidaturas majoritárias (Presidente, Governador, Senador), top 10 por território para proporcionais + candidaturas com histórico 2022 | Equilíbrio entre completude (spec §4.3) e peso de 1.777 candidaturas × 6.079 bairros | Decisão de produto a validar pelo proprietário (ver relatório §16) |
+| D08 | 2026-10-08 | Divergências Σcandidatos≠válidos e válidos+brancos+nulos≠comparecimento registradas em `warnings` com tolerância de alerta 0,5% | Spec §4.5: não corrigir silenciosamente | Nenhum |
+| D09 | 2026-10-08 | Versões: TypeScript 5.9 (não 7.x), React Router 7 (não 8), Vite 7, Vitest 4 — majors mais recentes evitados por risco de ecossistema | Estabilidade da rodada 1 | Atualizar em rodada futura |
+| D10 | 2026-10-08 | `.claude/settings.json` não foi gravado pelo agente (bloqueio de automodificação); proposta em `docs/claude-settings.proposed.json` e hook em `scripts/hooks/guard-bash.mjs` | Política da ferramenta | Proprietário deve copiar manualmente |
+| D11 | 2026-10-08 | Turnstile com chaves de TESTE oficiais da Cloudflare em local/dev (sempre passam), rotuladas; Siteverify real implementado no Worker | Sem conta Cloudflare autorizada nesta rodada | "Implementado" só vale após teste com chave real em staging |
+| D12 | 2026-10-08 | Sem deploy (SEM DEPLOY nesta rodada); sem wrangler login | Proprietário: "só Supabase CLI por enquanto" | Validação de Workers apenas local (`wrangler dev`) |
+| D13 | 2026-10-08 | Rate limit best-effort em memória por isolate + unique constraints/idempotência no banco | Sem KV/DO no MVP (spec §11) | Limites por isolate não são globais; documentado |
+| D14 | 2026-10-08 | Território: tabela `public.territories` no TARGET carregada a partir do snapshot (upsert idempotente) para FK/validação; busca no frontend usa índice estático | Integridade referencial + busca instantânea offline | Duas cópias do índice (snapshot é a fonte; DB é derivada) |
+| D15 | 2026-10-08 | Admin requer `app_private.admins` + `aal2` (MFA); bypass de MFA apenas com `APP_ENV=local`, logado | Spec §8.7; MFA não configurável sem UI de enrolamento nesta rodada | Painel admin em prod exige enrolamento MFA (pendência) |

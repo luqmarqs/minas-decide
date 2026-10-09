@@ -1,0 +1,71 @@
+import { z } from 'zod';
+import { ActivityStatus } from './activities.ts';
+import { GroupStatus } from './groups.ts';
+import { TerritoryId } from './territory.ts';
+
+export const ModerationDecision = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+export type ModerationDecision = z.infer<typeof ModerationDecision>;
+
+export const AdminQueueQuery = z.object({
+  kind: z.enum(['groups', 'activities']).default('groups'),
+  status: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.string().optional(),
+});
+
+export const AdminGroupProposal = z.object({
+  id: z.string().uuid(),
+  territory_id: TerritoryId,
+  name_proposed: z.string(),
+  join_url_proposed: z.string(),
+  proposer_name: z.string(),
+  proposer_email_masked: z.string(),
+  proposer_phone_masked: z.string(),
+  status: GroupStatus,
+  created_at: z.string(),
+  reviewed_at: z.string().nullable(),
+  review_reason: z.string().nullable(),
+});
+export type AdminGroupProposal = z.infer<typeof AdminGroupProposal>;
+
+export const AdminActivity = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  type: z.string(),
+  description: z.string(),
+  territory_id: TerritoryId,
+  public_address: z.string(),
+  starts_at: z.string(),
+  status: ActivityStatus,
+  creator_user_id: z.string().uuid(),
+  public_contact_opt_in: z.boolean(),
+  created_at: z.string(),
+  reviewed_at: z.string().nullable(),
+  review_reason: z.string().nullable(),
+  version: z.number().int(),
+});
+export type AdminActivity = z.infer<typeof AdminActivity>;
+
+export const AdminGroupPatch = z.object({
+  display_name: z.string().trim().min(3).max(80).optional(),
+  join_url: z.string().trim().max(200).optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const GroupManagerInput = z.object({
+  name: z.string().trim().min(2).max(120),
+  email: z.string().trim().toLowerCase().email().nullable().optional(),
+  phone: z.string().trim().max(20).nullable().optional(),
+  role_label: z.string().trim().max(60).default('responsável'),
+});
+
+export const SecurityEvent = z.object({
+  id: z.string().uuid(),
+  created_at: z.string(),
+  route: z.string(),
+  event_type: z.string(),
+  block_code: z.string().nullable(),
+});

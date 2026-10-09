@@ -1,0 +1,37 @@
+{
+  "_comment": "Proposta para .claude/settings.json (não aplicada automaticamente: a gravação desse arquivo é bloqueada para o agente). Revise e copie manualmente. Hook em scripts/hooks/guard-bash.mjs.",
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx vitest *)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prettier *)",
+      "Bash(npx playwright *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)"
+    ],
+    "deny": [
+      "Bash(supabase db reset*)",
+      "Bash(supabase db push*)",
+      "Bash(supabase migration up*)",
+      "Bash(supabase link*)",
+      "Bash(supabase projects delete*)",
+      "Bash(wrangler deploy*)",
+      "Bash(wrangler publish*)",
+      "Bash(wrangler secret*)",
+      "Read(./.env)",
+      "Read(./.dev.vars)",
+      "Read(~/.minas-em-movimento/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "node scripts/hooks/guard-bash.mjs" }]
+      }
+    ]
+  }
+}
