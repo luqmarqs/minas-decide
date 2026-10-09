@@ -6,14 +6,7 @@ import { SessionMenu } from '@/components/layouts/SessionMenu';
 import { WhyMinasStrip } from '@/features/highlights/WhyMinasStrip';
 import { HomeJoinSection } from '@/features/registration/HomeJoinSection';
 import { JoinCta } from '@/features/registration/JoinCta';
-import { createFakeSupabase } from './fe2Helpers';
 import { renderWithApp, stubFetch } from './utils';
-
-const sb = vi.hoisted(() => ({ current: null as unknown }));
-vi.mock('@/lib/supabase', () => ({
-  getSupabase: () => sb.current,
-  isSupabaseConfigured: () => true,
-}));
 
 const hl = vi.hoisted(() => ({
   data: {
@@ -39,7 +32,6 @@ vi.mock('@/features/electoral-map/hooks', async (orig) => ({
 }));
 
 beforeEach(() => {
-  sb.current = createFakeSupabase(null);
   window.sessionStorage.clear();
 });
 afterEach(() => vi.unstubAllGlobals());

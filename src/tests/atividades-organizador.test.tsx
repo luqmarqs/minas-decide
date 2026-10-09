@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -14,20 +14,15 @@ import {
   apiError,
   callsTo,
   firstCallTo,
-  createFakeSupabase,
+  clerk,
+  CLERK_TOKEN,
+  headerOf,
   installTurnstile,
-  makeSession,
   ok,
   renderRoutes,
   uninstallTurnstile,
   USER_ID,
 } from './fe2Helpers';
-
-const sb = vi.hoisted(() => ({ current: null as unknown }));
-vi.mock('@/lib/supabase', () => ({
-  getSupabase: () => sb.current,
-  isSupabaseConfigured: () => true,
-}));
 
 const TERRITORY = 'mg-3106200-centro';
 const ACT_ID = '55555555-5555-4555-8555-555555555555';
@@ -107,38 +102,58 @@ describe('/criar-atividade guard', () => {
     );
   }
 
-  it('no session → explains and links to /participar', async () => {
-    sb.current = createFakeSupabase(null);
-    stubFetch();
+  it('no session → "Entrar com código" (with next) and "Criar conta"; no API call', async () => {
+    const fetchMock = stubFetch();
     renderCriar();
-    expect(await screen.findByText(/e-mail verificado/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Fazer cadastro' })).toHaveAttribute(
+    expect(await screen.findByText(/e-mail verificado por/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Entrar com código' })).toHaveAttribute(
+      'href',
+      '/entrar?next=%2Fcriar-atividade',
+    );
+    expect(screen.getByRole('link', { name: 'Criar conta' })).toHaveAttribute(
       'href',
       '/participar',
     );
+    expect(callsTo(fetchMock, '/api/v1/')).toHaveLength(0);
   });
 
-  it('T06: provisional session sees the verification screen; draft is kept, submit blocked', async () => {
-    sb.current = createFakeSupabase(makeSession({ anonymous: true }));
-    const fetchMock = stubFetch((url) =>
-      url === '/api/v1/me' ? Promise.resolve(ok(me(false))) : undefined,
-    );
-    const user = userEvent.setup();
+  it('Clerk still loading → loading state, no API call', async () => {
+    clerk.setLoaded(false);
+    const fetchMock = stubFetch();
     renderCriar();
-    expect(await screen.findByText('Verifique seu e-mail para continuar')).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Reenviar link de confirmação' }),
-    ).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/^Título/), 'Caminhada no bairro');
-    await waitFor(() =>
-      expect(window.localStorage.getItem(DRAFT_KEY)).toContain('Caminhada no bairro'),
+    expect(await screen.findByText('Verificando sua sessão…')).toBeInTheDocument();
+    expect(callsTo(fetchMock, '/api/v1/')).toHaveLength(0);
+  });
+
+  it('ADR 0005: no "verifique seu e-mail" nor profile review — signed in goes to the editor', async () => {
+    clerk.signIn();
+    const fetchMock = stubFetch((url) =>
+      url === '/api/v1/me'
+        ? Promise.resolve(ok({ ...me(true), profile_review_required: false }))
+        : undefined,
     );
-    expect(screen.getByRole('button', { name: 'Enviar para análise' })).toBeDisabled();
-    expect(callsTo(fetchMock, '/api/v1/activities')).toHaveLength(0);
+    renderCriar();
+    expect(await screen.findByLabelText(/^Título/)).toBeInTheDocument();
+    expect(screen.queryByText(/Verifique seu e-mail/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Confira seus dados' })).not.toBeInTheDocument();
+    const [, init] = firstCallTo(fetchMock, '/api/v1/me');
+    expect(headerOf(init, 'Authorization')).toBe(`Bearer ${CLERK_TOKEN}`);
+  });
+
+  it('suspended account cannot propose', async () => {
+    clerk.signIn();
+    stubFetch((url) =>
+      url === '/api/v1/me'
+        ? Promise.resolve(ok({ ...me(true), account_state: 'suspended' }))
+        : undefined,
+    );
+    renderCriar();
+    expect(await screen.findByText(/conta está suspensa/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Título/)).not.toBeInTheDocument();
   });
 
   it('verified: validates, converts local time to UTC and ends in "enviada para análise"', async () => {
-    sb.current = createFakeSupabase(makeSession({ anonymous: false, email: 'm@exemplo.com.br' }));
+    clerk.signIn({ email: 'm@exemplo.com.br' });
     seedDraft({
       title: 'Panfletagem na praça',
       type: 'panfletagem',
@@ -194,7 +209,7 @@ describe('/criar-atividade guard', () => {
   });
 
   it('T18: API failure keeps the form and never shows success', async () => {
-    sb.current = createFakeSupabase(makeSession({ anonymous: false }));
+    clerk.signIn();
     seedDraft({
       title: 'Panfletagem na praça',
       type: 'panfletagem',
@@ -230,7 +245,7 @@ describe('/minhas-atividades', () => {
   }
 
   it('lists statuses with rejection reason and cancels with confirmation + version', async () => {
-    sb.current = createFakeSupabase(makeSession({ anonymous: false }));
+    clerk.signIn();
     const items = [
       myActivity(),
       myActivity({
@@ -264,7 +279,7 @@ describe('/minhas-atividades', () => {
   });
 
   it('edit of a published activity warns about re-review and PATCHes only changes + version', async () => {
-    sb.current = createFakeSupabase(makeSession({ anonymous: false }));
+    clerk.signIn();
     const pub = myActivity({ status: 'published', rsvp_count_approx: 4 });
     const fetchMock = stubFetch((url, init) => {
       if (url === '/api/v1/me') return Promise.resolve(ok(me(true)));
@@ -290,43 +305,17 @@ describe('/minhas-atividades', () => {
   });
 });
 
-describe('P-SEC-1 — pages blocked until the profile is reviewed', () => {
-  const reviewMe = {
-    ...me(true),
-    profile_review_required: true,
-    phone_masked: '+55 (31) 9****-**88',
-  };
-
-  it('/criar-atividade shows "Confira seus dados" and no editor until "Está correto"', async () => {
-    sb.current = createFakeSupabase(makeSession({ anonymous: false }));
-    const fetchMock = stubFetch((url, init) => {
-      if (url === '/api/v1/me' && init?.method === 'PATCH')
-        return Promise.resolve(ok({ ...reviewMe, profile_review_required: false }));
-      if (url === '/api/v1/me') return Promise.resolve(ok(reviewMe));
-      return undefined;
-    });
-    const user = userEvent.setup();
-    renderRoutes(
-      [{ path: '/criar-atividade', element: <CriarAtividadePage /> }],
-      '/criar-atividade',
-    );
-    expect(await screen.findByRole('heading', { name: 'Confira seus dados' })).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Título/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Está correto' }));
-    expect(await screen.findByLabelText(/^Título/)).toBeInTheDocument();
-    expect(callsTo(fetchMock, '/api/v1/activities')).toHaveLength(0);
-  });
-
-  it('/minhas-atividades does not list anything before the review', async () => {
-    sb.current = createFakeSupabase(makeSession({ anonymous: false }));
-    const fetchMock = stubFetch((url) =>
-      url === '/api/v1/me' ? Promise.resolve(ok(reviewMe)) : undefined,
-    );
+describe('/minhas-atividades without a session', () => {
+  it('shows "Entrar com código" (next=/minhas-atividades) and lists nothing', async () => {
+    const fetchMock = stubFetch();
     renderRoutes(
       [{ path: '/minhas-atividades', element: <MinhasAtividadesPage /> }],
       '/minhas-atividades',
     );
-    expect(await screen.findByRole('heading', { name: 'Confira seus dados' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Entrar com código' })).toHaveAttribute(
+      'href',
+      '/entrar?next=%2Fminhas-atividades',
+    );
     expect(callsTo(fetchMock, '/api/v1/my-activities')).toHaveLength(0);
   });
 });

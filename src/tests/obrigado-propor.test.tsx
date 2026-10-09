@@ -7,21 +7,14 @@ import { stubFetch } from './utils';
 import {
   apiError,
   callsTo,
-  createFakeSupabase,
+  clerk,
   headerOf,
   installTurnstile,
-  makeSession,
   ok,
   renderRoutes,
   uninstallTurnstile,
   USER_ID,
 } from './fe2Helpers';
-
-const sb = vi.hoisted(() => ({ current: null as unknown }));
-vi.mock('@/lib/supabase', () => ({
-  getSupabase: () => sb.current,
-  isSupabaseConfigured: () => true,
-}));
 
 const TERRITORY = 'mg-3106200-centro';
 const GROUP = {
@@ -34,7 +27,7 @@ const GROUP = {
 };
 
 beforeEach(() => {
-  sb.current = createFakeSupabase(makeSession({ anonymous: true }));
+  clerk.signIn({ email: 'maria@exemplo.com.br', firstName: 'Maria' });
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -62,7 +55,8 @@ describe('/obrigado', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(screen.getByText('chat.whatsapp.com')).toBeInTheDocument();
     expect(screen.getByText(/não sabe se você entrou/)).toBeInTheDocument();
-    expect(screen.getByText(/sessão provisória/)).toBeInTheDocument();
+    // ADR 0005: no "sessão provisória" / magic-link texts anymore.
+    expect(screen.queryByText(/sessão provisória|link de confirmação/)).not.toBeInTheDocument();
   });
 
   it('municipality fallback explains it is the city group', async () => {
@@ -133,8 +127,8 @@ describe('/propor-grupo — GroupProposalForm', () => {
             user_id: USER_ID,
             display_name: 'Maria Cadastrada',
             email_masked: 'ma***@exemplo.com.br',
-            email_verified: false,
-            is_anonymous: true,
+            email_verified: true,
+            is_anonymous: false,
             selected_territory_id: TERRITORY,
             is_admin: false,
             account_state: 'active',

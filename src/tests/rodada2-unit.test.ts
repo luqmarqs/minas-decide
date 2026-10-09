@@ -23,7 +23,6 @@ import {
 } from '@/features/territory/sheet';
 import { TerritoryIndexEntry } from '@shared/contracts/territory.ts';
 import { whenIdle } from '@/lib/idle';
-import { hasStoredSession } from '@/lib/sessionPresence';
 
 describe('activity draft store (P-UX-1)', () => {
   beforeEach(() => window.localStorage.clear());
@@ -158,16 +157,5 @@ describe('idle scheduling (P-PERF-1)', () => {
     cancel();
     await new Promise((r) => setTimeout(r, 60));
     expect(cb2).not.toHaveBeenCalled();
-  });
-});
-
-describe('session presence hint', () => {
-  beforeEach(() => window.localStorage.clear());
-  it('only looks for the supabase-js storage key (never parses it)', () => {
-    expect(hasStoredSession()).toBe(false);
-    window.localStorage.setItem('sb-abcdef-auth-token-code-verifier', 'x');
-    expect(hasStoredSession()).toBe(false);
-    window.localStorage.setItem('sb-abcdef-auth-token', 'opaque');
-    expect(hasStoredSession()).toBe(true);
   });
 });

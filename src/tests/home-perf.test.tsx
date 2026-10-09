@@ -21,7 +21,8 @@ describe('home first paint (P-PERF-1)', () => {
     expect(screen.getByRole('combobox', { name: /Cidade ou bairro/ })).toBeInTheDocument();
     expect(screen.getByTestId('map-placeholder')).toBeInTheDocument();
     // Placeholder keeps the legend label and the mandatory attribution.
-    expect(screen.getByText('Abstenção')).toBeInTheDocument();
+    // (FE-10: phone chip + desktop legend, one of them hidden by CSS per breakpoint.)
+    expect(screen.getAllByText('Abstenção').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/OpenStreetMap contributors/)).toBeInTheDocument();
     expect(snapshotCalls(fetchMock)).toHaveLength(0);
 

@@ -83,7 +83,15 @@ solto; o mapa lê as cores com `getComputedStyle` (`src/features/electoral-map/p
   `MapLayerSelector` (radiogroup nativo estilizado como chips), `MapLegend`, `TerritoryListFallback`,
   `snapshot.ts` (loader com fallback DEMO), `useMapUrlState` (`?t=&camada=&ano=&turno=&cand=&vista=`).
 - `features/activities`: `ActivityCard`, `ActivityMarker`, `ActivityAgenda`, `RSVPButton`.
-- Layouts: `AppHeader` (identidade tipográfica + CTA Participar), `AppFooter` (metodologia, privacidade,
+- `features/auth` (ADR 0005, Clerk, fluxos próprios — nenhum componente visual do Clerk):
+  `CodeStep` + `CodeActions` (passo 2 "Digite o código enviado para <e-mail>": input de 6 dígitos com
+  `autocomplete="one-time-code"`, `inputmode="numeric"`, foco automático, erro no campo; "Reenviar código"
+  com espera de 30 s e "Trocar e-mail"), `SignInCodeForm` (`/entrar`), `SignedOutPanel` (páginas
+  protegidas sem sessão: "Entrar com código" + "Criar conta"). O cadastro (`RegistrationForm`) usa o mesmo
+  `CodeStep`; o Turnstile fica montado nos dois passos e o slot `#clerk-captcha` logo abaixo dele. Erros do
+  Clerk sempre traduzidos (`lib/clerk.ts` → `clerkErrorMessage`).
+- Layouts: `AppHeader` (identidade tipográfica + "Entrar" a partir de 640px + CTA Participar; com sessão, menu
+  da conta com nome, Minhas atividades, Propor atividade, Moderação só se `/me.is_admin`, Sair), `AppFooter` (metodologia, privacidade,
   termos, fonte, organização responsável — placeholder), `PageShell`/`Prose`.
 
 ## 4. Motion
@@ -164,7 +172,7 @@ Suspender/Revelar contato. Resultados de axe/CLS/alvos em `_resultados-r2.json`,
 `lighthouse-*.json`, validação real em `_validacao-real.json`. Scripts: `scripts/visual/{capture-r2,lighthouse,
 r2-validate,paint-probe,totp}.mjs`.
 
-Padrões novos: `ProfileReview`/`ProfileReviewGate` (revisão de dados após a promoção da sessão),
+Padrões novos (os três primeiros removidos na FE-11/ADR 0005): `ProfileReview`/`ProfileReviewGate` (revisão de dados após a promoção da sessão),
 `MfaGate` + `OtpField` (código de 6 dígitos, `autocomplete="one-time-code"`, `inputmode="numeric"`),
 `RevealContact` (contato completo só em estado local, some ao fechar a revisão ou esconder a aba),
 `ModerationDialog` genérico (aprovar/rejeitar/suspender/reativar, motivo obrigatório).
@@ -225,3 +233,10 @@ nome "Minas Decide").
 - **Evidências:** `docs/screenshots/brand/` (protótipo FE-4, `?brand=1`) e `docs/screenshots/brand/final/`
   (padrão FE-5, sem query; inclui o antes/depois com `?brand=0`), mais `fe4-log.json`, gerados por
   `BASE=… AXE=… node scripts/visual/capture-brand.mjs` (`OUT`/`QS` configuráveis).
+
+### FE-11 — Clerk (ADR 0005)
+
+`docs/screenshots/clerk/`: formulário, passo do código (`live-participar-codigo-*`), código incorreto, conta que
+exige senha na instância dev (`live-participar-senha-exigida-*`), `/obrigado` após POST real, menu da sessão,
+"já tem cadastro", `/entrar` (e e-mail não encontrado), página protegida sem sessão, desafio do captcha do Clerk
+em navegador automatizado. `fe11-log.json`: violações de CSP, axe e peso das requisições do Clerk.

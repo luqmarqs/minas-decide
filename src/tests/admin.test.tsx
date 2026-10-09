@@ -6,22 +6,17 @@ import AdminPage from '@/pages/admin/AdminPage';
 import { stubFetch } from './utils';
 import {
   apiError,
+  clerk,
   callsTo,
   firstCallTo,
-  createFakeSupabase,
+  CLERK_TOKEN,
+  headerOf,
   installTurnstile,
-  makeSession,
   ok,
   renderRoutes,
   uninstallTurnstile,
   USER_ID,
 } from './fe2Helpers';
-
-const sb = vi.hoisted(() => ({ current: null as unknown }));
-vi.mock('@/lib/supabase', () => ({
-  getSupabase: () => sb.current,
-  isSupabaseConfigured: () => true,
-}));
 
 const PROPOSAL_ID = '77777777-7777-4777-8777-777777777777';
 const GROUP_ID = '88888888-8888-4888-8888-888888888888';
@@ -61,7 +56,7 @@ function renderAdmin() {
 }
 
 beforeEach(() => {
-  sb.current = createFakeSupabase(makeSession({ anonymous: false }));
+  clerk.signIn({ email: 'admin@exemplo.com.br', firstName: 'Admin' });
   installTurnstile();
 });
 afterEach(() => {
@@ -132,9 +127,7 @@ describe('/admin', () => {
     expect(screen.getByRole('button', { name: 'Suspender grupo' })).toBeInTheDocument();
   });
 
-  it('D35: an admin with a verified factor and an aal1 session opens the panel directly (no code asked)', async () => {
-    const fake = createFakeSupabase(makeSession({ anonymous: false })).withVerifiedFactor();
-    sb.current = fake;
+  it('D35: an admin (GET /me is_admin) opens the panel directly with the Clerk token', async () => {
     const fetchMock = stubFetch((url) => {
       if (url === '/api/v1/me') return Promise.resolve(ok(me(true)));
       if (url.startsWith('/api/v1/admin/queue'))
@@ -143,11 +136,9 @@ describe('/admin', () => {
     });
     renderAdmin();
     expect(await screen.findByText('Nenhuma proposta neste status.')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('heading', { name: 'Confirme o segundo fator' }),
-    ).not.toBeInTheDocument();
-    expect(fake.auth.mfa.challenge).not.toHaveBeenCalled();
-    expect(callsTo(fetchMock, '/api/v1/admin/queue').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/segundo fator/)).not.toBeInTheDocument();
+    const [, init] = firstCallTo(fetchMock, '/api/v1/admin/queue');
+    expect(headerOf(init, 'Authorization')).toBe(`Bearer ${CLERK_TOKEN}`);
   });
 
   it('status filter offers "Suspensos"; a suspended group can be reactivated with reason', async () => {
@@ -190,7 +181,10 @@ describe('/admin', () => {
       public_address: 'Praça Sete',
       starts_at: '2030-01-15T17:30:00.000Z',
       status: 'published',
-      creator_user_id: USER_ID,
+      // shared/contracts/admin.ts still types creator_user_id as uuid (pre-ADR 0005); with
+      // Clerk the Worker returns `user_…` and this queue would fail validation. Contract
+      // change requested in the FE-11 report; uuid kept here so the fixture matches it.
+      creator_user_id: '22222222-2222-4222-8222-222222222222',
       public_contact_opt_in: false,
       created_at: '2026-10-08T12:00:00Z',
       reviewed_at: null,
@@ -278,11 +272,16 @@ describe('/admin', () => {
     ).toBeInTheDocument();
   });
 
-  it('without a session asks to sign in by e-mail', async () => {
-    sb.current = createFakeSupabase(null);
-    stubFetch();
+  it('without a session asks to sign in with a code (no sign-up offer) and calls no API', async () => {
+    clerk.signOut();
+    const fetchMock = stubFetch();
     renderAdmin();
     expect(await screen.findByText(/Área restrita/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Entrar por e-mail' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Entrar com código' })).toHaveAttribute(
+      'href',
+      '/entrar?next=%2Fadmin',
+    );
+    expect(screen.queryByRole('link', { name: 'Criar conta' })).not.toBeInTheDocument();
+    expect(callsTo(fetchMock, '/api/v1/')).toHaveLength(0);
   });
 });

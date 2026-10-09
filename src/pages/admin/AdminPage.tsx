@@ -5,25 +5,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { useMe, useSession } from '@/lib/auth';
 import { ActivitiesQueue, GroupsQueue, SecurityEvents } from '@/features/admin/AdminQueues';
 import { adminErrorMessage, ADMIN_FORBIDDEN_MESSAGE } from '@/features/admin/errors';
-import { SendLinkForm } from '@/features/auth/SendLinkForm';
+import { SignedOutPanel } from '@/features/auth/SignedOutPanel';
 
 /** Admin entry — lazy chunk, never linked from public navigation. */
 export default function AdminPage() {
   const session = useSession();
   const active = session.status === 'active' ? session.session : null;
-  const me = useMe(active && !active.user.is_anonymous ? active : null);
+  const me = useMe(active);
 
   let body;
-  if (session.status === 'loading' || (active && !active.user.is_anonymous && me.isLoading)) {
+  if (session.status === 'loading' || (active && me.isLoading)) {
     body = <LoadingBlock label="Verificando permissões…" lines={3} />;
   } else if (session.status === 'unconfigured') {
     body = <Note tone="warning">Login não configurado neste ambiente.</Note>;
-  } else if (!active || active.user.is_anonymous) {
+  } else if (!active) {
     body = (
-      <div className="flex flex-col gap-4">
-        <Note>Área restrita. Entre com o e-mail de administrador; depois volte a esta página.</Note>
-        <SendLinkForm idPrefix="admin-link" next="/admin" title="Entrar por e-mail" />
-      </div>
+      <SignedOutPanel next="/admin" allowSignUp={false}>
+        Área restrita. Entre com o e-mail de administrador.
+      </SignedOutPanel>
     );
   } else if (me.error) {
     body = (

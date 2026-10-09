@@ -1,8 +1,11 @@
 # Security headers for the static SPA (Cloudflare Workers Static Assets `_headers`).
 # /api/* headers are set by the Worker itself. Review the CSP allowlist whenever a
 # new external origin (tiles, fonts, auth) is introduced. HSTS only on real HTTPS domains.
+# Clerk (ADR 0005): dev instance Frontend API host (from the publishable key) + *.clerk.accounts.dev.
+# Production (instance live) needs its own clerk.<domain> host here once a domain exists.
+# The browser no longer talks to Supabase (Worker only), so *.supabase.co was removed.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://*.supabase.co https://tiles.openfreemap.org https://challenges.cloudflare.com; img-src 'self' data: blob: https://tiles.openfreemap.org; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://funky-cheetah-9841.clerk.accounts.dev https://*.clerk.accounts.dev; frame-src https://challenges.cloudflare.com https://funky-cheetah-9841.clerk.accounts.dev https://*.clerk.accounts.dev; connect-src 'self' https://tiles.openfreemap.org https://challenges.cloudflare.com https://funky-cheetah-9841.clerk.accounts.dev https://*.clerk.accounts.dev https://*.clerk.com; img-src 'self' data: blob: https://tiles.openfreemap.org https://img.clerk.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin

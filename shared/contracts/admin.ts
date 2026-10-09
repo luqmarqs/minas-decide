@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ActivityStatus } from './activities.ts';
 import { GroupStatus } from './groups.ts';
 import { TerritoryId } from './territory.ts';
+import { ClerkUserId } from './registration.ts';
 
 export const ModerationDecision = z.object({
   reason: z.string().trim().min(3).max(500),
@@ -41,7 +42,7 @@ export const AdminActivity = z.object({
   public_address: z.string(),
   starts_at: z.string(),
   status: ActivityStatus,
-  creator_user_id: z.string().uuid(),
+  creator_user_id: ClerkUserId,
   public_contact_opt_in: z.boolean(),
   created_at: z.string(),
   reviewed_at: z.string().nullable(),

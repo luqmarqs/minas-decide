@@ -1,27 +1,40 @@
 import { lazy, Suspense } from 'react';
+import { Link } from 'react-router';
 import { JoinCta } from '@/features/registration/JoinCta';
-import { useSessionMaybePresent } from '@/lib/sessionPresence';
+import { useSession } from '@/lib/session';
 
 const SessionMenuActive = lazy(() =>
   import('./SessionMenuActive').then((m) => ({ default: m.SessionMenuActive })),
 );
 
-/** On the home page it scrolls to the sign-up section (#participar); elsewhere /participar. */
-function ParticiparCta() {
-  return <JoinCta size="sm">Participar</JoinCta>;
+/**
+ * "Entrar" (from 640px; on phones the header has no room — /entrar is linked from the
+ * sign-up form and protected pages) + "Participar" (home: scrolls to #participar).
+ */
+function SignedOutActions() {
+  return (
+    <div className="flex items-center gap-1">
+      <Link
+        to="/entrar"
+        className="hidden min-h-11 items-center rounded-md px-2 text-sm font-semibold text-primary underline-offset-4 hover:underline sm:inline-flex"
+      >
+        Entrar
+      </Link>
+      <JoinCta size="sm">Participar</JoinCta>
+    </div>
+  );
 }
 
 /**
- * Header slot. Visitors without any stored session get the plain "Participar"
- * CTA and never download supabase-js/Zod; the real menu (session state, account
- * links) is a lazy chunk loaded only when a session may exist.
+ * Header slot (ADR 0005). Signed out: "Entrar" + "Participar". Signed in: the account menu
+ * (lazy chunk: GET /me and the contracts load only for people with a session).
  */
 export function SessionMenu() {
-  const maybe = useSessionMaybePresent();
-  if (!maybe) return <ParticiparCta />;
+  const session = useSession();
+  if (session.status !== 'active') return <SignedOutActions />;
   return (
-    <Suspense fallback={<ParticiparCta />}>
-      <SessionMenuActive fallback={<ParticiparCta />} />
+    <Suspense fallback={<SignedOutActions />}>
+      <SessionMenuActive session={session.session} />
     </Suspense>
   );
 }

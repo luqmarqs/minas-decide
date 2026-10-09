@@ -15,10 +15,9 @@ import { EmptyState, ErrorState, Note } from '@/components/ui/States';
 import { ApiClientError, messageForError } from '@/lib/api';
 import { formatActivityWhen, plural } from '@/lib/format';
 import { useMe, useSession } from '@/lib/auth';
-import { ProfileReviewGate } from '@/features/account/ProfileReview';
 import { ActivityEditor } from '@/features/activities/ActivityEditor';
 import { cancelActivity, myActivitiesKey, useMyActivities } from '@/features/activities/api';
-import { SendLinkForm } from '@/features/auth/SendLinkForm';
+import { SignedOutPanel } from '@/features/auth/SignedOutPanel';
 import { submitErrorMessage } from '@/features/registration/formErrors';
 
 const STATUS: Record<ActivityStatus, { label: string; variant: BadgeVariant }> = {
@@ -37,7 +36,6 @@ export default function MinhasAtividadesPage() {
   const session = useSession();
   const active = session.status === 'active' ? session.session : null;
   const me = useMe(active);
-  const verified = !!me.data?.email_verified;
 
   let body;
   if (session.status === 'loading' || (active && me.isLoading)) {
@@ -46,10 +44,9 @@ export default function MinhasAtividadesPage() {
     body = <Note tone="warning">Login não configurado neste ambiente.</Note>;
   } else if (!active) {
     body = (
-      <div className="flex flex-col gap-6">
-        <Note>Entre com o link enviado por e-mail para ver as atividades que você propôs.</Note>
-        <SendLinkForm idPrefix="minhas-link" next="/minhas-atividades" title="Entrar por e-mail" />
-      </div>
+      <SignedOutPanel next="/minhas-atividades">
+        Entre com a sua conta para ver as atividades que você propôs.
+      </SignedOutPanel>
     );
   } else if (me.error) {
     body = (
@@ -59,22 +56,8 @@ export default function MinhasAtividadesPage() {
         retrying={me.isFetching}
       />
     );
-  } else if (!verified) {
-    body = (
-      <div className="flex flex-col gap-6">
-        <Note tone="warning">
-          Sua sessão é provisória: confirme o e-mail pelo link enviado para propor e acompanhar
-          atividades.
-        </Note>
-        <SendLinkForm idPrefix="minhas-link" next="/minhas-atividades" title="Reenviar link" />
-      </div>
-    );
   } else {
-    body = me.data ? (
-      <ProfileReviewGate me={me.data}>
-        <MyActivityList userId={active.user.id} />
-      </ProfileReviewGate>
-    ) : null;
+    body = <MyActivityList userId={active.user.id} />;
   }
 
   return (

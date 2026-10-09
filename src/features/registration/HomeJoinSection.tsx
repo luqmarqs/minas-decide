@@ -3,7 +3,7 @@ import { LoadingBlock } from '@/components/ui/Skeleton';
 import { useAfterIdle } from '@/lib/idle';
 import { JOIN_SECTION_ID, JOIN_TITLE_ID } from './join';
 
-// supabase-js, Zod and Turnstile only load after first paint (P-PERF-1).
+// Zod, the Clerk sign-up flow and Turnstile only load after first paint (P-PERF-1).
 const ParticipationPanel = lazy(() =>
   import('./ParticipationPanel').then((m) => ({ default: m.ParticipationPanel })),
 );

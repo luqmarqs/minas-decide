@@ -31,7 +31,7 @@
         "APP_ENV": "local",
         "WRITES_ENABLED": "true",
         "PUBLIC_ORIGIN": "http://127.0.0.1:5173",
-        "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:8787",
+        "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:8787,http://127.0.0.1:8788,http://127.0.0.1:8793,http://localhost:8788",
         "TURNSTILE_EXPECTED_HOSTNAMES": "localhost,127.0.0.1",
       },
     },

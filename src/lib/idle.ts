@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 
 type IdleWindow = Window & {
   requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
@@ -120,4 +120,34 @@ export function useAfterIdle(force = false, timeout?: number): boolean {
     return whenIdle(() => setIdle(true), { timeout });
   }, [idle, timeout]);
   return idle || force;
+}
+
+/**
+ * `true` once the element is within `rootMargin` of the viewport (FE-10: the home map —
+ * MapLibre, 280 KB index, layer data — only starts when its section approaches the screen),
+ * or immediately when `force` is set / IntersectionObserver is missing. Never resets.
+ */
+export function useNearViewport(
+  ref: RefObject<Element | null>,
+  force = false,
+  rootMargin = '100% 0px',
+): boolean {
+  const [near, setNear] = useState(() => force || typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    if (near || force) return;
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setNear(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near, force, ref, rootMargin]);
+  return near || force;
 }

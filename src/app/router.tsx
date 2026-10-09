@@ -1,11 +1,11 @@
 import type { ComponentType } from 'react';
-import { createBrowserRouter, type RouteObject } from 'react-router';
+import { createBrowserRouter, redirect, type RouteObject } from 'react-router';
 import HomePage from '@/pages/HomePage';
 import { RootLayout, RouteError } from './layout';
 
 /**
  * Only the home (map explorer) ships in the initial chunk. Every other page is a
- * lazy route chunk (P-PERF-1): forms, Zod contracts, supabase-js, vaul and the
+ * lazy route chunk (P-PERF-1): forms, Zod contracts, vaul and the
  * admin panel never block the first paint of the public map.
  */
 function page(load: () => Promise<{ default: ComponentType }>): Pick<RouteObject, 'lazy'> {
@@ -32,8 +32,10 @@ export const routes: RouteObject[] = [
       { path: 'propor-grupo', ...page(() => import('@/pages/ProporGrupoPage')) },
       { path: 'criar-atividade', ...page(() => import('@/pages/CriarAtividadePage')) },
       { path: 'minhas-atividades', ...page(() => import('@/pages/MinhasAtividadesPage')) },
-      { path: 'autenticacao/retorno', ...page(() => import('@/pages/AuthRetornoPage')) },
-      { path: 'conta/seguranca', ...page(() => import('@/pages/ContaSegurancaPage')) },
+      { path: 'entrar', ...page(() => import('@/pages/EntrarPage')) },
+      // ADR 0005: magic-link return and TOTP pages no longer exist (old e-mails/bookmarks).
+      { path: 'autenticacao/retorno', loader: () => redirect('/entrar') },
+      { path: 'conta/seguranca', loader: () => redirect('/') },
       // Separate lazy chunk; never linked from public navigation.
       { path: 'admin/*', ...page(() => import('@/pages/admin/AdminPage')) },
       { path: 'privacidade', ...page(() => import('@/pages/PrivacidadePage')) },

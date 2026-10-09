@@ -1,8 +1,18 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup, configure } from '@testing-library/react';
+import { clerk } from './clerkFake';
 
-// CI runners are slow: form flows load supabase-js dynamically before submitting.
+// ADR 0005: Clerk is always "configured" in unit tests (deterministic, independent of a
+// developer's .env.local) and replaced by an in-memory fake — no network, no clerk-js.
+vi.stubEnv('VITE_CLERK_PUBLISHABLE_KEY', 'pk_test_ZmFrZS1pbnN0YW5jZS5jbGVyay5hY2NvdW50cy5kZXYk');
+vi.mock('@clerk/clerk-react', async () => (await import('./clerkFake')).clerkReactMock);
+
+beforeEach(() => {
+  clerk.reset();
+});
+
+// CI runners are slow: form flows load lazy chunks (Zod, Turnstile) before submitting.
 // 1 s (default) flakes on GitHub Actions; 8 s keeps assertions meaningful.
 configure({ asyncUtilTimeout: 8000 });
 

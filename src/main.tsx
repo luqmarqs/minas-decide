@@ -13,9 +13,13 @@ const router = createAppRouter();
 const root = document.getElementById('root');
 if (!root) throw new Error('#root ausente em index.html');
 
+// ClerkProvider (inside Providers) uses the data router for SPA redirects (ADR 0005).
+const navigate = (to: string, opts?: { replace?: boolean }) =>
+  void router.navigate(to, { replace: opts?.replace ?? false });
+
 createRoot(root).render(
   <StrictMode>
-    <Providers>
+    <Providers navigate={navigate}>
       <RouterProvider router={router} />
     </Providers>
   </StrictMode>,

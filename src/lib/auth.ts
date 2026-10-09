@@ -1,144 +1,53 @@
 /**
- * Session helpers on top of Supabase Auth (TARGET project). The browser only holds
- * the Supabase session; every mutation goes through the Worker with
- * `Authorization: Bearer <access_token>`. Tokens are never logged, never put in a
- * URL and never sent to analytics.
+ * Session helpers on top of Clerk (ADR 0005). The browser holds only the Clerk session;
+ * every mutation goes through the Worker with `Authorization: Bearer <Clerk session token>`.
+ * Tokens are never logged, never put in a URL and never sent to analytics.
  *
- * Levels (docs/SECURITY.md):
- * - provisional: anonymous sign-in (`is_anonymous=true`) — enough to register;
- * - verified: e-mail confirmed via magic link + POST /auth/confirm-email + refreshSession.
+ * Clerk verifies the e-mail (code) before any session exists, so there is no
+ * "provisional" level anymore: an active session = verified e-mail.
  */
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import type { z } from 'zod';
 import { MeResponse } from '@shared/contracts/registration.ts';
 import { ApiClientError, apiRequest, type RequestOptions } from './api';
-import { hasStoredSession, markSupabaseLoaded } from './sessionPresence';
+import { getSessionToken, type AuthSession } from './session';
 
-export class AuthUnavailableError extends Error {
-  constructor(message = 'O serviço de login não está configurado neste ambiente.') {
-    super(message);
-    this.name = 'AuthUnavailableError';
-  }
-}
+export {
+  AuthUnavailableError,
+  getCurrentSession,
+  getSessionToken,
+  registerClerk,
+  signOut,
+  useSession,
+  type AuthSession,
+  type ClerkHandle,
+  type SessionState,
+} from './session';
 
-/**
- * supabase-js is loaded on demand (separate chunk): the public map never pays for
- * it. `null` = Auth not configured in this environment.
- */
-export async function loadSupabase(): Promise<SupabaseClient | null> {
-  const m = await import('./supabase');
-  const sb = m.getSupabase();
-  if (sb) markSupabaseLoaded();
-  return sb;
-}
-
-export async function getCurrentSession(): Promise<Session | null> {
-  const sb = await loadSupabase();
-  if (!sb) return null;
-  const { data } = await sb.auth.getSession();
-  return data.session;
-}
-
-/**
- * Returns the current session or creates a provisional (anonymous) one. Never
- * replaces an existing session (re-submits stay idempotent server-side).
- */
-export async function ensureProvisionalSession(): Promise<Session> {
-  const sb = await loadSupabase();
-  if (!sb) throw new AuthUnavailableError();
-  const current = await getCurrentSession();
-  if (current) return current;
-  const { data, error } = await sb.auth.signInAnonymously();
-  if (error || !data.session) {
-    const limited = error?.status === 429;
-    throw new ApiClientError(
-      limited ? 'RATE_LIMITED' : 'INTERNAL_ERROR',
-      limited
-        ? 'Muitas sessões criadas a partir desta rede. Aguarde alguns minutos e tente de novo.'
-        : 'Não foi possível iniciar sua sessão agora. Tente de novo em instantes.',
-      { status: error?.status ?? 0 },
-    );
-  }
-  return data.session;
-}
-
-/** API request with the current access token; retries once after a refresh on 401. */
+/** API request with the current Clerk token; retries once with a fresh token on 401. */
 export async function authedRequest<S extends z.ZodType>(
   path: string,
   schema: S,
-  opts: RequestOptions & { session?: Session | null } = {},
+  // `session` is accepted for call-site compatibility; the token always comes from Clerk.
+  opts: RequestOptions & { session?: AuthSession | null } = {},
 ): Promise<z.infer<S>> {
-  const { session: given, ...rest } = opts;
-  const session = given ?? (await getCurrentSession());
-  if (!session) throw new ApiClientError('UNAUTHENTICATED', 'É preciso entrar para continuar.');
-  const run = (token: string) =>
+  const { session: _ignored, ...rest } = opts;
+  void _ignored;
+  const token = await getSessionToken();
+  if (!token) throw new ApiClientError('UNAUTHENTICATED', 'É preciso entrar para continuar.');
+  const run = (t: string) =>
     apiRequest(path, schema, {
       ...rest,
-      headers: { ...rest.headers, Authorization: `Bearer ${token}` },
+      headers: { ...rest.headers, Authorization: `Bearer ${t}` },
     });
   try {
-    return await run(session.access_token);
+    return await run(token);
   } catch (err) {
     if (!(err instanceof ApiClientError) || err.code !== 'UNAUTHENTICATED') throw err;
-    const sb = await loadSupabase();
-    const refreshed = sb ? (await sb.auth.refreshSession()).data.session : null;
-    if (!refreshed) throw err;
-    return run(refreshed.access_token);
+    const fresh = await getSessionToken({ skipCache: true });
+    if (!fresh || fresh === token) throw err;
+    return run(fresh);
   }
-}
-
-export async function signOut(): Promise<void> {
-  // QA2-11: drafts may hold address/contact; never leave them behind on shared devices.
-  const { clearAllDrafts } = await import('@/features/activities/draftStore');
-  clearAllDrafts();
-  const sb = await loadSupabase();
-  if (!sb) return;
-  await sb.auth.signOut({ scope: 'local' });
-}
-
-export type SessionState =
-  | { status: 'loading'; session: null }
-  | { status: 'none'; session: null }
-  | { status: 'unconfigured'; session: null }
-  | { status: 'active'; session: Session };
-
-/** Reactive Supabase session (no token ever leaves this hook except via authedRequest). */
-export function useSession(): SessionState {
-  // No stored session → answer "none" immediately (pages render their signed-out state
-  // without waiting for supabase-js); the subscription below still upgrades to "active".
-  const [state, setState] = useState<SessionState>(() =>
-    hasStoredSession() ? { status: 'loading', session: null } : { status: 'none', session: null },
-  );
-  useEffect(() => {
-    let alive = true;
-    let unsubscribe: (() => void) | undefined;
-    void loadSupabase().then(async (sb) => {
-      if (!alive) return;
-      if (!sb) {
-        setState({ status: 'unconfigured', session: null });
-        return;
-      }
-      const { data: sub } = sb.auth.onAuthStateChange((_event, session) => {
-        if (!alive) return;
-        setState(session ? { status: 'active', session } : { status: 'none', session: null });
-      });
-      unsubscribe = () => sub.subscription.unsubscribe();
-      const { data } = await sb.auth.getSession();
-      if (!alive) return;
-      setState(
-        data.session
-          ? { status: 'active', session: data.session }
-          : { status: 'none', session: null },
-      );
-    });
-    return () => {
-      alive = false;
-      unsubscribe?.();
-    };
-  }, []);
-  return state;
 }
 
 export const meQueryKey = (userId: string | null) => ['me', userId] as const;
@@ -147,26 +56,20 @@ export const meQueryKey = (userId: string | null) => ['me', userId] as const;
  * GET /me for the current session. Private data: never cached across users
  * (key includes the user id, staleTime/gcTime 0).
  */
-export function useMe(session: Session | null) {
+export function useMe(session: AuthSession | null) {
   const userId = session?.user.id ?? null;
   return useQuery({
     queryKey: meQueryKey(userId),
-    enabled: !!session,
+    enabled: !!userId,
     staleTime: 0,
     gcTime: 0,
     retry: false,
-    queryFn: ({ signal }) => authedRequest('/me', MeResponse, { session, signal }),
+    queryFn: ({ signal }) => authedRequest('/me', MeResponse, { signal }),
   });
 }
 
 /** Internal paths a post-login redirect may target (never an open redirect). */
-const ALLOWED_EXACT = new Set([
-  '/',
-  '/minhas-atividades',
-  '/criar-atividade',
-  '/admin',
-  '/conta/seguranca',
-]);
+const ALLOWED_EXACT = new Set(['/', '/minhas-atividades', '/criar-atividade', '/admin']);
 const TERRITORY_PATH = /^\/territorio\/mg(?:-\d{7}(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?)?$/;
 
 export function safeRedirectPath(raw: string | null | undefined, fallback = '/'): string {
@@ -178,23 +81,8 @@ export function safeRedirectPath(raw: string | null | undefined, fallback = '/')
   return fallback;
 }
 
-const NEXT_KEY = 'mm.auth.next';
-
-/** Remembers where to go after the e-mail link (validated again when read). */
-export function rememberAuthNext(path: string): void {
-  try {
-    window.sessionStorage.setItem(NEXT_KEY, safeRedirectPath(path));
-  } catch {
-    // storage unavailable
-  }
-}
-
-export function consumeAuthNext(): string | null {
-  try {
-    const v = window.sessionStorage.getItem(NEXT_KEY);
-    window.sessionStorage.removeItem(NEXT_KEY);
-    return v ? safeRedirectPath(v) : null;
-  } catch {
-    return null;
-  }
+/** `/entrar?next=…` link for a protected page. */
+export function signInHref(next?: string): string {
+  const safe = next ? safeRedirectPath(next, '') : '';
+  return safe && safe !== '/' ? `/entrar?next=${encodeURIComponent(safe)}` : '/entrar';
 }

@@ -1,0 +1,401 @@
+{
+  "csp": [
+    {
+      "key": "home-desktop",
+      "v": [
+        "script-src eval http://127.0.0.1:8789/assets/territory-Cce-ZPAe.js:1"
+      ]
+    },
+    {
+      "key": "participar-desktop",
+      "v": [
+        "script-src eval http://127.0.0.1:8789/assets/territory-Cce-ZPAe.js:1"
+      ]
+    },
+    {
+      "key": "entrar-desktop",
+      "v": [
+        "script-src eval http://127.0.0.1:8789/assets/territory-Cce-ZPAe.js:1"
+      ]
+    },
+    {
+      "key": "criar-desktop",
+      "v": [
+        "script-src eval http://127.0.0.1:8789/assets/territory-Cce-ZPAe.js:1"
+      ]
+    },
+    {
+      "key": "home-mobile",
+      "v": [
+        "script-src eval http://127.0.0.1:8789/assets/territory-Cce-ZPAe.js:1"
+      ]
+    },
+    {
+      "key": "participar-mobile",
+      "v": [
+        "script-src eval http://127.0.0.1:8789/assets/territory-Cce-ZPAe.js:1"
+      ]
+    },
+    {
+      "key": "entrar-mobile",
+      "v": [
+        "script-src eval http://127.0.0.1:8789/assets/territory-Cce-ZPAe.js:1"
+      ]
+    },
+    {
+      "key": "criar-mobile",
+      "v": [
+        "script-src eval http://127.0.0.1:8789/assets/territory-Cce-ZPAe.js:1"
+      ]
+    }
+  ],
+  "axe": {
+    "participar-form-desktop": [
+      {
+        "id": "label-content-name-mismatch",
+        "impact": "serious",
+        "nodes": 1,
+        "target": [
+          ".mr-auto"
+        ]
+      }
+    ],
+    "entrar-desktop": [
+      {
+        "id": "label-content-name-mismatch",
+        "impact": "serious",
+        "nodes": 1,
+        "target": [
+          ".mr-auto"
+        ]
+      }
+    ],
+    "criar-atividade-sem-sessao-desktop": [
+      {
+        "id": "label-content-name-mismatch",
+        "impact": "serious",
+        "nodes": 1,
+        "target": [
+          ".mr-auto"
+        ]
+      }
+    ],
+    "participar-form-mobile": [
+      {
+        "id": "label-content-name-mismatch",
+        "impact": "serious",
+        "nodes": 1,
+        "target": [
+          ".mr-auto"
+        ]
+      }
+    ],
+    "entrar-mobile": [
+      {
+        "id": "label-content-name-mismatch",
+        "impact": "serious",
+        "nodes": 1,
+        "target": [
+          ".mr-auto"
+        ]
+      }
+    ],
+    "criar-atividade-sem-sessao-mobile": [
+      {
+        "id": "label-content-name-mismatch",
+        "impact": "serious",
+        "nodes": 1,
+        "target": [
+          ".mr-auto"
+        ]
+      }
+    ],
+    "entrar-mobile-escuro": [
+      {
+        "id": "label-content-name-mismatch",
+        "impact": "serious",
+        "nodes": 1,
+        "target": [
+          ".mr-auto"
+        ]
+      }
+    ]
+  },
+  "clerkRequests": [
+    {
+      "dev": "desktop",
+      "status": 307,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js",
+      "size": 0
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js",
+      "size": 270273
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/dev_browser?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0",
+      "size": 663
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb_3KTKY0iI",
+      "size": 300
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&_method=PATCH&__clerk_",
+      "size": 8293
+    },
+    {
+      "dev": "desktop",
+      "status": 307,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js",
+      "size": 0
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js",
+      "size": 270273
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&_method=PATCH&__clerk_",
+      "size": 8293
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb_3KTKY0iI",
+      "size": 300
+    },
+    {
+      "dev": "desktop",
+      "status": 307,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js",
+      "size": 0
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js",
+      "size": 270273
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&_method=PATCH&__clerk_",
+      "size": 8293
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb_3KTKY0iI",
+      "size": 300
+    },
+    {
+      "dev": "desktop",
+      "status": 422,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client/sign_ins?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb",
+      "size": 990
+    },
+    {
+      "dev": "desktop",
+      "status": 307,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js",
+      "size": 0
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js",
+      "size": 270273
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&_method=PATCH&__clerk_",
+      "size": 8293
+    },
+    {
+      "dev": "desktop",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb_3KTKY0iI",
+      "size": 777
+    },
+    {
+      "dev": "mobile",
+      "status": 307,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js",
+      "size": 0
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js",
+      "size": 270273
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/dev_browser?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0",
+      "size": 663
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb_3KTKcrCi",
+      "size": 300
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&_method=PATCH&__clerk_",
+      "size": 8293
+    },
+    {
+      "dev": "mobile",
+      "status": 307,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js",
+      "size": 0
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js",
+      "size": 270273
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb_3KTKcrCi",
+      "size": 300
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&_method=PATCH&__clerk_",
+      "size": 8293
+    },
+    {
+      "dev": "mobile",
+      "status": 307,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js",
+      "size": 0
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js",
+      "size": 270273
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&_method=PATCH&__clerk_",
+      "size": 8293
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb_3KTKcrCi",
+      "size": 300
+    },
+    {
+      "dev": "mobile",
+      "status": 422,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client/sign_ins?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb",
+      "size": 990
+    },
+    {
+      "dev": "mobile",
+      "status": 307,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js",
+      "size": 0
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js",
+      "size": 270273
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb_3KTKcrCi",
+      "size": 777
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&_method=PATCH&__clerk_",
+      "size": 8293
+    },
+    {
+      "dev": "mobile",
+      "status": 307,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js",
+      "size": 0
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/npm/@clerk/clerk-js@5.128.0/dist/clerk.headless.browser.js",
+      "size": 270273
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/dev_browser?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0",
+      "size": 663
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&__clerk_db_jwt=dvb_3KTKhhsi",
+      "size": 300
+    },
+    {
+      "dev": "mobile",
+      "status": 200,
+      "url": "https://funky-cheetah-9841.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.128.0&_method=PATCH&__clerk_",
+      "size": 8293
+    }
+  ],
+  "errors": [
+    "desktop: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "desktop: %c%d font-size:0;color:transparent NaN",
+    "desktop: %c%d font-size:0;color:transparent NaN",
+    "desktop: code step not reached: TimeoutError: locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByLabel(/^Código de verificação/) to be visible\u001b[22m\n",
+    "desktop: alerts=[]",
+    "desktop: Failed to load resource: the server responded with a status of 422 ()",
+    "mobile: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "mobile: %c%d font-size:0;color:transparent NaN",
+    "mobile: %c%d font-size:0;color:transparent NaN",
+    "mobile: code step not reached: TimeoutError: locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByLabel(/^Código de verificação/) to be visible\u001b[22m\n",
+    "mobile: alerts=[]",
+    "mobile: Failed to load resource: the server responded with a status of 422 ()"
+  ],
+  "shots": [
+    "D:/dev/minas-decide/docs/screenshots/clerk/home-header-desktop.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/participar-form-desktop.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/participar-codigo-falhou-desktop.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/entrar-desktop.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/entrar-nao-encontrado-desktop.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/criar-atividade-sem-sessao-desktop.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/home-header-mobile.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/participar-form-mobile.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/participar-codigo-falhou-mobile.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/entrar-mobile.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/entrar-nao-encontrado-mobile.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/criar-atividade-sem-sessao-mobile.png",
+    "D:/dev/minas-decide/docs/screenshots/clerk/entrar-mobile-escuro.png"
+  ]
+}
