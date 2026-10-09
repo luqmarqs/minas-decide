@@ -282,3 +282,25 @@ Deep link `?t=` no mobile abre o sheet no estado meio sem rolar ao mapa; fila do
 ## R2-6. Auditoria QA-2
 
 {QA2}
+
+---
+
+# ADENDO — STAGING NA CLOUDFLARE (2026-10-09)
+
+**URL verificada:** https://minas-em-movimento-staging.luq-marqs.workers.dev (Worker `minas-em-movimento-staging`, versão `7c8b9a59…`, env `staging`, conta workers.dev `luq-marqs`).
+
+| Item | Status | Evidência |
+|---|---|---|
+| Autenticação Cloudflare | API Token do proprietário (OAuth do Wrangler falhou 3× com `request_forbidden` — cookie CSRF do painel) | `wrangler whoami` com token; token guardado fora do repo |
+| Turnstile real | widget **Managed** `minas-em-movimento-staging` criado via API (`/challenges/widgets`), domínios: host de staging, `localhost`, `127.0.0.1`; sitekey no `.env.staging`, secret como secret do Worker | resposta da API `success: true` |
+| Secrets de staging | `SUPABASE_TARGET_URL/ANON/SERVICE_ROLE`, `TURNSTILE_SECRET_KEY` (real), `RSVP_DEVICE_SECRET` (novo), `ADMIN_EMAILS` | `wrangler secret list --env staging` = 6 |
+| Vars de staging | `APP_ENV=staging`, `WRITES_ENABLED=true`, `PUBLIC_ORIGIN`, `TURNSTILE_EXPECTED_HOSTNAMES` = host de staging | `wrangler.jsonc` `env.staging` |
+| Auth do TARGET | `additional_redirect_urls` += `https://minas-em-movimento-staging.luq-marqs.workers.dev/autenticacao/retorno` via `supabase config push` | `supabase/config.toml` |
+| Deploy | `vite build --mode staging` + `wrangler deploy --env staging`: Worker 1.677 KB (305 KB gz), assets enviados em 35 s | saída do deploy |
+| Verificação | `/api/v1/health` 200 (`writes_enabled: true`); CSP e `X-Frame-Options` na SPA; `/territories/mg-3140001` 200 (banco); `/groups` 200 com `X-Cache: MISS` e `max-age=60`; `/data/manifest.json` 200; RSVP em id inexistente → 404 | `curl` |
+| E2E contra staging | **22/22** (`E2E_BASE_URL=…`) | Playwright |
+| Cadastro real com Turnstile Managed em headless | **NÃO CONCLUÍDO**: o widget não liberou o token em navegador headless (comportamento esperado do modo Managed com automação); o formulário bloqueou o envio com a mensagem correta | `docs/screenshots/final-r2/staging-participar-resultado-20261009.png` |
+| Cadastro real em navegador humano | **PENDENTE — proprietário** (abrir `/participar`, cadastrar, confirmar e-mail; depende também de SMTP próprio, P-SEC-3) | — |
+
+**Limitações desta publicação:** banco de staging é o mesmo projeto TARGET dev (dados de teste vão para lá; criar projeto Supabase de staging antes de uso real); sem domínio próprio (workers.dev); HSTS gerido pela Cloudflare no `workers.dev`; admin em staging exige fator TOTP verificado (o admin dev ainda não tem — enrolar em `/conta/seguranca` após entrar por magic link, que por sua vez depende da cota de e-mail); token de API transitou pelo chat — **rotacionar**.
+

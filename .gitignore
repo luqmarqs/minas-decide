@@ -24,3 +24,7 @@ data/private/
 .DS_Store
 Thumbs.db
 *.log
+
+# official artwork / brand assets (licensed; never publish)
+brand/
+*.zip

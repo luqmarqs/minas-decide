@@ -1,6 +1,6 @@
 # STAGING_PLAYBOOK — o que só o proprietário pode executar
 
-Cada passo abaixo exige conta, credencial ou decisão sua. O código já está preparado; nada aqui foi executado pelo agente.
+> **Status em 2026-10-09:** a seção 1 foi **executada** com um API Token fornecido pelo proprietário (o OAuth do `wrangler login` falhou 3× com `request_forbidden`/CSRF no navegador). Staging publicado em **https://minas-em-movimento-staging.luq-marqs.workers.dev** (Worker `minas-em-movimento-staging`, env `staging`), widget Turnstile Managed `minas-em-movimento-staging` criado pela API, 6 secrets configurados, redirect de retorno adicionado no Auth do TARGET. Credenciais em `~/.minas-em-movimento/{cloudflare.env,turnstile-staging.env}` e `.env.staging` (gitignored). **Recomendado: rotacionar o API Token** (ele transitou pelo chat). Seções 2–5 continuam pendentes.
 
 ## 1. Cloudflare (uma vez)
 

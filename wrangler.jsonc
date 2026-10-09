@@ -39,9 +39,9 @@
       "vars": {
         "APP_ENV": "staging",
         "WRITES_ENABLED": "true",
-        "PUBLIC_ORIGIN": "https://REPLACE-WITH-STAGING-ORIGIN",
+        "PUBLIC_ORIGIN": "https://minas-em-movimento-staging.luq-marqs.workers.dev",
         "ALLOWED_ORIGINS": "",
-        "TURNSTILE_EXPECTED_HOSTNAMES": "REPLACE-WITH-STAGING-HOST",
+        "TURNSTILE_EXPECTED_HOSTNAMES": "minas-em-movimento-staging.luq-marqs.workers.dev",
       },
     },
   },
