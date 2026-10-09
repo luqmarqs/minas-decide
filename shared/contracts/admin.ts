@@ -17,6 +17,8 @@ export const AdminQueueQuery = z.object({
 
 export const AdminGroupProposal = z.object({
   id: z.string().uuid(),
+  /** group created on approval, when any */
+  group_id: z.string().uuid().nullable(),
   territory_id: TerritoryId,
   name_proposed: z.string(),
   join_url_proposed: z.string(),
@@ -75,6 +77,15 @@ export const AdminQueueResponse = z.object({
   next_cursor: z.string().nullable(),
 });
 export type AdminQueueResponse = z.infer<typeof AdminQueueResponse>;
+
+/** POST /admin/group-proposals/:id/reveal-contact — audited, aal2 only. */
+export const AdminRevealContactResponse = z.object({
+  proposal_id: z.string().uuid(),
+  proposer_email: z.string(),
+  proposer_phone: z.string(),
+  revealed_at: z.string(),
+});
+export type AdminRevealContactResponse = z.infer<typeof AdminRevealContactResponse>;
 
 export const SecurityEvent = z.object({
   id: z.string().uuid(),

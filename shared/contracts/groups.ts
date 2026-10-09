@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { TerritoryId } from './territory.ts';
 
-export const GroupStatus = z.enum(['pending', 'active', 'inactive', 'rejected']);
+export const GroupStatus = z.enum(['pending', 'active', 'inactive', 'rejected', 'suspended']);
 export type GroupStatus = z.infer<typeof GroupStatus>;
 
 export const PublicGroup = z.object({

@@ -43,6 +43,10 @@ export const MeResponse = z.object({
   selected_territory_id: TerritoryId.nullable(),
   is_admin: z.boolean(),
   account_state: z.enum(['active', 'suspended']),
+  /** masked E.164, e.g. +55 (31) 9****-**88 */
+  phone_masked: z.string().nullable(),
+  /** true after promotion by magic link until the person confirms/edits their data (P-SEC-1) */
+  profile_review_required: z.boolean(),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 
@@ -50,6 +54,9 @@ export const MePatch = z.object({
   display_name: z.string().trim().min(2).max(120).optional(),
   selected_territory_id: TerritoryId.optional(),
   contact_opt_in: z.boolean().optional(),
+  phone: BrazilPhone.optional(),
+  /** clears profile_review_required after the person confirmed/edited their data */
+  profile_reviewed: z.literal(true).optional(),
 });
 
 export const SendLinkInput = z.object({

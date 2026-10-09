@@ -12,6 +12,7 @@ export const ActivityStatus = z.enum([
   'rejected',
   'cancelled',
   'archived',
+  'suspended',
 ]);
 export type ActivityStatus = z.infer<typeof ActivityStatus>;
 
@@ -76,7 +77,8 @@ export const ActivityInput = z.object({
   territory_id: TerritoryId,
   public_address: z.string().trim().min(5).max(240),
   /** [lon, lat] */
-  coordinates: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
+  /** [lon, lat] restricted to the Minas Gerais bounding box (QA-1 F09). */
+  coordinates: z.tuple([z.number().min(-51.1).max(-39.8), z.number().min(-23.0).max(-14.2)]),
   location_confirmed: z.literal(true),
   starts_at: z.string().datetime(),
   ends_at: z.string().datetime().nullable().optional(),
