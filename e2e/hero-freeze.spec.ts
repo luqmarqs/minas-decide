@@ -25,9 +25,12 @@ test.describe('hero congelado', () => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
         await page.goto('/');
-        await page.waitForFunction('document.fonts.status === "loaded"', undefined, {
-          timeout: 10_000,
-        });
+        // Fonts settled (typed without the DOM lib; no string evaluation — CSP forbids eval).
+        await page.evaluate(
+          () =>
+            (globalThis as unknown as { document: { fonts: { ready: Promise<unknown> } } }).document
+              .fonts.ready,
+        );
         const hero = page.locator('section.brand-hero');
         await expect(hero).toBeVisible();
         // Let the hero image settle (it is preloaded; srcset may still swap once).
