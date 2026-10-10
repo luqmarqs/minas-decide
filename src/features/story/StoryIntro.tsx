@@ -145,8 +145,10 @@ function Step({
       {side ? (
         <div
           className={cn(
-            'mt-5 min-w-0 md:z-[1] md:bg-surface md:pb-3 md:motion-safe:sticky md:motion-safe:top-[calc(var(--header-height)+0.5rem)]',
-            'lg:static lg:col-span-7 lg:col-start-6 lg:row-span-3 lg:row-start-1 lg:mt-0 lg:self-center lg:pb-0',
+            // Static in every width: a per-step sticky map (tablet) painted over the step's own
+            // text while it scrolled underneath ("seção por cima da outra") — removed 2026-10-10.
+            'mt-5 min-w-0',
+            'lg:col-span-7 lg:col-start-6 lg:row-span-3 lg:row-start-1 lg:mt-0 lg:self-center',
           )}
         >
           {figure}
