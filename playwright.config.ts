@@ -17,7 +17,9 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: 'npm run build && npx wrangler dev --env local --port 8788',
+        // `--mode dev` (build:local) loads .env + .env.local (test keys) and NOT .env.production (live Clerk key
+        // and production Turnstile widget, which refuse localhost).
+        command: 'npm run build:local && npx wrangler dev --env local --port 8788',
         url: 'http://127.0.0.1:8788/api/v1/health',
         reuseExistingServer: true,
         timeout: 180_000,

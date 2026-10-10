@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './tokens.css';
+@import './editorial.css'; /* camada editorial (redesign): só regras aditivas, nada do hero */
 
 /* Expose tokens to Tailwind utilities (Tailwind 4 @theme). Components use
    bg-surface, text-primary, text-muted, bg-action, border-border, etc. */

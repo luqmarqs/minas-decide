@@ -1,0 +1,138 @@
+/*
+ * Camada EDITORIAL (redesign 2026-10-09) — regras de composição para as seções DEPOIS do hero.
+ *
+ * Princípio: espaçamento, alinhamento, filetes e tipografia organizam a página; caixas e sombras
+ * só quando um elemento é de fato interativo (cartão de atividade, formulário). Tudo aqui é
+ * ADITIVO: não redefine nenhum token de `tokens.css` nem toca em `.brand-hero` (hero congelado —
+ * ver e2e/hero-freeze.spec.ts). Consumo apenas de tokens semânticos existentes.
+ *
+ * Vocabulário:
+ *   .ed-section     ritmo vertical das seções editoriais (padding fluido) + gutter do projeto
+ *   .ed-measure     largura de leitura (≈ 62ch) para texto corrido
+ *   .ed-rule        filete horizontal fino (separador tipográfico, substitui bordas de card)
+ *   .ed-rule-strong filete forte (abertura de seção / "prancha")
+ *   .ed-kicker      rótulo pequeno em caixa alta com espaçamento (passo, fonte, categoria)
+ *   .ed-figure      número protagonista (tabular, apertado, pesado) — usa a fonte de display
+ *   .ed-figure-xl   variante grande para o número âncora de um bloco
+ *   .ed-note        anotação de gráfico (texto pequeno, cor secundária, com traço opcional)
+ *   .ed-grid-12     grade editorial de 12 colunas (≥ lg) para composições assimétricas
+ *   .ed-sticky      coluna fixa (scrollytelling) respeitando a altura do cabeçalho
+ *   .ed-caption     legenda de figura (fonte, denominador)
+ *   .ed-band-ink    faixa escura ("ilha" oliva) para momentos de impacto, com tokens do tema escuro
+ */
+
+.ed-section {
+  padding-block: clamp(2.5rem, 6vw, 5.5rem);
+  padding-inline: var(--gutter);
+}
+@media (min-width: 1024px) {
+  .ed-section {
+    padding-inline: 1.5rem;
+  }
+}
+
+.ed-measure {
+  max-width: 62ch;
+}
+
+.ed-rule {
+  border: 0;
+  height: 1px;
+  background: var(--color-border);
+  margin: 0;
+}
+.ed-rule-strong {
+  border: 0;
+  height: 3px;
+  background: var(--color-text-primary);
+  margin: 0;
+}
+
+.ed-kicker {
+  font-size: 0.75rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.ed-figure {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+  color: var(--color-text-primary);
+}
+.ed-figure-xl {
+  font-size: clamp(3rem, 9vw, 7.5rem);
+}
+.ed-figure-lg {
+  font-size: clamp(2.25rem, 5vw, 4rem);
+}
+.ed-figure-md {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+}
+
+.ed-note {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+}
+.ed-caption {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+/* Abaixo de 768 px a grade é uma coluna (os `col-span` só valem a partir de md). */
+.ed-grid-12 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: clamp(1.5rem, 3vw, 3rem);
+}
+@media (min-width: 768px) {
+  .ed-grid-12 {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: clamp(1rem, 2.5vw, 2.5rem);
+  }
+}
+
+.ed-sticky {
+  position: sticky;
+  top: calc(var(--header-height) + 0.75rem);
+}
+
+/* Faixa escura de impacto: a mesma "ilha oliva" do hero (global.css), remapeando os aliases
+   semânticos para que os componentes de dentro consumam tokens normalmente. Não altera .brand-hero. */
+.ed-band-ink {
+  --color-surface: var(--brand-olive-deep);
+  --color-surface-alt: var(--brand-olive);
+  --color-surface-raised: #2e302b;
+  --color-text-primary: var(--brand-cream);
+  --color-text-secondary: #d4c3b7;
+  --color-text-muted: #b3a497;
+  --color-text-on-action: var(--brand-ink);
+  --color-border: #3d3f38;
+  --color-border-strong: #9c7a4f;
+  --color-action-primary: var(--brand-sun);
+  --color-action-hover: #d7ac1e;
+  --color-action-active: #c99a12;
+  --color-action-soft: #3a3320;
+  --color-accent-soft: #3a3320;
+  --color-focus: var(--brand-sun);
+  --color-primary: var(--brand-cream);
+  --color-secondary: #d4c3b7;
+  --color-muted: #b3a497;
+  --color-on-action: var(--brand-ink);
+  --color-action: var(--brand-sun);
+  background: var(--brand-olive-deep);
+  color: var(--color-text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ed-sticky {
+    position: static;
+  }
+}

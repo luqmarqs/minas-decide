@@ -1,0 +1,17 @@
+/*
+ * Narrativa (redesign editorial): mosaico "atenuado" do passo 5. Uma opacidade no <svg> inteiro
+ * (nunca por path). No tema escuro a mesma opacidade do claro deixa as faixas lamacentas sobre o
+ * fundo escuro, então sobe para 0,72 — ainda lê como atenuado, com as faixas distinguíveis.
+ * Segue a mesma lógica de tema de tokens.css (preferência do sistema + data-theme).
+ */
+.story-dim {
+  opacity: 0.55;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .story-dim {
+    opacity: 0.72;
+  }
+}
+:root[data-theme='dark'] .story-dim {
+  opacity: 0.72;
+}

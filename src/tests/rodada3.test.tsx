@@ -537,26 +537,43 @@ describe('StoryIntro (D25)', () => {
     expect(map.paths[0]!.d).toMatch(/^M[\d.]+ [\d.]+L.*Z$/);
   });
 
-  it('renders the five steps, numbers from the file and maps described in text', () => {
-    const margin = (year: number, round: number): MapLayerValues => ({
-      layer: 'president_margin',
-      year,
-      round,
-      unit: 'pp',
-      candidate_id: null,
-      values: { 'mg-3106200': 20, 'mg-3136702': -30 },
-      domain: [-60, 60],
-    });
+  const storyMargin = (year: number, round: number): MapLayerValues => ({
+    layer: 'president_margin',
+    year,
+    round,
+    unit: 'pp',
+    candidate_id: null,
+    values: { 'mg-3106200': 20, 'mg-3136702': -30 },
+    domain: [-60, 60],
+  });
+  const renderStory = () =>
     renderWithApp(
       <StoryIntroView
         highlights={HIGHLIGHTS}
-        margin2026={margin(2026, 1)}
-        margin2022r2={margin(2022, 2)}
+        margin2026={storyMargin(2026, 1)}
+        margin2022r2={storyMargin(2022, 2)}
         map={projectMunicipalities(geo, 200)}
         releaseId="rel-1"
         demo={false}
       />,
     );
+  const describedText = (el: Element) =>
+    (el.getAttribute('aria-describedby') ?? '')
+      .split(/\s+/)
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+
+  it('renders the five steps, numbers from the file and maps described in text', () => {
+    renderStory();
+    const section = screen.getByTestId('story-intro');
+    expect(section).toHaveAttribute('aria-labelledby', 'story-title');
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Minas, cidade por cidade' }),
+    ).toHaveAttribute('id', 'story-title');
+    // Static mode (no IntersectionObserver / narrow screen): five steps in an ordered list.
+    expect(section).toHaveAttribute('data-story-mode', 'static');
+    const list = section.querySelector('ol')!;
+    expect(list.querySelectorAll(':scope > li[data-step]')).toHaveLength(5);
     const steps = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
     expect(steps).toEqual([
       'O mapa do primeiro turno assusta',
@@ -571,24 +588,102 @@ describe('StoryIntro (D25)', () => {
     expect(screen.getByText('49.650 votos')).toBeInTheDocument();
     expect(screen.getByText('3.735.098')).toBeInTheDocument();
     expect(screen.getByText(/não indicam preferência/)).toBeInTheDocument();
+    // Five static maps: wall (1), wall + mosaic side by side (2), 2022 (4), 2026 + sun (5).
     const maps = screen.getAllByTestId('story-map');
-    expect(maps).toHaveLength(3);
+    expect(maps).toHaveLength(5);
     for (const m of maps) {
-      const desc = document.getElementById(m.getAttribute('aria-describedby')!);
-      expect(desc?.textContent).toMatch(/Fonte: TSE/);
+      expect(m).toHaveAttribute('role', 'img');
+      expect(m.getAttribute('aria-label')).toBeTruthy();
+      // D10: short caption per map + the step's single source line, both in aria-describedby.
+      expect(describedText(m)).toMatch(/Fonte: TSE/);
+      // D32: short sources, no file names or release ids.
+      expect(describedText(m)).not.toMatch(/rel-1|\.zip|snapshot/);
     }
-    // Step 2 colours municipalities by margin (Lula red / Bolsonaro blue tokens).
-    const paths = maps[1]!.querySelectorAll('path');
+    // Step 2 puts the wall and the mosaic in the same visual field.
+    const compare = within(screen.getByTestId('story-compare'));
+    expect(compare.getByText('Resumo')).toBeInTheDocument();
+    expect(compare.getByText('Município a município')).toBeInTheDocument();
+    expect(compare.getAllByTestId('story-map')).toHaveLength(2);
+    // The wall is one path (one colour); the mosaic colours municipalities by margin.
+    expect(maps[1]!.querySelectorAll('path')).toHaveLength(1);
+    expect(maps[1]!.querySelector('path')!.getAttribute('style')).toContain('--map-bolsonaro');
+    const paths = maps[2]!.querySelectorAll('path');
     expect(paths[0]!.getAttribute('style')).toContain('--map-lula');
     expect(paths[1]!.getAttribute('style')).toContain('--map-bolsonaro');
-    // D28: steps 3 and 5 point to the sign-up section of the home page.
+    // Step 5 legend does not promise suns on this map (it has none).
+    expect(
+      screen.getByText(
+        /Este é o mosaico de 2026\. As atividades da campanha aparecem no mapa interativo/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('story-wall-thumb')).not.toBeInTheDocument();
+    // The colour bands are explained once (step 2), not under every map.
+    expect(screen.getAllByText(/tons claros: margem de até 15 p\.p\./)).toHaveLength(1);
+    // D6/D28: one sign-up invite (step 5, secondary) next to the primary "see the map" link.
     const ctas = screen.getAllByRole('link', { name: 'Quero participar' });
-    expect(ctas).toHaveLength(2);
-    for (const a of ctas) expect(a).toHaveAttribute('href', '#participar');
-    // D32: short sources under the figures, no file names or release ids.
-    for (const m of maps) {
-      const desc = document.getElementById(m.getAttribute('aria-describedby')!);
-      expect(desc?.textContent).not.toMatch(/rel-1|\.zip|snapshot/);
+    expect(ctas).toHaveLength(1);
+    expect(ctas[0]).toHaveAttribute('href', '#participar');
+    expect(screen.getByRole('link', { name: 'Ver o seu bairro no mapa' })).toHaveAttribute(
+      'href',
+      '/#mapa',
+    );
+  });
+
+  it('step 3 is an infographic of three bars, each on its own base, in neutral colours', () => {
+    renderStory();
+    const box = screen.getByTestId('story-absence');
+    const bars = within(box);
+    expect(bars.getByText('3.735.098')).toBeInTheDocument();
+    expect(bars.getByText('661.039')).toBeInTheDocument();
+    expect(bars.getByText('1.009.751')).toBeInTheDocument();
+    // Denominators written beside each bar (aptos, comparecimento, válidos derived).
+    const text = (box.textContent ?? '').replace(/\s+/g, ' ');
+    expect(text).toMatch(/22,8% de 16,4 mi aptos/);
+    expect(text).toMatch(/5,2% de 12,6 mi que compareceram/);
+    expect(text).toMatch(/8,4% de 12,0 mi votos válidos/);
+    expect(
+      screen.getByText(/Votos válidos = comparecimento menos brancos e nulos/),
+    ).toBeInTheDocument();
+    expect(box.innerHTML).not.toMatch(/--map-(lula|bolsonaro)/);
+    expect(box.innerHTML).toContain('--map-fill-mid-high');
+  });
+
+  it('stays static on wide screens with motion (D45: sticky narrative disabled)', () => {
+    class FakeIO {
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+      takeRecords() {
+        return [];
+      }
+    }
+    vi.stubGlobal('IntersectionObserver', FakeIO);
+    const mm = vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === '(min-width: 1024px)',
+          media: query,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList,
+    );
+    try {
+      renderStory();
+      const section = screen.getByTestId('story-intro');
+      expect(section).toHaveAttribute('data-story-mode', 'static');
+      expect(screen.queryAllByTestId('story-sticky')).toHaveLength(0);
+      // Every step keeps its own map(s): 1 + 2 (wall × mosaic) + 0 + 1 + 1.
+      expect(
+        section.querySelector('ol')!.querySelectorAll('[data-testid="story-map"]'),
+      ).toHaveLength(5);
+      expect(section.querySelector('li[data-step="1"]')).toHaveClass('ed-band-ink');
+      expect(screen.queryByTestId('story-wall-thumb')).not.toBeInTheDocument();
+    } finally {
+      mm.mockRestore();
     }
   });
 
@@ -604,8 +699,9 @@ describe('StoryIntro (D25)', () => {
       />,
     );
     expect(screen.queryAllByTestId('story-map')).toHaveLength(0);
-    expect(screen.getAllByRole('status', { name: 'Carregando mapa' })).toHaveLength(3);
+    expect(screen.getAllByRole('status', { name: 'Carregando mapa' })).toHaveLength(5);
     expect(screen.getByText('DADOS DEMONSTRATIVOS')).toBeInTheDocument();
     expect(screen.queryByText(/municípios$/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('sem dado')).toHaveLength(3);
   });
 });

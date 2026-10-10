@@ -1,0 +1,56 @@
+[
+ {
+  "route": "/",
+  "run": 1,
+  "perf": 88,
+  "a11y": 90,
+  "bp": 73,
+  "fcp": "2.2 s",
+  "lcp": "2.8 s",
+  "tbt": "270 ms",
+  "cls": "0",
+  "si": "2.2 s",
+  "bootup": [
+   "/assets/index-DfUyd56T.js:972ms",
+   "/:88ms",
+   "Unattributable:99ms",
+   "https://clerk.minasdecide.com.br/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js:109ms"
+  ]
+ },
+ {
+  "route": "/",
+  "run": 2,
+  "perf": 84,
+  "a11y": 90,
+  "bp": 73,
+  "fcp": "2.3 s",
+  "lcp": "2.9 s",
+  "tbt": "380 ms",
+  "cls": "0",
+  "si": "2.3 s",
+  "bootup": [
+   "/assets/index-DfUyd56T.js:957ms",
+   "/:81ms",
+   "Unattributable:104ms",
+   "https://clerk.minasdecide.com.br/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js:67ms"
+  ]
+ },
+ {
+  "route": "/",
+  "run": 3,
+  "perf": 88,
+  "a11y": 90,
+  "bp": 73,
+  "fcp": "2.2 s",
+  "lcp": "2.8 s",
+  "tbt": "290 ms",
+  "cls": "0",
+  "si": "2.2 s",
+  "bootup": [
+   "/assets/index-DfUyd56T.js:966ms",
+   "/:77ms",
+   "Unattributable:95ms",
+   "https://clerk.minasdecide.com.br/npm/@clerk/clerk-js@5/dist/clerk.headless.browser.js:63ms"
+  ]
+ }
+]

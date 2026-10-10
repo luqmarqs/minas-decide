@@ -111,7 +111,7 @@ for (const [dev, desc] of Object.entries(DEVICES)) {
     await page.keyboard.press('Escape');
   }
   // Infographic carousel.
-  const strip = page.locator('[data-testid="why-minas-carousel"]');
+  const strip = page.locator('[data-testid="why-minas"]');
   if (await strip.count()) {
     await strip.scrollIntoViewIfNeeded();
     await page.waitForTimeout(400);

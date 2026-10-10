@@ -54,7 +54,7 @@ export function MobilizationList({
   }
   return (
     <div className="flex flex-col gap-2">
-      <ol className="flex flex-col divide-y divide-border rounded-md border border-border">
+      <ol className="flex flex-col divide-y divide-border border-y border-border">
         {ranking.top.map((r, i) => (
           <li key={r.id}>
             <button
@@ -62,7 +62,7 @@ export function MobilizationList({
               onClick={() => onSelectTerritory(r.id)}
               className="flex min-h-11 w-full items-center gap-3 px-2 py-1.5 text-left hover:bg-surface-alt"
             >
-              <span className="w-5 shrink-0 text-right text-xs text-muted tabular-nums">
+              <span className="ed-figure w-6 shrink-0 text-right text-base text-muted">
                 {i + 1}
               </span>
               <span className="min-w-0 flex-1">
@@ -81,7 +81,7 @@ export function MobilizationList({
                     : ''}
                 </span>
               </span>
-              <span className="shrink-0 font-semibold tabular-nums">{formatPercent(r.rate)}</span>
+              <span className="ed-figure shrink-0 text-lg">{formatPercent(r.rate)}</span>
               <Icon name="chevronRight" size={16} className="shrink-0 text-muted" />
             </button>
           </li>

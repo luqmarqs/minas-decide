@@ -12,6 +12,8 @@ export interface DuelRound {
   label: string;
   lula: { share: number; votes: number | null };
   bolsonaro: { share: number; votes: number | null; name: string };
+  /** Published Lula − Bolsonaro margin in p.p. of valid votes (compare value of the margin id). */
+  marginPp: number | null;
 }
 
 export interface Infographic {
@@ -57,6 +59,7 @@ export function buildInfographic(h: Highlights | null | undefined): Infographic 
     lulaVotes: string,
     bolsoVotes: string,
     bolsoName: string,
+    marginId: string,
     lulaShare?: string,
     bolsoShare?: string,
   ): DuelRound | null => {
@@ -67,6 +70,7 @@ export function buildInfographic(h: Highlights | null | undefined): Infographic 
       label,
       lula: { share: ls, votes: v(lulaVotes) },
       bolsonaro: { share: bs, votes: v(bolsoVotes), name: bolsoName },
+      marginPp: cmp(marginId),
     };
   };
   const duel = [
@@ -75,18 +79,21 @@ export function buildInfographic(h: Highlights | null | undefined): Infographic 
       'mg_2022_r1_lula_votes',
       'mg_2022_r1_bolsonaro_votes',
       'Jair Bolsonaro',
+      'mg_2022_r1_margin_votes',
     ),
     round(
       '2022 · 2º turno',
       'mg_2022_r2_lula_votes',
       'mg_2022_r2_bolsonaro_votes',
       'Jair Bolsonaro',
+      'mg_2022_r2_margin_votes',
     ),
     round(
       '2026 · 1º turno',
       'mg_2026_r1_lula_votes',
       'mg_2026_r1_flavio_votes',
       'Flávio Bolsonaro',
+      'mg_2026_r1_margin_votes',
       'mg_2026_r1_lula_share',
       'mg_2026_r1_flavio_share',
     ),

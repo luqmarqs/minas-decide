@@ -51,10 +51,10 @@ function CandidateCard({ e, demo }: { e: PresidentialComparisonEntry; demo?: boo
   const namesDiffer = e.ballot_name_2022 !== e.ballot_name_2026;
   return (
     <article
-      className="flex min-w-0 flex-col rounded-md border border-border bg-surface p-3"
+      className="flex min-w-0 flex-col border-t-2 border-primary pt-2"
       aria-labelledby={`pc-${e.key}`}
     >
-      <h3 id={`pc-${e.key}`} className="font-body text-base font-bold tracking-normal">
+      <h3 id={`pc-${e.key}`} className="font-body text-lg font-bold tracking-normal">
         {title}
       </h3>
       <p className="text-xs text-muted">
@@ -67,10 +67,10 @@ function CandidateCard({ e, demo }: { e: PresidentialComparisonEntry; demo?: boo
         <Row label="2022 · 2º turno" share={e.share_2022_r2} votes={e.votes_2022_r2} />
         <Row label="2026 · 1º turno" share={e.share_2026_r1} votes={e.votes_2026_r1} />
       </dl>
-      <div className="mt-2 rounded-sm bg-surface-alt p-2">
-        <p className="text-xs font-semibold text-secondary">Variação no 1º turno (2026 − 2022)</p>
-        <p className="tabular-nums">
-          <strong className="text-lg">{formatPp(e.delta_pp_r1)}</strong>{' '}
+      <div className="mt-1 border-t border-border-strong pt-2">
+        <p className="ed-kicker">Variação no 1º turno (2026 − 2022)</p>
+        <p className="mt-1 tabular-nums">
+          <strong className="ed-figure text-2xl">{formatPp(e.delta_pp_r1)}</strong>{' '}
           <span className="text-sm text-secondary">
             {e.delta_votes_r1 === null ? '' : `${formatSignedInt(e.delta_votes_r1)} votos`}
           </span>
@@ -114,7 +114,7 @@ export function PresidentialComparisonBlock({
           {comparison.note ? ` ${comparison.note}` : ''}
         </Note>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-x-5 gap-y-4">
           {entries.map((e) => (
             <CandidateCard key={e.key} e={e} demo={demo} />
           ))}

@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import {
   OFFICE_LABEL_PT,
   VOTES_PER_VOTER,
@@ -10,28 +9,43 @@ import { Note } from '@/components/ui/States';
 import { cn } from '@/lib/cn';
 import { formatInt, formatPercent } from '@/lib/format';
 
-export function MetricCard({
-  label,
-  value,
-  detail,
-  className,
-}: {
-  label: string;
-  value: string;
-  detail?: ReactNode;
-  className?: string;
-}) {
+/** Neutral proportion bar (no party or moral colour): value ÷ denominator. */
+function ShareBar({ value }: { value: number | null }) {
+  const pct = value === null ? 0 : Math.max(0, Math.min(1, value));
   return (
-    <div className={cn('rounded-md border border-border bg-surface p-3', className)}>
-      <p className="text-xs font-semibold tracking-wide text-muted uppercase">{label}</p>
-      <p className="mt-0.5 font-display text-2xl leading-tight font-(--heading-weight) tabular-nums">
-        {value}
-      </p>
-      {detail ? <p className="mt-0.5 text-sm text-secondary">{detail}</p> : null}
+    <div className="mt-2 h-1.5 bg-surface-alt" aria-hidden="true">
+      <div className="h-full bg-border-strong" style={{ width: `${pct * 100}%` }} />
     </div>
   );
 }
 
+function PairFigure({
+  label,
+  value,
+  rate,
+  detail,
+}: {
+  label: string;
+  value: string;
+  rate: number | null;
+  detail: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="ed-kicker">{label}</p>
+      <p className="ed-figure ed-figure-md mt-1">{value}</p>
+      <ShareBar value={rate} />
+      <p className="ed-note mt-1.5 tabular-nums">{detail}</p>
+    </div>
+  );
+}
+
+/**
+ * Participation indicators as a typographic composition (redesign editorial, D11): eligible
+ * voters as a context line; turnout × abstention as a pair with neutral bars; blank + null
+ * votes highlighted (the "votes that can be won"); valid votes of the basis office as a line.
+ * Same numbers, labels and denominators as before.
+ */
 export function TurnoutCards({ m }: { m: TerritoryMetrics }) {
   const t = m.turnout;
   if (!t) {
@@ -39,43 +53,59 @@ export function TurnoutCards({ m }: { m: TerritoryMetrics }) {
       <Note tone="warning">Sem dados de comparecimento para este território neste ano/turno.</Note>
     );
   }
+  const blankNull = t.blank + t.null_votes;
   return (
-    <div className="grid grid-cols-2 gap-2">
-      <MetricCard
-        label="Eleitorado apto"
-        value={formatInt(t.eligible)}
-        detail="pessoas aptas a votar"
-      />
-      <MetricCard
-        label="Comparecimento"
-        value={formatPercent(t.turnout_rate)}
-        detail={`${formatInt(t.turnout)} de ${formatInt(t.eligible)} aptos`}
-      />
-      <MetricCard
-        label="Abstenção"
-        value={formatPercent(t.abstention_rate)}
-        detail={`${formatInt(t.abstention)} de ${formatInt(t.eligible)} aptos`}
-      />
-      <MetricCard
-        label={
-          t.basis_office === 'president'
-            ? 'Brancos e nulos'
-            : `Brancos e nulos · ${OFFICE_LABEL_PT[t.basis_office]}`
-        }
-        value={formatPercent(t.turnout > 0 ? (t.blank + t.null_votes) / t.turnout : null)}
-        detail={
-          <>
-            {formatInt(t.blank + t.null_votes)} de {formatInt(t.turnout)} comparecimentos ·{' '}
+    <div className="flex flex-col gap-5">
+      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="ed-kicker">Eleitorado apto</span>
+        <span className="text-lg font-bold text-primary tabular-nums">{formatInt(t.eligible)}</span>
+        <span className="text-sm text-secondary">pessoas aptas a votar</span>
+      </p>
+      <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+        <PairFigure
+          label="Comparecimento"
+          value={formatPercent(t.turnout_rate)}
+          rate={t.turnout_rate}
+          detail={`${formatInt(t.turnout)} de ${formatInt(t.eligible)} aptos`}
+        />
+        <PairFigure
+          label="Abstenção"
+          value={formatPercent(t.abstention_rate)}
+          rate={t.abstention_rate}
+          detail={`${formatInt(t.abstention)} de ${formatInt(t.eligible)} aptos`}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <hr className="ed-rule-strong" aria-hidden="true" />
+        <div>
+          <p className="ed-kicker">
+            {t.basis_office === 'president'
+              ? 'Brancos e nulos'
+              : `Brancos e nulos · ${OFFICE_LABEL_PT[t.basis_office]}`}
+          </p>
+          <p className="ed-figure ed-figure-lg mt-1">
+            {formatPercent(t.turnout > 0 ? blankNull / t.turnout : null)}
+          </p>
+          <p className="mt-1.5 text-sm text-secondary tabular-nums">
+            {formatInt(blankNull)} de {formatInt(t.turnout)} comparecimentos ·{' '}
             <span className="font-semibold text-primary">votos que podem ser conquistados</span>
-          </>
-        }
-      />
-      <MetricCard
-        className="col-span-2"
-        label={`Válidos · ${OFFICE_LABEL_PT[t.basis_office]}`}
-        value={formatInt(t.valid)}
-        detail={`brancos ${formatInt(t.blank)} · nulos ${formatInt(t.null_votes)} · de ${formatInt(t.turnout)} comparecimentos`}
-      />
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-col gap-2">
+        <hr className="ed-rule" aria-hidden="true" />
+        <div>
+          <p className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <span className="ed-kicker">{`Válidos · ${OFFICE_LABEL_PT[t.basis_office]}`}</span>
+            <span className="text-lg font-bold text-primary tabular-nums">
+              {formatInt(t.valid)}
+            </span>
+          </p>
+          <p className="ed-note mt-0.5 tabular-nums">
+            {`brancos ${formatInt(t.blank)} · nulos ${formatInt(t.null_votes)} · de ${formatInt(t.turnout)} comparecimentos`}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
