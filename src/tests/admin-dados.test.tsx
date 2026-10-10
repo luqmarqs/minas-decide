@@ -261,7 +261,7 @@ describe('Dados section', () => {
       ),
     );
     expect(screen.getByText('99,39%')).toBeInTheDocument();
-    expect(await screen.findByText('2 de 3')).toBeInTheDocument(); // neighborhoods compared
+    expect(await screen.findByText('1 de 4'.replace(',', '.'))).toBeInTheDocument(); // municipalities with a published comparison (layer is municipal)
     expect(screen.getByText('2026 · 1º turno').closest('div')).toHaveTextContent('comparecimento');
     expect(screen.getByRole('list', { name: 'Bairros por qualidade do dado' })).toHaveTextContent(
       'indisponível',

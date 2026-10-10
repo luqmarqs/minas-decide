@@ -179,3 +179,8 @@ Auditoria adversarial (`qa-security`) da rodada 2. Testes de regressão em `work
 | QA2-11 | — | Rascunhos com endereço/contato deixados no dispositivo | Frontend (`src/lib/auth.ts`), fora do escopo do BE-3 |
 | QA2-12 | — | Admin sem fator TOTP: quem fizer o primeiro login enrola o fator | **Política alterada por D35** — o fator TOTP deixou de ser exigido para admin (era MITIGADO no BE-3); a corrida do primeiro enrolamento deixa de dar acesso extra, já que o admin entra sem MFA. Risco aceito pelo proprietário: segurança do admin = segurança da conta de e-mail |
 | F17 (QA-1) | baixo | Segredo em argv no modo `db-url` | **CORRIGIDO** (D19) |
+
+## Conta validadora do agente (D46)
+
+`validador@minasdecide.com.br` é um administrador criado para o agente validar as telas de admin com navegador automatizado. Entra só por **sign-in token** da Backend API do Clerk (10 min, uso único), gerado por quem tem a chave secreta da instância; não tem senha nem caixa de e-mail. Toda ação fica na auditoria como qualquer admin. Para revogar: remover em `/admin` → Administradores (ou apagar o usuário no painel do Clerk).
+

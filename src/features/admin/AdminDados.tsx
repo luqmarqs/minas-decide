@@ -151,10 +151,12 @@ function CoverageBlock({
     return { hoods: hoods.length, withData, quality, top };
   }, [index]);
 
-  const compared =
-    cmp.data && stats
-      ? Object.keys(cmp.data.values).filter((k) => /^mg-\d{7}-/.test(k)).length
-      : null;
+  // The public comparison layer is municipal (one value per municipality); the bairro-level
+  // comparison lives inside each municipality's metrics file and is summarised by the coverage
+  // notes (matching rate, municipalities under 80 %) — never counted here.
+  const compared = cmp.data
+    ? Object.keys(cmp.data.values).filter((k) => /^mg-\d{7}$/.test(k)).length
+    : null;
 
   const byOffice = useMemo(() => {
     const m = new Map<string, number>();
@@ -244,11 +246,11 @@ function CoverageBlock({
           />
           <Figure
             value={
-              compared !== null && stats
-                ? `${formatInt(compared)} de ${formatInt(stats.hoods)}`
+              compared !== null && totalMg !== null
+                ? `${formatInt(compared)} de ${formatInt(totalMg)}`
                 : pendingOrNp(cmp.isError || cmp.data === null)
             }
-            label="bairros com comparação publicada"
+            label="municípios com comparação 2022→2026 publicada (por bairro: nos arquivos de métricas)"
           />
         </div>
         {stats && stats.quality.size ? (
