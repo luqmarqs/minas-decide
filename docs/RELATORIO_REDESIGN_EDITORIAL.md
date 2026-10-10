@@ -55,7 +55,22 @@ Riscos aceitos e mitigação: (1) `position: sticky` + troca de estado por Inter
 
 ## 3. Princípios aplicados (de `docs/REFERENCIAS_REDESIGN_EDITORIAL.md`)
 
-_(preenchido na fase 4, após a pesquisa)_
+A pesquisa examinou 26 referências (38 URLs lidas; as que falharam estão registradas no documento). Dos 15 princípios consolidados, estes governam a implementação:
+
+| Princípio (pesquisa) | Onde se aplica | Referências |
+|---|---|---|
+| Um gráfico por ideia; título como conclusão, unidade e base junto do título | infográfico (cada peça responde a uma pergunta), momento 3 (três bases, três barras separadas) | Pudding, SWD, Nexo, FT Visual Vocabulary |
+| Anotar sobre o dado em vez de embalar em card: número > rótulo > fonte | infográfico (número âncora, pequenos múltiplos com filetes), momento 4, painel territorial | NN/g (hierarquia, escala), SWD |
+| Três tamanhos de tipo, no máximo dois elementos grandes por tela | todas as pranchas (`.ed-figure-xl/lg/md`, `.ed-kicker`, `.ed-caption`) | NN/g ×2, lambe-lambe |
+| Scroll só quando a transição carrega informação; empilhar com movimento reduzido e no celular quando não acrescenta | narrativa (mapa fixo que muda de estado; no celular momento 2 lado a lado; reduced motion = mapas estáticos) | Pudding (scrollama, responsive scrollytelling), WCAG 2.3.3 |
+| Mudança no tempo lida em p.p., lado a lado, com legenda comum | infográfico (comparativo 2022 → 2026), momento 4 | Nexo 2022×2026, Datawrapper 2021, AnyChart |
+| Legenda com classes, unidade e classe "empate técnico" explícita; bordas finas entre áreas (3:1) | momento 2 (rótulos existentes mantidos; refino na rodada de revisão), mapa | Datawrapper ×2, WCAG 1.4.11 |
+| Reflow a 320 px; alvos ≥ 44 px; foco nunca sob o sheet | todas as seções (teste e2e de overflow em 390/320) | WCAG 1.4.10, 2.4.11, 2.5.8 |
+| Linguagem de cartaz nas vinhetas, não nos dados | faixa oliva do cadastro e do momento 1; gráficos e mapas limpos | Tupinambá Lambido, xilogravura (URCA) |
+| Ficha técnica como parte do gráfico (fonte, turno, base, aproximação, status) | uma linha `.ed-caption` por peça; metodologia linkada | Nexo, Atlas RS, Pudding |
+| Agenda como lista cronológica: data em coluna estreita + título + local + selo de tipo | agenda (prancha 04) | Pindograma, NN/g |
+
+**Desvios deliberados em relação à pesquisa (decisão de direção, proprietário > referência):** (1) a pesquisa recomenda abandonar vermelho/azul partidários em favor de uma divergente céu–creme–ocre; o proprietário decidiu pelo enquadramento explícito de campanha e as cores partidárias ficam **só** na narrativa e na camada de margem (D25) — mantidas; (2) a pesquisa limita Anton ao hero e selos; os títulos dos momentos e os números do infográfico já usavam `.brand-display` desde a rodada 3 com aceite do proprietário — mantidos, sem ampliar para novos lugares; (3) propostas que exigem ETL/MapLibre (mapa de setas, pontos por local de votação, basemap próprio) ficam registradas como pendências, fora do escopo frontend desta missão.
 
 ## 4. Solução implementada
 
