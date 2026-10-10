@@ -18,7 +18,14 @@ import { chromium } from 'playwright';
 const args = Object.fromEntries(
   process.argv
     .slice(2)
-    .map((a, i, all) => (a.startsWith('--') ? [a.slice(2), all[i + 1]?.startsWith('--') || all[i + 1] === undefined ? 'true' : all[i + 1]] : null))
+    .map((a, i, all) =>
+      a.startsWith('--')
+        ? [
+            a.slice(2),
+            all[i + 1]?.startsWith('--') || all[i + 1] === undefined ? 'true' : all[i + 1],
+          ]
+        : null,
+    )
     .filter(Boolean),
 );
 const base = args.base ?? 'http://127.0.0.1:8788';
@@ -31,8 +38,14 @@ mkdirSync(out, { recursive: true });
 const clerk = createClerkClient({ secretKey });
 const found = await clerk.users.getUserList({ emailAddress: [email], limit: 1 });
 const user = found.data[0];
-if (!user) throw new Error(`Usuário ${email} não existe nesta instância: rode scripts/db/bootstrap-admin.ts antes.`);
-const token = await clerk.signInTokens.createSignInToken({ userId: user.id, expiresInSeconds: 600 });
+if (!user)
+  throw new Error(
+    `Usuário ${email} não existe nesta instância: rode scripts/db/bootstrap-admin.ts antes.`,
+  );
+const token = await clerk.signInTokens.createSignInToken({
+  userId: user.id,
+  expiresInSeconds: 600,
+});
 console.log('sign-in token criado para', email.replace(/^(.).*@/, '$1***@'));
 
 const browser = await chromium.launch();
@@ -46,11 +59,17 @@ for (const [tag, viewport] of [
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
   await page.goto(`${base}/entrar`, { waitUntil: 'load' });
-  await page.waitForFunction(() => Boolean(globalThis.Clerk && globalThis.Clerk.loaded), null, { timeout: 30_000 });
+  await page.waitForFunction(() => Boolean(globalThis.Clerk && globalThis.Clerk.loaded), null, {
+    timeout: 30_000,
+  });
   // The ticket is single-use: only the first context consumes it; later contexts reuse the
   // signed-in state by copying cookies? Clerk keeps the client in a cookie per context, so we
   // mint one ticket per context instead.
-  const ticket = tag === 'd1440' ? token.token : (await clerk.signInTokens.createSignInToken({ userId: user.id, expiresInSeconds: 600 })).token;
+  const ticket =
+    tag === 'd1440'
+      ? token.token
+      : (await clerk.signInTokens.createSignInToken({ userId: user.id, expiresInSeconds: 600 }))
+          .token;
   const status = await page.evaluate(async (t) => {
     const c = globalThis.Clerk;
     const res = await c.client.signIn.create({ strategy: 'ticket', ticket: t });
@@ -64,10 +83,16 @@ for (const [tag, viewport] of [
   await page.screenshot({ path: `${out}/admin-home-${tag}.png`, fullPage: true });
   for (const tab of ['Métricas', 'Cadastros', 'Administradores']) {
     const t = page.getByRole('tab', { name: tab });
-    if ((await t.count()) === 0) { results.push(`${tag}: aba ${tab} ausente`); continue; }
+    if ((await t.count()) === 0) {
+      results.push(`${tag}: aba ${tab} ausente`);
+      continue;
+    }
     await t.click();
     await page.waitForTimeout(3500);
-    const slug = tab.normalize('NFD').replace(/[^a-z]/gi, '').toLowerCase();
+    const slug = tab
+      .normalize('NFD')
+      .replace(/[^a-z]/gi, '')
+      .toLowerCase();
     await page.screenshot({ path: `${out}/admin-${slug}-${tag}.png`, fullPage: true });
     results.push(`${tag}: ${tab} ok`);
   }
