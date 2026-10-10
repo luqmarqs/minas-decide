@@ -443,3 +443,22 @@ A seção 6 deste relatório (sessão provisória do Supabase Auth, magic link, 
 
 **Ressalvas honestas:** (1) o beacon do **Web Analytics da Cloudflare** é injetado na zona e fica **bloqueado** pela CSP (sem envio de dados; gera erro de console a cada página) — não encontrei o site correspondente na API da conta para desligar a injeção; o proprietário pode desligar no painel ou pedir para liberar o host (D43). (2) **Mesmo banco de dev** em produção: usuários/atividades de teste e `[EXEMPLO]` aparecem no site real até serem limpos/arquivados; quem se cadastrou no staging (instância dev do Clerk) tem perfil com o id antigo e, ao se cadastrar em produção com o mesmo e-mail, receberá o 409 neutro até a limpeza — **incluindo o proprietário**, se tiver testado no staging. (3) Cadastro/login real com código por e-mail em produção **não testado por mim** (o Clerk live envia de `clkmail.minasdecide.com.br`). (4) Webhook `user.deleted` da instância live ainda não criado (painel do Clerk + secret). (5) Responsável legal no rodapé continua "[a definir]" — o site está público. (6) `accounts.minasdecide.com.br` (portal do Clerk) responde 403 e não é usado. (7) Token da Cloudflare que passou pelo chat continua válido — rotacionar.
 
+---
+
+# ADENDO — RODADA 5b: GESTÃO DE ADMINISTRADORES NO PAINEL (2026-10-09)
+
+**Pedido:** "precisa de uma funcionalidade de adicionar admins no painel admin". **Commit:** `de43616`. **Publicado** em staging (`bc848864…`) e produção (`e5d0894b…`); **migration 0014 aplicada** no TARGET (que serve a produção, D40).
+
+| Camada | Entrega |
+|---|---|
+| Banco (0014) | `svc_list_admins()`, `svc_add_admin(p_user,p_actor)` (idempotente), `svc_remove_admin(p_user,p_actor)` (trava a tabela e recusa esvaziá-la, `PT409`); `created_by` passa a aceitar `'bootstrap'`; mesmo padrão de privilégios das demais `svc_*` |
+| API | `GET /admin/admins` (e-mail **mascarado** via Clerk, `status: active|missing`, `is_self`), `POST /admin/admins {email}` (conta precisa existir no Clerk com e-mail primário verificado; 404 neutro se não existe ou está banida; 201/200), `DELETE /admin/admins/:userId` (400 se o próprio, 409 se o último); todas com admin **fresco** (sem cache), `noStore`, auditoria `admin.grant`/`admin.revoke` sem PII, bucket `admin_write` 30/10 min |
+| Painel | aba "Administradores" em `/admin` (chunk lazy): lista com e-mail mascarado, desde quando e quem adicionou; selos "você" e "sem usuário no Clerk"; formulário com confirmação em diálogo (explica que a pessoa já precisa ter conta em `/participar` e que recebe acesso total à moderação e aos contatos); "Remover" com confirmação e desabilitado no próprio |
+| Testes | worker 11 novos (conceder/revogar/próprio/último/inexistente/não verificado/não-admin) e front 7 novos; `npm run ci` **511/511**; `test:db` **58/58** ao vivo; isolamento OK |
+
+**Risco registrado (SECURITY.md):** um admin comprometido pode conceder acesso a outros; mitigações: e-mail verificado obrigatório, auditoria, limite de escrita e revogação imediata; MFA segue opcional (D35). Concessão e auditoria são duas chamadas (padrão do projeto); um RPC transacional endureceria.
+
+**Não validado:** revisão visual/axe da aba nova (exige sessão de admin real — fluxo por código de e-mail); comportamento real de `findUserByEmail`/`getUser` nas rotas novas só com fakes (as funções do Clerk já são exercitadas pelos testes ao vivo do cadastro).
+
+**Limpeza de dados de dev (pedido do proprietário):** a execução foi **bloqueada pela permissão da sessão** (apaga dados num banco que agora serve a produção). A simulação mostrou o escopo exato: 1 identidade da instância dev do Clerk e as 3 atividades `[EXEMPLO]`. Comando para o proprietário rodar: `APP_ENV=local npx tsx scripts/db/cleanup-dev-data.ts --yes --all`. O admin do proprietário na instância **live** já existe e não é afetado por essa limpeza.
+
