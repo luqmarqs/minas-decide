@@ -1,245 +1,341 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { formatInt, formatPercent, formatPp } from '@/lib/format';
-import { Carousel } from './Carousel';
-import { compactNumber, type Infographic } from './infographic';
+import { compactNumber, type DuelRound, type Infographic } from './infographic';
 
 /*
- * Infographic tiles (D34). Mark specs from the dataviz method: thin bars (≤ 10 px), 2 px
- * surface gaps between touching segments, a 2 px surface ring on the dot, hairline axis,
- * text in text tokens (never in the series colour), partisan colours ONLY on the Lula ×
- * Bolsonaro marks (D25 tokens, validated: lightness band + CVD ΔE ≥ 15). Each SVG is
- * role="img" with the numbers in aria-label; bars carry <title> for hover.
+ * "Por que Minas decide" como página dupla de jornal (redesign editorial, direção A — D4/D5/D10).
+ *
+ * Hierarquia por escala e posição, não por caixas: número âncora (10,3% do eleitorado) em
+ * `.ed-figure-xl`; o comparativo 2022 → 2026 ocupa a maior coluna; a margem de 2022 vira uma
+ * régua tipográfica logo abaixo; uma linha de pequenos múltiplos (municípios, participação,
+ * nenhum dos dois) separada por filetes. Sem carrossel: no celular é uma lista vertical a toda
+ * a largura, com os seis números sempre visíveis (D5).
+ *
+ * Marcas: barras retas (sem raio), espaço de 2 px entre segmentos que se tocam, texto sempre em
+ * tokens de texto (nunca na cor da série). Cores partidárias (D25) SÓ no comparativo, na divisão
+ * de municípios e na margem; o resto usa a escala neutra `--map-fill-*` (contraste ≥ 3:1 sobre a
+ * superfície nos dois temas: `high` e `mid-high`; a abstenção é um segmento vazado com contorno
+ * `--color-border-strong`). Cada gráfico é um único `role="img"` com todos os números no
+ * `aria-label`; os filhos visuais são decorativos para tecnologia assistiva (o rótulo já diz tudo)
+ * e as barras mantêm `<title>` para o detalhe ao passar o mouse.
  */
 
 const pct100 = (v: number, d = 1) => formatPercent(v / 100, d);
-const INK = { fill: 'var(--color-text-secondary)' } as const;
-const MUTED = { fill: 'var(--color-text-muted)' } as const;
+const DUEL_MAX = 60; // escala 0–60% dos votos válidos (em MG os percentuais ficam abaixo de 60%)
+const fill = (color: string): CSSProperties => ({ fill: color });
 
-function Tile({
-  big,
+/** Bloco da grade: pergunta curta (h3) + número + texto + gráfico + uma linha de fonte. */
+function Figure({
+  testId,
+  kicker,
+  figure,
+  figureSize = 'lg',
   label,
   source,
   children,
   className,
-  testId,
+  alignSource = false,
 }: {
-  big: ReactNode;
+  testId: string;
+  kicker: string;
+  figure: ReactNode;
+  figureSize?: 'xl' | 'lg' | 'md';
   label: ReactNode;
-  source: string;
+  /** Short source; null when the block shares the source line of a neighbour (D10). */
+  source: string | null;
   children: ReactNode;
   className?: string;
-  testId?: string;
+  /** Pin the source line to the bottom (small multiples side by side share a baseline). */
+  alignSource?: boolean;
 }) {
   return (
-    <li
-      data-testid={testId}
-      className={cn(
-        // Phones: width leaves ~28 px of the next tile visible (peek, FE-10); ≤ 160 px tall.
-        'flex h-40 w-[calc(100%-1.25rem)] min-w-0 shrink-0 snap-start flex-col overflow-hidden rounded-md border border-border bg-surface-raised px-3 pt-2 pb-1.5 sm:w-[46%] md:h-auto md:min-h-40 md:w-auto',
-        className,
-      )}
-    >
-      <p className="brand-display text-[1.9rem] leading-none tabular-nums">{big}</p>
-      <p className="mt-1 text-xs leading-snug font-semibold text-secondary">{label}</p>
-      <div className="mt-auto pt-1">{children}</div>
-      <p className="mt-0.5 text-[0.7rem] text-muted">Fonte: {source}</p>
+    <li data-testid={testId} className={cn('flex min-w-0 flex-col gap-3', className)}>
+      <h3 className="ed-kicker font-body">{kicker}</h3>
+      <p
+        className={cn(
+          'ed-figure flex flex-wrap items-baseline gap-x-[0.25em] tabular-nums',
+          figureSize === 'xl'
+            ? 'ed-figure-xl'
+            : figureSize === 'lg'
+              ? 'ed-figure-lg'
+              : 'ed-figure-md',
+        )}
+      >
+        {figure}
+      </p>
+      <p className="ed-measure text-base leading-snug text-secondary">{label}</p>
+      <div className="min-w-0">{children}</div>
+      {source ? (
+        <p className={cn('ed-caption pt-1', alignSource && 'mt-auto')}>Fonte: {source}</p>
+      ) : null}
     </li>
   );
 }
 
-function Swatch({ color }: { color: string }) {
+function Swatch({ color, hollow = false }: { color: string; hollow?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-block size-2.5 shrink-0 rounded-[2px]"
-      style={{ background: color }}
+      className="inline-block size-3 shrink-0"
+      style={hollow ? { boxShadow: `inset 0 0 0 1.5px ${color}` } : { background: color }}
     />
   );
 }
 
+/* 1 · número âncora --------------------------------------------------------------------------- */
+
 function NationalBar({ sharePct }: { sharePct: number }) {
-  const w = 200;
-  const fill = Math.max(2, (sharePct / 100) * w);
   return (
-    <svg
-      viewBox={`0 0 ${w} 10`}
-      className="h-2.5 w-full"
-      preserveAspectRatio="none"
-      role="img"
-      aria-label={`Minas tem ${pct100(sharePct)} do eleitorado do Brasil`}
-    >
-      <rect x="0" y="1" width={w} height="8" rx="2" style={{ fill: 'var(--map-fill-none)' }} />
-      <rect
-        x="0"
-        y="1"
-        width={fill}
-        height="8"
-        rx="2"
-        style={{ fill: 'var(--color-action-primary)' }}
-      >
-        <title>{`Minas Gerais: ${pct100(sharePct)} do eleitorado do Brasil`}</title>
-      </rect>
-    </svg>
+    <div role="img" aria-label={`Minas tem ${pct100(sharePct)} do eleitorado do Brasil`}>
+      {/* Contorno = Brasil (100%), em border-strong (≥ 3:1 nos dois temas); preenchimento = MG. */}
+      <div aria-hidden="true" className="relative h-3.5 border-[1.5px] border-border-strong">
+        <svg
+          viewBox="0 0 1000 10"
+          preserveAspectRatio="none"
+          className="absolute inset-0 block h-full w-full"
+        >
+          <rect
+            x="0"
+            y="0"
+            width={Math.max(4, sharePct * 10)}
+            height="10"
+            style={fill('var(--map-fill-high)')}
+          >
+            <title>{`Minas Gerais: ${pct100(sharePct)} do eleitorado do Brasil`}</title>
+          </rect>
+        </svg>
+      </div>
+      <p className="ed-caption mt-1.5 flex justify-between gap-2 tabular-nums" aria-hidden="true">
+        <span className="font-semibold text-secondary">Minas Gerais {pct100(sharePct)}</span>
+        <span>Brasil = 100%</span>
+      </p>
+    </div>
   );
 }
 
-function DuelBars({ duel }: { duel: Infographic['duel'] }) {
-  const W = 260;
-  const labelW = 74;
-  const max = 60; // % scale (shares in MG stay below 60%)
-  const barW = W - labelW - 40;
-  const rowH = 20;
-  const aria = duel
-    .map(
-      (r) =>
-        `${r.label}: Lula ${pct100(r.lula.share)}, ${r.bolsonaro.name} ${pct100(r.bolsonaro.share)}`,
-    )
-    .join('; ');
+/* 2 · comparativo 2022 → 2026 ----------------------------------------------------------------- */
+
+function leadNote(r: DuelRound): string | null {
+  if (r.marginPp === null) return null;
+  const abs = formatPp(Math.abs(r.marginPp)).replace(/^\+/, '');
+  if (Number(r.marginPp.toFixed(1)) === 0) return 'empate técnico';
+  const who = r.marginPp > 0 ? 'Lula' : r.bolsonaro.name;
+  return `${who} à frente por ${abs}`;
+}
+
+function DuelBar({
+  name,
+  share,
+  color,
+  title,
+}: {
+  name: string;
+  share: number;
+  color: string;
+  title: string;
+}) {
+  const w = Math.min(100, (share / DUEL_MAX) * 100);
   return (
-    <svg
-      viewBox={`0 0 ${W} ${duel.length * rowH}`}
-      // Height follows the width (scale ≈ 1.2–1.3 on phones): labels render ≥ 11 px (FE-10).
-      className="h-auto w-full max-w-[22rem] md:h-[76px] md:max-w-[30rem]"
-      preserveAspectRatio="xMinYMin meet"
+    <div className="relative h-3.5">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 10 10"
+        preserveAspectRatio="none"
+        className="block h-full"
+        style={{ width: `${w}%` }}
+      >
+        <rect x="0" y="0" width="10" height="10" style={fill(color)}>
+          <title>{title}</title>
+        </rect>
+      </svg>
+      <span
+        className="absolute top-1/2 -translate-y-1/2 bg-surface py-0.5 pr-1 pl-1.5 text-sm leading-none font-semibold whitespace-nowrap text-primary tabular-nums"
+        style={{ left: `${w}%` }}
+      >
+        <span className="font-normal text-secondary">{name}</span> {pct100(share)}
+      </span>
+    </div>
+  );
+}
+
+function DuelChart({ duel }: { duel: Infographic['duel'] }) {
+  const aria = duel
+    .map((r) => {
+      const n = leadNote(r);
+      return `${r.label}: Lula ${pct100(r.lula.share)}, ${r.bolsonaro.name} ${pct100(r.bolsonaro.share)}${n ? ` (${n})` : ''}`;
+    })
+    .join('; ');
+  const ref = (50 / DUEL_MAX) * 100;
+  return (
+    <div
       role="img"
       aria-label={`Votos válidos para Presidente em Minas — ${aria}`}
+      className="flex flex-col gap-4"
     >
       {duel.map((r, i) => {
-        const y = i * rowH;
-        const wl = (r.lula.share / max) * barW;
-        const wb = (r.bolsonaro.share / max) * barW;
+        const note = leadNote(r);
         return (
-          <g key={r.label}>
-            <text x="0" y={y + 12} fontSize="10" style={INK}>
-              {r.label}
-            </text>
-            <rect
-              x={labelW}
-              y={y + 2}
-              width={wl}
-              height="7"
-              rx="2"
-              style={{ fill: 'var(--map-lula)' }}
-            >
-              <title>{`Lula, ${r.label}: ${pct100(r.lula.share)}${r.lula.votes !== null ? ` (${formatInt(r.lula.votes)} votos)` : ''}`}</title>
-            </rect>
-            <text x={labelW + wl + 3} y={y + 8.8} fontSize="9.5" style={INK}>
-              {pct100(r.lula.share)}
-            </text>
-            <rect
-              x={labelW}
-              y={y + 11}
-              width={wb}
-              height="7"
-              rx="2"
-              style={{ fill: 'var(--map-bolsonaro)' }}
-            >
-              <title>{`${r.bolsonaro.name}, ${r.label}: ${pct100(r.bolsonaro.share)}${r.bolsonaro.votes !== null ? ` (${formatInt(r.bolsonaro.votes)} votos)` : ''}`}</title>
-            </rect>
-            <text x={labelW + wb + 3} y={y + 18.2} fontSize="9.5" style={INK}>
-              {pct100(r.bolsonaro.share)}
-            </text>
-          </g>
+          <div
+            key={r.label}
+            className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-[11.5rem_minmax(0,1fr)] sm:items-center"
+          >
+            <p className="flex flex-wrap items-baseline gap-x-2 sm:flex-col sm:gap-0">
+              <span className="text-sm font-semibold text-primary">{r.label}</span>
+              {note ? <span className="ed-note tabular-nums">{note}</span> : null}
+            </p>
+            {/* Área das barras: 0–60% ocupa a largura menos o espaço do rótulo de valor (mr-24). */}
+            <div className="relative mr-24 flex flex-col gap-1 py-1">
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-0 border-l border-dashed border-border-strong"
+                style={{ left: `${ref}%` }}
+              />
+              {i === 0 ? (
+                <span
+                  aria-hidden="true"
+                  className="ed-caption absolute -top-4 hidden -translate-x-1/2 tabular-nums sm:block"
+                  style={{ left: `${ref}%` }}
+                >
+                  50%
+                </span>
+              ) : null}
+              <DuelBar
+                name="Lula"
+                share={r.lula.share}
+                color="var(--map-lula)"
+                title={`Lula, ${r.label}: ${pct100(r.lula.share)}${r.lula.votes !== null ? ` (${formatInt(r.lula.votes)} votos)` : ''}`}
+              />
+              <DuelBar
+                name={r.bolsonaro.name.split(' ')[0] ?? r.bolsonaro.name}
+                share={r.bolsonaro.share}
+                color="var(--map-bolsonaro)"
+                title={`${r.bolsonaro.name}, ${r.label}: ${pct100(r.bolsonaro.share)}${r.bolsonaro.votes !== null ? ` (${formatInt(r.bolsonaro.votes)} votos)` : ''}`}
+              />
+            </div>
+          </div>
         );
       })}
-    </svg>
+    </div>
   );
 }
 
-function MarginDot({ pp, votes }: { pp: number; votes: number }) {
-  const W = 220;
-  const span = 2; // ±2 p.p. — a deliberately narrow scale: the 2022 margin was tiny
-  const x = (v: number) => 10 + ((v + span) / (2 * span)) * (W - 20);
-  const cx = x(Math.max(-span, Math.min(span, pp)));
+function DuelLegend() {
+  // Rótulo direto em cada barra ("Lula 48,3%", "Jair 43,6%"); a legenda só associa cor e nome.
   return (
-    <svg
-      viewBox={`0 0 ${W} 30`}
-      className="h-auto w-full max-w-[18rem]"
-      preserveAspectRatio="xMinYMid meet"
+    <p className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-secondary">
+      <span className="flex items-baseline gap-1.5">
+        <Swatch color="var(--map-lula)" /> Lula
+      </span>
+      <span className="flex items-baseline gap-1.5">
+        <Swatch color="var(--map-bolsonaro)" /> Bolsonaro (Jair em 2022, Flávio em 2026)
+      </span>
+    </p>
+  );
+}
+
+/* 3 · margem de 2022 (régua tipográfica) ------------------------------------------------------ */
+
+function MarginRuler({ pp, votes }: { pp: number; votes: number }) {
+  const span = 2; // ±2 p.p. — escala propositalmente estreita: a margem de 2022 foi mínima
+  const pos = (v: number) => ((Math.max(-span, Math.min(span, v)) + span) / (2 * span)) * 100;
+  const at = pos(pp);
+  const ticks: { v: number; label: string }[] = [
+    { v: -2, label: '−2' },
+    { v: -1, label: '−1' },
+    { v: 0, label: 'empate' },
+    { v: 1, label: '+1' },
+    { v: 2, label: '+2 p.p.' },
+  ];
+  return (
+    <div
       role="img"
       aria-label={`Margem de Lula em Minas no 2º turno de 2022: ${formatPp(pp, 2)}, ${formatInt(votes)} votos, numa escala de −2 a +2 pontos percentuais`}
+      title={`Lula +${formatInt(votes)} votos (${formatPp(pp, 2)})`}
+      className="relative h-[3.25rem] w-full max-w-[26rem]"
     >
-      <line
-        x1="10"
-        x2={W - 10}
-        y1="12"
-        y2="12"
-        strokeWidth="1"
-        style={{ stroke: 'var(--color-border-strong)' }}
-      />
-      <line
-        x1={x(0)}
-        x2={x(0)}
-        y1="6"
-        y2="18"
-        strokeWidth="1"
-        style={{ stroke: 'var(--color-border-strong)' }}
-      />
-      <line
-        x1={x(0)}
-        x2={cx - 6}
-        y1="12"
-        y2="12"
-        strokeWidth="2"
-        strokeLinecap="round"
-        style={{ stroke: 'var(--map-lula)' }}
-      />
-      <circle
-        cx={cx}
-        cy="12"
-        r="5"
-        strokeWidth="2"
-        style={{ fill: 'var(--map-lula)', stroke: 'var(--color-surface-raised)' }}
-      >
-        <title>{`Lula +${formatInt(votes)} votos (${formatPp(pp, 2)})`}</title>
-      </circle>
-      <text x="10" y="28.5" fontSize="9" style={MUTED}>
-        −2 p.p.
-      </text>
-      <text x={x(0)} y="28.5" fontSize="9" textAnchor="middle" style={MUTED}>
-        empate
-      </text>
-      <text x={W - 10} y="28.5" fontSize="9" textAnchor="end" style={MUTED}>
-        +2 p.p.
-      </text>
-    </svg>
+      <div aria-hidden="true">
+        {/* marcador e rótulo */}
+        <span
+          className="ed-caption absolute top-0 -translate-x-1/2 font-semibold whitespace-nowrap text-primary tabular-nums"
+          style={{ left: `${at}%` }}
+        >
+          Lula {formatPp(pp)}
+        </span>
+        <span
+          className="absolute top-[1.05rem] h-5 w-[3px] -translate-x-1/2"
+          style={{ left: `${at}%`, background: 'var(--map-lula)' }}
+        />
+        {/* linha de base + trecho da margem */}
+        <span
+          className="absolute inset-x-0 top-[1.55rem] h-px"
+          style={{ background: 'var(--color-border-strong)' }}
+        />
+        <span
+          className="absolute top-[1.45rem] h-[3px]"
+          style={{
+            left: `${Math.min(50, at)}%`,
+            width: `${Math.abs(at - 50)}%`,
+            background: 'var(--map-lula)',
+          }}
+        />
+        {ticks.map((t, i) => (
+          <span key={t.v}>
+            <span
+              className="absolute top-[1.25rem] h-2.5 w-px"
+              style={{ left: `${pos(t.v)}%`, background: 'var(--color-border-strong)' }}
+            />
+            <span
+              className={cn(
+                'ed-caption absolute top-[2.1rem] whitespace-nowrap tabular-nums',
+                i === 0 ? '' : i === ticks.length - 1 ? '-translate-x-full' : '-translate-x-1/2',
+              )}
+              style={{ left: `${pos(t.v)}%` }}
+            >
+              {t.label}
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
+/* 4 · pequenos múltiplos ---------------------------------------------------------------------- */
+
 function SplitBar({ lula, bolsonaro }: { lula: number; bolsonaro: number }) {
-  const W = 220;
   const total = lula + bolsonaro;
-  const wl = (lula / total) * W - 1;
+  const W = 1000;
+  const gap = 4;
+  const wl = (lula / total) * (W - gap);
   return (
     <div>
       <svg
-        viewBox={`0 0 ${W} 10`}
-        className="h-2.5 w-full"
+        viewBox={`0 0 ${W} 14`}
         preserveAspectRatio="none"
+        className="block h-3.5 w-full"
         role="img"
         aria-label={`Em 2026, Lula liderou em ${lula} municípios e Flávio Bolsonaro em ${bolsonaro}`}
       >
-        <rect x="0" y="1" width={wl} height="8" rx="2" style={{ fill: 'var(--map-lula)' }}>
+        <rect x="0" y="0" width={wl} height="14" style={fill('var(--map-lula)')}>
           <title>{`Lula liderou em ${lula} municípios`}</title>
         </rect>
         <rect
-          x={wl + 2}
-          y="1"
-          width={W - wl - 2}
-          height="8"
-          rx="2"
-          style={{ fill: 'var(--map-bolsonaro)' }}
+          x={wl + gap}
+          y="0"
+          width={W - wl - gap}
+          height="14"
+          style={fill('var(--map-bolsonaro)')}
         >
           <title>{`Flávio Bolsonaro liderou em ${bolsonaro} municípios`}</title>
         </rect>
       </svg>
-      <p className="mt-1 flex justify-between text-[0.7rem] text-secondary">
-        <span className="inline-flex items-center gap-1">
+      <p className="mt-1.5 flex flex-wrap justify-between gap-x-3 text-sm text-secondary tabular-nums">
+        <span className="inline-flex items-center gap-1.5">
           <Swatch color="var(--map-lula)" /> Lula {formatInt(lula)}
         </span>
-        <span className="inline-flex items-center gap-1">
-          Bolsonaro {formatInt(bolsonaro)} <Swatch color="var(--map-bolsonaro)" />
+        <span className="inline-flex items-center gap-1.5">
+          Flávio Bolsonaro {formatInt(bolsonaro)} <Swatch color="var(--map-bolsonaro)" />
         </span>
       </p>
     </div>
@@ -247,40 +343,68 @@ function SplitBar({ lula, bolsonaro }: { lula: number; bolsonaro: number }) {
 }
 
 function TurnoutStack({ t }: { t: Infographic['turnout'] }) {
-  const W = 300;
+  const W = 1000;
+  const gap = 4;
   const bn = t.blankNull ?? 0;
   const seg = [
-    { key: 'valid', v: t.turnout - bn, color: 'var(--map-fill-mid-high)', label: 'votos válidos' },
-    { key: 'bn', v: bn, color: 'var(--map-fill-mid-low)', label: 'brancos e nulos' },
-    { key: 'abst', v: t.abstention, color: 'var(--map-fill-none)', label: 'abstenção' },
+    {
+      key: 'valid',
+      v: t.turnout - bn,
+      color: 'var(--map-fill-high)',
+      hollow: false,
+      label: 'votos válidos',
+    },
+    {
+      key: 'bn',
+      v: bn,
+      color: 'var(--map-fill-mid-high)',
+      hollow: false,
+      label: 'brancos e nulos',
+    },
+    {
+      key: 'abst',
+      v: t.abstention,
+      color: 'var(--color-border-strong)',
+      hollow: true,
+      label: 'abstenção',
+    },
   ].filter((s) => s.v > 0);
-  const gaps = (seg.length - 1) * 2;
-  let x = 0;
+  const usable = W - (seg.length - 1) * gap;
   const pctOf = (v: number) => formatPercent(v / t.eligible);
+  let x = 0;
   return (
     <div>
       <svg
-        viewBox={`0 0 ${W} 10`}
-        className="h-2.5 w-full"
+        viewBox={`0 0 ${W} 14`}
         preserveAspectRatio="none"
+        className="block h-3.5 w-full"
         role="img"
         aria-label={`Eleitorado apto em 2026, 1º turno: ${seg.map((s) => `${s.label} ${pctOf(s.v)} (${formatInt(s.v)})`).join('; ')}`}
       >
         {seg.map((s) => {
-          const w = Math.max(1, (s.v / t.eligible) * (W - gaps));
+          const w = Math.max(2, (s.v / t.eligible) * usable);
           const r = (
-            <rect key={s.key} x={x} y="1" width={w} height="8" rx="2" style={{ fill: s.color }}>
+            <rect
+              key={s.key}
+              x={x + (s.hollow ? 0.75 : 0)}
+              y={s.hollow ? 0.75 : 0}
+              width={s.hollow ? w - 1.5 : w}
+              height={s.hollow ? 12.5 : 14}
+              vectorEffect="non-scaling-stroke"
+              strokeWidth={s.hollow ? 1.5 : 0}
+              style={s.hollow ? { fill: 'none', stroke: s.color } : fill(s.color)}
+            >
               <title>{`${s.label}: ${formatInt(s.v)} (${pctOf(s.v)} do eleitorado apto)`}</title>
             </rect>
           );
-          x += w + 2;
+          x += w + gap;
           return r;
         })}
       </svg>
-      <p className="mt-1 flex flex-wrap gap-x-3 text-[0.7rem] text-secondary">
+      <p className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm text-secondary tabular-nums">
         {seg.map((s) => (
-          <span key={s.key} className="inline-flex items-center gap-1">
-            <Swatch color={s.color} /> {s.label} {pctOf(s.v)}
+          <span key={s.key} className="inline-flex items-center gap-1.5">
+            <Swatch color={s.color} hollow={s.hollow} /> {s.label} {pctOf(s.v)}
           </span>
         ))}
       </p>
@@ -289,124 +413,169 @@ function TurnoutStack({ t }: { t: Infographic['turnout'] }) {
 }
 
 function Blocks({ pct }: { pct: number }) {
-  // 10 blocks = eligible voters; filled blocks = share that voted for neither of the two.
+  // 10 blocos = eleitorado apto; parte preenchida = quem não votou em nenhum dos dois.
   const n = 10;
   const filled = (pct / 100) * n;
   return (
-    <svg
-      viewBox="0 0 218 18"
-      className="h-[18px] w-full max-w-[16rem]"
-      preserveAspectRatio="xMinYMid meet"
-      role="img"
-      aria-label={`${pct100(pct)} do eleitorado apto não votou em Lula nem em Flávio Bolsonaro`}
-    >
-      {Array.from({ length: n }, (_, i) => {
-        const part = Math.max(0, Math.min(1, filled - i));
-        return (
-          <g key={i}>
-            <rect
-              x={i * 22}
-              y="1"
-              width="20"
-              height="16"
-              rx="2"
-              style={{ fill: 'var(--map-fill-none)' }}
-            />
-            {part > 0 ? (
+    <div>
+      <svg
+        viewBox="0 0 218 20"
+        className="block h-auto w-full max-w-[18rem]"
+        preserveAspectRatio="xMinYMid meet"
+        role="img"
+        aria-label={`${pct100(pct)} do eleitorado apto não votou em Lula nem em Flávio Bolsonaro`}
+      >
+        {Array.from({ length: n }, (_, i) => {
+          const part = Math.max(0, Math.min(1, filled - i));
+          return (
+            <g key={i}>
               <rect
-                x={i * 22}
-                y="1"
-                width={20 * part}
-                height="16"
-                rx="2"
-                style={{ fill: 'var(--map-fill-high)' }}
+                x={i * 22 + 0.5}
+                y="0.5"
+                width="19"
+                height="19"
+                strokeWidth="1"
+                style={{ fill: 'none', stroke: 'var(--color-border-strong)' }}
               />
-            ) : null}
-          </g>
-        );
-      })}
-    </svg>
+              {part > 0 ? (
+                <rect
+                  x={i * 22}
+                  y="0"
+                  width={20 * part}
+                  height="20"
+                  style={fill('var(--map-fill-high)')}
+                />
+              ) : null}
+            </g>
+          );
+        })}
+      </svg>
+      <p className="mt-1.5 text-sm text-secondary tabular-nums">
+        {pct100(pct)} do eleitorado apto · cada bloco = 10%
+      </p>
+    </div>
   );
 }
 
-/** The six tiles; grid of equal rows from md, snap carousel on phones (tiles ≤ 160 px). */
+/**
+ * Seis números em grade editorial assimétrica (≥ lg: âncora 4 col + comparativo/margem 8 col;
+ * múltiplos 4/4/4 · md: duas colunas · celular: lista vertical a toda a largura, sem carrossel).
+ */
 export function WhyMinasInfographic({ data }: { data: Infographic }) {
   const last = data.duel[data.duel.length - 1];
+  const multiple = 'border-t border-border pt-5';
   return (
-    <Carousel
-      label="Números de Minas Gerais"
-      itemNoun="número"
-      testId="why-minas-carousel"
-      className="md:grid md:auto-rows-fr md:grid-cols-4"
+    <ul
+      aria-label="Números de Minas Gerais"
+      data-testid="why-minas-figures"
+      // Phones: one column (editorial.css), tighter rhythm between blocks.
+      className="ed-grid-12 max-md:gap-y-7!"
     >
-      <Tile
-        testId="tile-nacional"
-        big={pct100(data.national.sharePct)}
-        label={`do eleitorado do Brasil · ${data.national.rank}º maior`}
+      <Figure
+        testId="fig-nacional"
+        kicker="Peso no país"
+        figureSize="xl"
+        figure={pct100(data.national.sharePct)}
+        label={
+          <>
+            do eleitorado do Brasil ·{' '}
+            <strong className="text-primary">{data.national.rank}º maior</strong>
+          </>
+        }
         source="TSE"
+        className="md:col-span-5 md:row-span-2 md:border-r md:border-border md:pr-6 lg:col-span-4 lg:col-start-1 lg:row-span-1 lg:row-start-1 lg:border-r-0 lg:pr-0"
       >
+        <p className="ed-note mb-4 border-l-2 border-border-strong pl-2 tabular-nums">
+          {compactNumber(data.national.eligible)} pessoas aptas a votar
+        </p>
         <NationalBar sharePct={data.national.sharePct} />
-      </Tile>
+      </Figure>
+
       {last ? (
-        <Tile
-          testId="tile-duelo"
-          className="md:col-span-2"
-          big={`${pct100(last.lula.share)} × ${pct100(last.bolsonaro.share)}`}
-          // Colour key inline in the label (saves the legend row: the tile stays ≤ 160 px).
-          label={
+        <Figure
+          testId="fig-duelo"
+          kicker="O que mudou de 2022 para 2026?"
+          figure={
             <>
-              <span className="inline-flex items-center gap-1">
-                <Swatch color="var(--map-lula)" /> Lula
-              </span>{' '}
-              ×{' '}
-              <span className="inline-flex items-center gap-1">
-                <Swatch color="var(--map-bolsonaro)" /> Bolsonaro
-              </span>{' '}
-              (Jair 2022, Flávio 2026)
+              <span>{pct100(last.lula.share)}</span>
+              <span className="text-muted">×</span>
+              <span>{pct100(last.bolsonaro.share)}</span>
             </>
           }
-          source="TSE"
+          label="Lula × Flávio Bolsonaro no 1º turno de 2026, em votos válidos para Presidente. Em 2022, o adversário foi Jair Bolsonaro."
+          source="TSE · 2022 e 2026 (inclui a margem de 2022)"
+          // Source pinned to the bottom: on ≥ lg it closes the spread level with the margin block.
+          alignSource
+          className="border-t border-border pt-5 md:col-span-7 md:border-t-0 md:pt-0 lg:col-span-8 lg:col-start-5 lg:row-span-2 lg:row-start-1 lg:border-l lg:border-border lg:pl-10"
         >
-          <DuelBars duel={data.duel} />
-        </Tile>
+          <DuelLegend />
+          <div className="mt-6">
+            <DuelChart duel={data.duel} />
+          </div>
+          <p className="ed-caption mt-3">
+            Escala de 0 a 60% dos votos válidos; linha tracejada = 50%. Comparação de percentuais,
+            não implica transferência de votos.
+          </p>
+        </Figure>
       ) : null}
-      <Tile
-        testId="tile-margem-2022"
-        big={`+${formatInt(data.margin2022.votes)}`}
-        label="votos: Lula venceu MG em 2022"
-        source="TSE 2022"
+
+      <Figure
+        testId="fig-margem-2022"
+        kicker="Quão apertado foi 2022?"
+        figureSize="md"
+        figure={`+${formatInt(data.margin2022.votes)}`}
+        label={
+          <>
+            votos: Lula venceu MG em 2022 ·{' '}
+            <span className="tabular-nums">{formatPp(data.margin2022.pp)}</span> no 2º turno
+          </>
+        }
+        source={last ? null : 'TSE 2022'}
+        // ≥ lg: left column under the anchor, bottom-aligned with the end of the comparison.
+        className="border-t border-border pt-5 md:col-span-7 lg:col-span-4 lg:col-start-1 lg:row-start-2 lg:self-end"
       >
-        <MarginDot pp={data.margin2022.pp} votes={data.margin2022.votes} />
-      </Tile>
-      <Tile
-        testId="tile-municipios"
-        big={formatInt(data.municipalities.total)}
+        <MarginRuler pp={data.margin2022.pp} votes={data.margin2022.votes} />
+      </Figure>
+
+      <Figure
+        testId="fig-municipios"
+        kicker="Quem liderou nos municípios?"
+        figure={formatInt(data.municipalities.total)}
         label="municípios · quem liderou em 2026"
         source="TSE · IBGE"
+        alignSource
+        className={cn(multiple, 'md:col-span-6 lg:col-span-4')}
       >
         {data.municipalities.lula !== null && data.municipalities.bolsonaro !== null ? (
           <SplitBar lula={data.municipalities.lula} bolsonaro={data.municipalities.bolsonaro} />
         ) : null}
-      </Tile>
-      <Tile
-        testId="tile-comparecimento"
-        className="md:col-span-2"
-        big={formatPercent(data.turnout.turnout / data.turnout.eligible)}
+      </Figure>
+
+      <Figure
+        testId="fig-comparecimento"
+        kicker="Quantos foram votar?"
+        figure={formatPercent(data.turnout.turnout / data.turnout.eligible)}
         label="foram votar no 1º turno de 2026"
         source="TSE"
+        alignSource
+        className={cn(multiple, 'md:col-span-6 lg:col-span-4')}
       >
         <TurnoutStack t={data.turnout} />
-      </Tile>
+      </Figure>
+
       {data.neither ? (
-        <Tile
-          testId="tile-nenhum"
-          big={compactNumber(data.neither.people)}
+        <Figure
+          testId="fig-nenhum"
+          kicker="Quantos ficaram fora do duelo?"
+          figure={compactNumber(data.neither.people)}
           label="não votaram em nenhum dos dois"
           source="TSE"
+          alignSource
+          className={cn(multiple, 'md:col-span-12 lg:col-span-4')}
         >
           {data.neither.pctEligible !== null ? <Blocks pct={data.neither.pctEligible} /> : null}
-        </Tile>
+        </Figure>
       ) : null}
-    </Carousel>
+    </ul>
   );
 }

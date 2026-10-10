@@ -89,34 +89,104 @@ describe('infographic data', () => {
   });
 });
 
-describe('infographic tiles', () => {
-  it('big number + short label + accessible visual + short source, no paragraphs', () => {
+describe('infographic as an editorial spread (redesign A, D4/D5)', () => {
+  it('six figures in one asymmetric grid, no carousel, accessible visuals, short sources', () => {
     render(<WhyMinasInfographic data={buildInfographic(HIGHLIGHTS)!} />);
     const list = screen.getByRole('list', { name: 'Números de Minas Gerais' });
-    const tiles = within(list).getAllByRole('listitem');
-    expect(tiles).toHaveLength(6);
-    expect(within(screen.getByTestId('tile-nacional')).getByText('10,3%')).toBeInTheDocument();
-    expect(screen.getByTestId('tile-margem-2022')).toHaveTextContent('+49.650');
-    expect(screen.getByTestId('tile-nenhum')).toHaveTextContent('5,4 mi');
+    // D5: never a carousel for the main infographic (no snap scroller, no dots).
+    expect(list.className).toContain('ed-grid-12');
+    expect(list.className).not.toMatch(/snap-x|overflow-x/);
+    expect(screen.queryByRole('button', { name: /Ir para o número/ })).not.toBeInTheDocument();
+    const figs = within(list).getAllByRole('listitem');
+    expect(figs).toHaveLength(6);
+    // Hierarchy by scale: the anchor is the only XL figure; multiples use LG.
+    const anchor = screen.getByTestId('fig-nacional');
+    expect(within(anchor).getByText('10,3%').className).toContain('ed-figure-xl');
+    expect(list.querySelectorAll('.ed-figure-xl')).toHaveLength(1);
+    expect(anchor).toHaveTextContent('2º maior');
+    expect(anchor).toHaveTextContent('16,4 mi pessoas aptas a votar');
+    expect(within(anchor).getByRole('img')).toHaveAttribute(
+      'aria-label',
+      'Minas tem 10,3% do eleitorado do Brasil',
+    );
+    // Asymmetric layout: anchor 4 + comparison 8; multiples 4/4/4 on desktop.
+    expect(anchor.className).toContain('lg:col-span-4');
+    expect(screen.getByTestId('fig-duelo').className).toContain('lg:col-span-8');
+    expect(screen.getByTestId('fig-duelo').className).toContain('lg:row-span-2');
+    expect(screen.getByTestId('fig-margem-2022').className).toContain('lg:col-start-1');
+    for (const id of ['fig-municipios', 'fig-comparecimento', 'fig-nenhum'])
+      expect(screen.getByTestId(id).className).toContain('lg:col-span-4');
+    expect(screen.getByTestId('fig-margem-2022')).toHaveTextContent('+49.650');
+    expect(screen.getByTestId('fig-margem-2022')).toHaveTextContent('+0,4 p.p.');
+    expect(screen.getByTestId('fig-nenhum')).toHaveTextContent('5,4 mi');
+    expect(screen.getByTestId('fig-nenhum')).toHaveTextContent('33,0% do eleitorado apto');
+    expect(screen.getByTestId('fig-comparecimento')).toHaveTextContent('77,2%');
+    expect(screen.getByTestId('fig-municipios')).toHaveTextContent('853');
+    // Each block opens with a short question (h3), in reading order.
+    expect(
+      within(list)
+        .getAllByRole('heading', { level: 3 })
+        .map((h) => h.textContent),
+    ).toEqual([
+      'Peso no país',
+      'O que mudou de 2022 para 2026?',
+      'Quão apertado foi 2022?',
+      'Quem liderou nos municípios?',
+      'Quantos foram votar?',
+      'Quantos ficaram fora do duelo?',
+    ]);
     const imgs = within(list).getAllByRole('img');
-    expect(imgs.length).toBeGreaterThanOrEqual(6);
-    const duel = within(screen.getByTestId('tile-duelo')).getByRole('img');
+    expect(imgs).toHaveLength(6);
+    const duel = within(screen.getByTestId('fig-duelo')).getByRole('img');
     expect(duel.getAttribute('aria-label')).toContain(
       '2026 · 1º turno: Lula 43,3%, Flávio Bolsonaro 48,2%',
     );
+    // The published margins (p.p.) annotate each round; nothing recomputed.
+    expect(duel.getAttribute('aria-label')).toContain('Flávio Bolsonaro à frente por 4,9 p.p.');
+    expect(duel.getAttribute('aria-label')).toContain(
+      '2022 · 2º turno: Lula 50,2%, Jair Bolsonaro 49,8% (Lula à frente por 0,4 p.p.)',
+    );
+    // Values annotated at the bar tips and a textual legend (not colour only).
+    expect(duel).toHaveTextContent('Lula 48,3%');
+    expect(duel).toHaveTextContent('Jair 43,6%');
+    expect(duel).toHaveTextContent('Flávio 48,2%');
+    expect(screen.getByTestId('fig-duelo')).toHaveTextContent(
+      'Bolsonaro (Jair em 2022, Flávio em 2026)',
+    );
+    expect(screen.getByTestId('fig-duelo')).not.toHaveTextContent('barra de');
     expect(
-      within(screen.getByTestId('tile-municipios')).getByRole('img').getAttribute('aria-label'),
+      within(screen.getByTestId('fig-municipios')).getByRole('img').getAttribute('aria-label'),
     ).toBe('Em 2026, Lula liderou em 452 municípios e Flávio Bolsonaro em 401');
+    expect(screen.getByTestId('fig-municipios')).toHaveTextContent('Lula 452');
+    expect(screen.getByTestId('fig-municipios')).toHaveTextContent('Flávio Bolsonaro 401');
+    expect(
+      within(screen.getByTestId('fig-margem-2022')).getByRole('img').getAttribute('aria-label'),
+    ).toBe(
+      'Margem de Lula em Minas no 2º turno de 2022: +0,40 p.p., 49.650 votos, numa escala de −2 a +2 pontos percentuais',
+    );
     // Hover detail on bars (SVG <title>) includes votes.
-    expect(screen.getByTestId('tile-duelo').querySelector('title')?.textContent).toBe(
+    expect(screen.getByTestId('fig-duelo').querySelector('title')?.textContent).toBe(
       'Lula, 2022 · 1º turno: 48,3% (5.802.571 votos)',
     );
+    // Turnout legend in text, with percentages over the eligible electorate.
+    const turnout = screen.getByTestId('fig-comparecimento');
+    expect(turnout).toHaveTextContent('votos válidos 73,1%');
+    expect(turnout).toHaveTextContent('brancos e nulos 4,0%');
+    expect(turnout).toHaveTextContent('abstenção 22,8%');
     // Party colours only on the Lula × Bolsonaro marks.
-    const turnoutRects = screen.getByTestId('tile-comparecimento').querySelectorAll('rect');
-    for (const r of turnoutRects)
-      expect(r.getAttribute('style')).not.toMatch(/map-lula|map-bolsonaro/);
-    // Short sources only.
-    for (const t of tiles) expect(t).toHaveTextContent(/Fonte: (TSE|TSE 2022|TSE · IBGE)$/);
+    for (const id of ['fig-nacional', 'fig-comparecimento', 'fig-nenhum'])
+      for (const el of screen.getByTestId(id).querySelectorAll('[style]'))
+        expect(el.getAttribute('style')).not.toMatch(/map-lula|map-bolsonaro/);
+    // No boxes: no rounded/bordered card chrome, no shadows.
+    for (const f of figs) expect(f.className).not.toMatch(/rounded|shadow|bg-surface-raised/);
+    // D10: short sources; the comparison and the 2022 margin share one line → 5 source lines.
+    expect(screen.getAllByText(/^Fonte: /)).toHaveLength(5);
+    expect(screen.getByTestId('fig-margem-2022')).not.toHaveTextContent('Fonte:');
+    expect(screen.getByTestId('fig-duelo')).toHaveTextContent(
+      /Fonte: TSE · 2022 e 2026 \(inclui a margem de 2022\)$/,
+    );
+    for (const id of ['fig-nacional', 'fig-municipios', 'fig-comparecimento', 'fig-nenhum'])
+      expect(screen.getByTestId(id)).toHaveTextContent(/Fonte: (TSE|TSE · IBGE)$/);
     expect(screen.queryByText(/Um texto longo/)).not.toBeInTheDocument();
   });
 });

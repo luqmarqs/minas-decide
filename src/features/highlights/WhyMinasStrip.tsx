@@ -1,3 +1,4 @@
+import { PlateHeading } from '@/components/editorial/PlateHeading';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Note } from '@/components/ui/States';
@@ -36,18 +37,30 @@ function Card({ c }: { c: StripCard }) {
 }
 
 function StripSkeleton() {
+  // Same skeleton shape as the editorial grid (anchor + wide comparison + three multiples).
   return (
     <div role="status" aria-label="Carregando números de Minas Gerais">
-      <ul className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6" aria-hidden="true">
-        {Array.from({ length: 6 }, (_, i) => (
-          <li key={i} className="rounded-md border border-border bg-surface-raised p-3">
-            <Skeleton className="h-3 w-3/4" />
-            <Skeleton className="mt-2 h-7 w-1/2" />
-            <Skeleton className="mt-2 h-3 w-2/3" />
-            <Skeleton className="mt-4 h-2 w-full" />
-          </li>
+      <div className="ed-grid-12 max-md:gap-y-7!" aria-hidden="true">
+        <div className="md:col-span-5 lg:col-span-4">
+          <Skeleton className="h-3 w-1/3" />
+          <Skeleton className="mt-3 h-20 w-2/3" />
+          <Skeleton className="mt-4 h-4 w-full" />
+        </div>
+        <div className="md:col-span-7 lg:col-span-8">
+          <Skeleton className="h-3 w-1/3" />
+          <Skeleton className="mt-3 h-12 w-1/2" />
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="mt-4 h-3 w-3/4" />
+          ))}
+        </div>
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="border-t border-border pt-5 md:col-span-6 lg:col-span-4">
+            <Skeleton className="h-3 w-1/2" />
+            <Skeleton className="mt-3 h-10 w-1/3" />
+            <Skeleton className="mt-4 h-3 w-full" />
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
@@ -113,16 +126,18 @@ export function WhyMinasStrip({ className, start }: WhyMinasStripProps) {
   return (
     <section
       aria-labelledby="why-minas-title"
-      className={cn('border-b border-border bg-surface px-(--gutter) py-6 lg:px-6', className)}
+      className={cn('ed-section bg-surface', className)}
       data-testid="why-minas"
     >
       <div className="mx-auto max-w-(--content-max) xl:max-w-none">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h2 id="why-minas-title" className="text-xl sm:text-2xl">
-            Por que Minas decide
-          </h2>
-          {demo ? <Badge variant="demo">{SNAPSHOT_STATUS_LABEL.demo}</Badge> : null}
-        </div>
+        <PlateHeading
+          number={2}
+          kicker="Números"
+          title="Por que Minas decide"
+          id="why-minas-title"
+          aside={demo ? <Badge variant="demo">{SNAPSHOT_STATUS_LABEL.demo}</Badge> : undefined}
+          className="mb-8 lg:mb-10"
+        />
         {body}
       </div>
     </section>
