@@ -3,7 +3,7 @@
 Este documento organiza os fatos técnicos verdadeiros do sistema para que a revisão jurídica produza a Política de Privacidade e os Termos. Os textos em `/privacidade` e `/termos` continuam marcados como rascunho até essa revisão. Pontos entre colchetes exigem decisão do controlador.
 
 ## 1. Agentes
-- **Controlador:** [organização responsável — a definir]. **Operador(es):** Supabase (banco, região São Paulo), **Clerk** (autenticação e envio de códigos de verificação por e-mail; EUA — avaliar transferência internacional), Cloudflare (hospedagem/CDN/Turnstile), [provedor SMTP para avisos — a definir], OpenFreeMap (tiles do mapa; recebe IP ao carregar o mapa).
+- **Controlador:** [organização responsável — a definir]. **Operador(es):** Supabase (banco, região São Paulo), **Clerk** (autenticação e envio de códigos de verificação por e-mail; EUA — avaliar transferência internacional), Cloudflare (hospedagem/CDN/Turnstile), **Umami self-hosted** (`analytics.luqmarqs.dev`, estatísticas de audiência sem cookies: URL, referrer, navegador/SO/dispositivo, país derivado do IP; o IP não é armazenado), [provedor SMTP para avisos — a definir], OpenFreeMap (tiles do mapa; recebe IP ao carregar o mapa).
 - **Encarregado (DPO) e canal do titular:** [e-mail — a definir]; o rodapé e `/privacidade` apontam para ele.
 
 ## 2. Dados tratados, finalidade, base legal (proposta) e retenção
@@ -19,6 +19,7 @@ Este documento organiza os fatos técnicos verdadeiros do sistema para que a rev
 | Eventos de abuso (hash de IP, rota, código) | bloqueios | segurança | legítimo interesse (art. 7º, IX) | [30 dias] |
 | Trilha de auditoria (ação administrativa, ids) | moderação | prestação de contas | obrigação/legítimo interesse | [5 anos] |
 | Logs técnicos (request_id, rota, status, duração) | sempre | operação | legítimo interesse | [7 dias] no provedor |
+| Estatísticas de audiência (Umami: página, referrer, navegador/SO/dispositivo, país; sem cookie, sem IP armazenado, sem identificador persistente) | navegação | medir uso do site | legítimo interesse (art. 7º, IX); respeita Do Not Track | [agregado; definir retenção no Umami] |
 
 Não coletamos: CPF, RG, endereço residencial, senha, geolocalização do dispositivo (o ponto de atividade é escolhido manualmente), voto individual. Não inferimos opinião política de ninguém; indicadores eleitorais são agregados públicos (TSE).
 
@@ -32,7 +33,7 @@ Supabase (São Paulo) — dados ficam no Brasil; Cloudflare — tráfego pela bo
 RLS e grants mínimos; dados privados em schema não exposto; PII nunca em respostas públicas; segredos fora do código; CSP; auditoria de moderação; administradores autenticados pelo Clerk com e-mail verificado e lista de admins no servidor (MFA não exigido — decisão D35); revelação de contato de proponente auditada.
 
 ## 6. Cookies e armazenamento local
-`mm_device` (HttpOnly, 1 ano, antifraude de RSVP); sessão do Clerk (cookie `__client`/`__session` do domínio do Clerk e token em memória; o Clerk recebe e-mail, IP e user-agent do titular para autenticação); rascunhos de formulário (localStorage, 7 dias); preferências de UI. Sem cookies de publicidade; sem analytics que capturem formulários.
+`mm_device` (HttpOnly, 1 ano, antifraude de RSVP); sessão do Clerk (cookie `__client`/`__session` do domínio do Clerk e token em memória; o Clerk recebe e-mail, IP e user-agent do titular para autenticação); rascunhos de formulário (localStorage, 7 dias); preferências de UI. Sem cookies de publicidade. Analytics: Umami self-hosted, sem cookies e sem captura de formulários (D44).
 
 ## 7. Pendências para o jurídico
 1. Base legal definitiva e eventual tratamento como dado sensível (art. 11).

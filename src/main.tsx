@@ -4,10 +4,13 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router/dom';
 import { Providers } from '@/app/providers';
 import { createAppRouter } from '@/app/router';
+import { initAnalytics } from '@/lib/analytics';
 import { initBrand } from '@/lib/brand';
 
 // Official identity by default; `?brand=0` / localStorage mm.brand=provisorio = old theme (rollback).
 initBrand();
+// Umami (self-hosted, cookie-less) after idle; no-op unless VITE_UMAMI_* are set (D44).
+initAnalytics();
 
 const router = createAppRouter();
 const root = document.getElementById('root');
