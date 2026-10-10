@@ -1,8 +1,8 @@
 /**
  * Redesign editorial — narrativa de 5 momentos (direção "A — Cartaz desdobrado").
  *
- * - Desktop (≥ 1024 px, movimento permitido): um mapa fixo por ato muda de estado conforme o
- *   momento ativo (`data-story-state` na seção e no painel).
+ * - Desktop: composição estática (D45 — o mapa fixo por rolagem foi desligado pelo proprietário);
+ *   cada momento com o seu mapa.
  * - Celular: no momento 2, "resumo" (parede) e "município a município" (mosaico) lado a lado.
  * - Movimento reduzido: nada de painel fixo; cada momento com seu mapa estático (5 SVGs).
  * Só leitura (nenhum clique em ações que gravam).
@@ -30,83 +30,30 @@ async function centerStep(page: Page, n: number) {
     .evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
 }
 
-test.describe('narrativa — desktop com movimento', () => {
+test.describe('narrativa — desktop (composição estática, D45)', () => {
   test.skip(({ isMobile }) => isMobile, 'composição de desktop');
 
-  test('o mapa fixo muda de estado ao rolar pelos momentos', async ({ page }) => {
+  test('sem mapa fixo: cada momento com o seu mapa, faixa oliva no momento 1, sem overflow', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto('/');
     const section = story(page);
     await reachStory(page);
-    await expect(section).toHaveAttribute('data-story-mode', 'sticky');
-    const panels = page.getByTestId('story-sticky');
-    await expect(panels).toHaveCount(2);
-    // Mesh loaded near the viewport: the panel draws real SVG maps.
-    await expect(panels.first().getByTestId('story-map').first()).toBeAttached({
+    await expect(section).toHaveAttribute('data-story-mode', 'static');
+    await expect(page.getByTestId('story-sticky')).toHaveCount(0);
+    await expect(section.locator('ol [data-testid="story-map"]').first()).toBeAttached({
       timeout: 30_000,
     });
-    // Nenhum mapa dentro da lista no modo fixo (o painel desenha; os passos descrevem).
-    await expect(section.locator('ol [data-testid="story-map"]')).toHaveCount(0);
-
-    // Impact: act A wears the olive band on step 1 and returns to cream on step 2.
-    const li1 = section.locator('li[data-step="1"]');
-    await centerStep(page, 1);
-    await expect(li1).toHaveClass(/ed-band-ink/);
-    await centerStep(page, 2);
-    await expect(li1).not.toHaveClass(/ed-band-ink/);
-    await expect(page.getByTestId('story-wall-thumb')).toBeVisible();
-
-    for (const n of [1, 2, 4, 5]) {
-      await centerStep(page, n);
-      await expect(section).toHaveAttribute('data-story-state', String(n), { timeout: 5_000 });
-    }
-    // Volta ao momento 2: o mosaico é a camada ativa do primeiro painel.
-    await centerStep(page, 2);
-    await expect(panels.first()).toHaveAttribute('data-story-state', '2');
-    const active = panels.first().locator('[data-layer="2"]');
-    await expect(active).toHaveAttribute('data-active', 'true');
-    await expect(active).toHaveCSS('opacity', '1');
-    await expect(panels.first().locator('[data-layer="1"]')).toHaveCSS('opacity', '0');
-    // O painel fica preso (abaixo do cabeçalho, dentro da janela) enquanto o ato rola.
-    const rect = () =>
-      panels
-        .first()
-        .locator('.ed-sticky')
-        .evaluate((el) => {
-          const r = el.getBoundingClientRect();
-          return { top: r.top, bottom: r.bottom };
-        });
-    await centerStep(page, 1);
-    const before = await rect();
-    await page.mouse.wheel(0, 150);
-    await expect.poll(async () => (await rect()).top).toBeCloseTo(before.top, 0);
-    expect(before.top).toBeGreaterThanOrEqual(56);
-    expect(before.bottom).toBeLessThanOrEqual(900);
-
-    // Momento 3: composição de barras a toda a largura, sem mapa.
+    await expect(section.locator('ol [data-testid="story-map"]')).toHaveCount(5);
+    await expect(section.locator('li[data-step="1"]')).toHaveClass(/ed-band-ink/);
     await centerStep(page, 3);
-    await expect(section).toHaveAttribute('data-story-state', '3');
     await expect(page.getByTestId('story-absence')).toBeVisible();
     const overflow = await page.evaluate(
       'document.documentElement.scrollWidth > document.documentElement.clientWidth',
     );
     expect(overflow).toBe(false);
-  });
-
-  test('laptop 1024×768: mapa fixo cabe na janela abaixo do cabeçalho', async ({ page }) => {
-    await page.setViewportSize({ width: 1024, height: 768 });
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.goto('/');
-    await reachStory(page);
-    await expect(story(page)).toHaveAttribute('data-story-mode', 'sticky');
-    const sticky = page.getByTestId('story-sticky').first();
-    await expect(sticky.getByTestId('story-map').first()).toBeAttached({ timeout: 30_000 });
-    await centerStep(page, 1);
-    await expect(sticky.locator('.ed-sticky')).toBeVisible();
-    const box = await sticky.locator('.ed-sticky').boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.y + box!.height).toBeLessThanOrEqual(768);
   });
 });
 

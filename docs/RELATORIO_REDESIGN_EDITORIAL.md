@@ -79,6 +79,8 @@ A pesquisa examinou 26 referências (38 URLs lidas; as que falharam estão regis
 - `src/components/editorial/PlateHeading.tsx`: abertura de seção com filete forte, número da prancha (01…04), kicker e título — a numeração atravessa narrativa → números → mapa → agenda.
 
 ### 4.2 Prancha 01 — narrativa (`src/features/story/`)
+
+> **Revisão do proprietário (2026-10-10, D45):** o scrollytelling do desktop foi desligado (`STICKY_NARRATIVE = false`) por parecer desajeitado ao rolar; a narrativa usa a composição estática por momento em todas as larguras. Os parágrafos sobre o "painel fixo" abaixo descrevem o código que ficou dormente atrás da flag.
 - **Scrollytelling em dois atos (≥ 1024 px, com IntersectionObserver e sem `prefers-reduced-motion`)**: um painel fixo (`.ed-sticky`, 7/12, ≈ `min(70vh, 640px)`) muda de estado por crossfade de 240 ms (nunca os 853 paths): ato A parede → mosaico 2026; ato B mosaico 2022 → mosaico 2026 atenuado. O estado vive num store externo; rolar só re-renderiza os painéis. `data-story-state` na seção e nos painéis.
 - **Momento 1 — impacto**: enquanto ativo, o ato A inteiro fica em faixa oliva (tokens de `.ed-band-ink`, transição motion-safe), a parede azul a toda a coluna e o título em display grande; no modo estático (celular, tablet, movimento reduzido) a faixa sangra a largura.
 - **Momento 2 — revelação**: no desktop o próprio painel vira o mosaico e uma miniatura da parede (1 path, 72 px, "Resumo · o estado numa cor só") fica junto do texto; no celular, resumo pequeno (6 rem) + mosaico a toda a largura; abaixo de 360 px empilham. A explicação das faixas aparece uma só vez.

@@ -648,18 +648,9 @@ describe('StoryIntro (D25)', () => {
     expect(box.innerHTML).toContain('--map-fill-mid-high');
   });
 
-  it('on wide screens with motion, one sticky map per act changes state as steps scroll', () => {
-    const observers: FakeIO[] = [];
+  it('stays static on wide screens with motion (D45: sticky narrative disabled)', () => {
     class FakeIO {
-      els: Element[] = [];
-      cb: IntersectionObserverCallback;
-      constructor(cb: IntersectionObserverCallback) {
-        this.cb = cb;
-        observers.push(this);
-      }
-      observe(el: Element) {
-        this.els.push(el);
-      }
+      observe() {}
       disconnect() {}
       unobserve() {}
       takeRecords() {
@@ -683,54 +674,14 @@ describe('StoryIntro (D25)', () => {
     try {
       renderStory();
       const section = screen.getByTestId('story-intro');
-      expect(section).toHaveAttribute('data-story-mode', 'sticky');
-      expect(section).toHaveAttribute('data-story-state', '1');
-      const panels = screen.getAllByTestId('story-sticky');
-      expect(panels).toHaveLength(2);
-      for (const p of panels) expect(p).toHaveAttribute('aria-hidden', 'true');
-      // Steps keep all their text; the maps are described in text for screen readers.
-      expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(5);
+      expect(section).toHaveAttribute('data-story-mode', 'static');
+      expect(screen.queryAllByTestId('story-sticky')).toHaveLength(0);
+      // Every step keeps its own map(s): 1 + 2 (wall × mosaic) + 0 + 1 + 1.
       expect(
         section.querySelector('ol')!.querySelectorAll('[data-testid="story-map"]'),
-      ).toHaveLength(0);
-      expect(screen.getAllByText(/^Mapa: /)).toHaveLength(4);
-      // Step 1 = impact: act A (steps 1–2, panel, backdrop) wears the olive band.
-      const li1 = section.querySelector('li[data-step="1"]')!;
-      const backdrop = section.querySelector('[data-story-backdrop]')!;
-      expect(li1).toHaveClass('ed-band-ink');
-      expect(panels[0]).toHaveClass('ed-band-ink');
-      expect(backdrop).toHaveClass('opacity-100');
-      // Desktop step 2 keeps a tiny "wall" next to its text (decorative, 1 path).
-      const thumb = screen.getByTestId('story-wall-thumb');
-      expect(thumb).toHaveAttribute('aria-hidden', 'true');
-      expect(thumb.querySelectorAll('path')).toHaveLength(1);
-      expect(screen.getByText('3.735.098')).toBeInTheDocument();
-      const stepObserver = observers.find((o) => o.els.length === 5)!;
-      const scrollTo = (n: number) =>
-        act(() =>
-          stepObserver.cb(
-            [
-              {
-                isIntersecting: true,
-                target: section.querySelector(`li[data-step="${n}"]`)!,
-              } as unknown as IntersectionObserverEntry,
-            ],
-            stepObserver as unknown as IntersectionObserver,
-          ),
-        );
-      // Step 2 → the first panel crossfades from the wall to the mosaic.
-      scrollTo(2);
-      expect(section).toHaveAttribute('data-story-state', '2');
-      expect(panels[0]).toHaveAttribute('data-story-state', '2');
-      expect(panels[0]!.querySelector('[data-layer="2"]')).toHaveAttribute('data-active', 'true');
-      expect(panels[0]!.querySelector('[data-layer="1"]')).not.toHaveAttribute('data-active');
-      // Reveal: back to cream on step 2.
-      expect(li1).not.toHaveClass('ed-band-ink');
-      expect(panels[0]).not.toHaveClass('ed-band-ink');
-      expect(backdrop).toHaveClass('opacity-0');
-      scrollTo(5);
-      expect(panels[1]).toHaveAttribute('data-story-state', '5');
-      expect(panels[1]!.querySelector('[data-layer="5"]')).toHaveAttribute('data-active', 'true');
+      ).toHaveLength(5);
+      expect(section.querySelector('li[data-step="1"]')).toHaveClass('ed-band-ink');
+      expect(screen.queryByTestId('story-wall-thumb')).not.toBeInTheDocument();
     } finally {
       mm.mockRestore();
     }

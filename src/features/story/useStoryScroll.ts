@@ -13,11 +13,18 @@ export type StoryMode = 'sticky' | 'static';
  * and motion allowed. Everywhere else every step renders its own static map (the content is
  * complete without any scroll-driven behaviour).
  */
+/**
+ * Owner decision (2026-10-10, D45): the scroll-driven sticky map on desktop felt clumsy
+ * ("desastrado"); the narrative uses the static composition at every width. The sticky code
+ * path is kept behind this flag for a possible future revisit — never enabled in production.
+ */
+export const STICKY_NARRATIVE = false;
+
 export function useStoryMode(): StoryMode {
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const reduced = useMediaQuery(REDUCED_MOTION_QUERY);
   const io = typeof IntersectionObserver !== 'undefined';
-  return desktop && !reduced && io ? 'sticky' : 'static';
+  return STICKY_NARRATIVE && desktop && !reduced && io ? 'sticky' : 'static';
 }
 
 /**
