@@ -4,6 +4,7 @@
  * so route logic can be exercised with app.request(). These are NOT a substitute for the
  * real RLS tests in supabase/tests (which run against the TARGET dev project).
  */
+import type { AdminInternalMetrics } from '../../shared/contracts/admin.ts';
 import { createApp } from '../app.ts';
 import type { AuthUser, Deps, EdgeCache, Env } from '../env.ts';
 import { fail } from '../errors.ts';
@@ -401,6 +402,75 @@ export class FakeRepo implements Repo {
     if (this.admins.size <= 1) throw fail('CONFLICT');
     this.adminMeta.delete(id);
     return this.admins.delete(id);
+  }
+  /** `days` values passed to adminMetrics (route tests). */
+  metricsCalls: number[] = [];
+  /** Mirrors svc_admin_metrics (0015) over the in-memory state; aggregates only. */
+  async adminMetrics(days: number): Promise<AdminInternalMetrics> {
+    this.metricsCalls.push(days);
+    const now = this.clock();
+    const profiles = [...this.profiles.values()];
+    const since = (d: number) =>
+      profiles.filter((p) => Date.parse(p.created_at) >= now - d * 864e5);
+    const by_day = Array.from({ length: days }, (_, i) => {
+      const day = new Date(now - (days - 1 - i) * 864e5 - 3 * 36e5).toISOString().slice(0, 10);
+      return {
+        day,
+        count: profiles.filter(
+          (p) => new Date(Date.parse(p.created_at) - 3 * 36e5).toISOString().slice(0, 10) === day,
+        ).length,
+      };
+    });
+    const by_status: Record<string, number> = Object.fromEntries(
+      [
+        'draft',
+        'pending_review',
+        'published',
+        'rejected',
+        'cancelled',
+        'archived',
+        'suspended',
+      ].map((s) => [s, this.activities.filter((a) => a.status === s).length]),
+    );
+    const perTerritory = new Map<string, number>();
+    for (const p of profiles) {
+      if (p.selected_territory_id) {
+        perTerritory.set(
+          p.selected_territory_id,
+          (perTerritory.get(p.selected_territory_id) ?? 0) + 1,
+        );
+      }
+    }
+    const going = this.rsvps.filter((r) => r.status === 'going');
+    return {
+      profiles: {
+        total: profiles.length,
+        last_7d: since(7).length,
+        last_30d: since(30).length,
+        by_day,
+      },
+      activities: {
+        by_status,
+        upcoming_published: this.activities.filter(
+          (a) => a.status === 'published' && Date.parse(a.starts_at) > now,
+        ).length,
+      },
+      rsvps: { total: going.length, last_7d: 0 },
+      groups: {
+        active: this.groups.filter((g) => g.status === 'active').length,
+        suspended: this.groups.filter((g) => g.status === 'suspended').length,
+        pending_proposals: this.proposals.filter((p) => p.status === 'pending').length,
+      },
+      admins: { total: this.admins.size },
+      top_territories: [...perTerritory]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([territory_id, registrations]) => ({
+          territory_id,
+          name: this.territories.find((t) => t.id === territory_id)?.name ?? territory_id,
+          registrations,
+        })),
+    };
   }
   async isEmailVerified(id: string) {
     return this.verified.has(id);

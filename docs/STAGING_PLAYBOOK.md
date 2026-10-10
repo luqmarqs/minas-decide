@@ -101,3 +101,14 @@ Enumeração de e-mail (manter 409 — recomendado), conteúdo do snapshot (top 
 
 No painel do Umami: *Settings → Websites → Add website* (nome, domínio `minasdecide.com.br`) e copie o **Website ID**. O tracker só entra na CSP quando `VITE_UMAMI_SCRIPT_URL` está definido no build; `?analytics=0` na URL desliga para depuração. Nenhuma credencial de API do Umami é necessária no site.
 
+### A.1 Métricas de audiência no painel `/admin` (aba "Métricas")
+
+O Worker lê os números do Umami no servidor, com um usuário **somente leitura**. Sem os secrets abaixo a aba mostra "Audiência ainda não configurada" (o resto do painel funciona).
+
+1. No Umami (`https://analytics.luqmarqs.dev`): *Settings → Users → Create user*. Nome (ex. `minas-metrics`), senha longa aleatória, papel **View only**. Em *Teams*/permissões, garanta que o usuário enxergue o site "minasdecide.com.br" (adicione-o ao time do site ou atribua o site ao usuário).
+2. Confirme o Website ID (já em `wrangler.jsonc`, `env.production.vars.UMAMI_WEBSITE_ID`, junto de `UMAMI_API_URL`). Staging não tem essas vars (fica "não configurada").
+3. Grave os secrets (cada comando pede o valor; não os coloque em arquivo versionado):
+   - `npx wrangler secret put UMAMI_USERNAME --env production`
+   - `npx wrangler secret put UMAMI_PASSWORD --env production`
+4. Teste em `/admin` > Métricas. Se aparecer "Umami indisponível", veja os logs do Worker (`where: "umami"`, `kind`/`status`): `login_rejected` = usuário/senha errados; `http 403/404` = o usuário não enxerga o site.
+5. Rotação: troque a senha no Umami e repita o passo 3 (`UMAMI_PASSWORD`); o JWT em cache expira em até ~50 min.

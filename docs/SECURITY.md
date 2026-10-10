@@ -63,6 +63,12 @@ Resíduos dos testes: território sandbox `mg-9xxxxxx` apagado por cascata; iden
 - **Salvaguardas:** não é possível remover a si mesmo (400) nem o último administrador (409; o banco recusa esvaziar a tabela, inclusive em remoções simultâneas). `svc_*` só por `service_role`.
 - **Risco aceito/mitigado:** um admin comprometido pode adicionar outros admins. Mitigações: e-mail verificado obrigatório, auditoria de cada concessão, rate limit, revogação imediata por outro admin e re-checagem fresca no Clerk a cada chamada. MFA segue opcional (D35); recomenda-se ativá-lo nas contas de admin no Clerk.
 
+## Painel de métricas (migration 0015)
+
+- **Superfície nova:** `GET /admin/metrics`. Admin **fresco**, `no-store`, `account_read`. Só **agregados**: contagens e séries por dia; nenhum e-mail, telefone, id de pessoa ou lista de quem clicou "Eu vou". `svc_admin_metrics` é `SECURITY DEFINER`, `search_path=''`, só `service_role`.
+- **Umami (D44):** as credenciais (`UMAMI_USERNAME`/`UMAMI_PASSWORD`, usuário **somente leitura** do Umami) existem só como secrets do Worker; o navegador nunca as vê nem chama o Umami com elas. O JWT fica só em memória do isolate (~50 min). `UMAMI_API_URL` precisa ser `https` (ou localhost) e `UMAMI_WEBSITE_ID` é validado como UUID antes de entrar na URL. Falhas viram `site_status: 'unavailable'` com `warn` sem URL, token ou senha.
+- **Risco:** o Umami é um serviço externo ao projeto; se as credenciais vazarem, o alcance é leitura das estatísticas do site (usuário view-only). Rotacione a senha no Umami e rode `wrangler secret put` de novo.
+
 ## Turnstile
 Siteverify com `secret`, `response` e `remoteip` (`CF-Connecting-IP`). Checa:
 - `success`;

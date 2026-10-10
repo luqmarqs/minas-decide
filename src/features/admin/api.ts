@@ -11,6 +11,7 @@ import {
   AdminGrantResponse,
   AdminGroupProposal,
   AdminListResponse,
+  AdminMetricsResponse,
   AdminRevealContactResponse,
   AdminRevokeResponse,
   SecurityEvent,
@@ -193,4 +194,9 @@ export function revokeAdmin(userId: string) {
   return authedRequest(`/admin/admins/${encodeURIComponent(userId)}`, AdminRevokeResponse, {
     method: 'DELETE',
   });
+}
+
+/** Metrics panel (aggregates only; internal numbers + Umami audience, read server-side). */
+export function fetchAdminMetrics(days: 7 | 30 | 90, signal?: AbortSignal) {
+  return authedRequest('/admin/metrics', AdminMetricsResponse, { query: { days }, signal });
 }

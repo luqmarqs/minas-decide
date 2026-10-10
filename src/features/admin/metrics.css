@@ -1,0 +1,61 @@
+/*
+ * "Métricas" tab of /admin. Editorial figures (no card chrome, hairlines only). The `.ed-*`
+ * names follow the editorial vocabulary but are scoped under `.adm-metrics` so they cannot
+ * collide with other stylesheets. Tokens only.
+ */
+.adm-metrics .ed-kicker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.adm-metrics .ed-rule {
+  border: 0;
+  border-top: 1px solid var(--color-border-strong);
+  margin: 0;
+}
+
+.adm-metrics .ed-figure {
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  font-weight: 700;
+  font-size: 1.75rem;
+  color: var(--color-text-primary);
+}
+
+.adm-metrics .ed-figure-lg {
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  font-weight: 700;
+  font-size: 2.5rem;
+  color: var(--color-text-primary);
+}
+
+.adm-metrics .ed-caption {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
+.adm-metrics .adm-bar-fill {
+  fill: var(--color-action-primary);
+}
+
+.adm-metrics .adm-bar-track {
+  fill: var(--color-surface-alt);
+}
+
+.adm-metrics .adm-hbar {
+  height: 0.5rem;
+  border-radius: 2px;
+  background: var(--color-surface-alt);
+  overflow: hidden;
+}
+
+.adm-metrics .adm-hbar > span {
+  display: block;
+  height: 100%;
+  background: var(--color-action-primary);
+}

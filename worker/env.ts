@@ -41,6 +41,15 @@ export interface Env {
    * it `POST /api/v1/webhooks/clerk` answers 404 NOT_FOUND (webhook disabled).
    */
   CLERK_WEBHOOK_SIGNING_SECRET?: string;
+  /**
+   * Umami (D44) audience metrics for the admin panel. All optional: without them the panel says
+   * "unconfigured". `UMAMI_API_URL`/`UMAMI_WEBSITE_ID` are public vars; `UMAMI_USERNAME` and
+   * `UMAMI_PASSWORD` are secrets of a READ-ONLY (view-only) Umami user. Worker only.
+   */
+  UMAMI_API_URL?: string;
+  UMAMI_WEBSITE_ID?: string;
+  UMAMI_USERNAME?: string;
+  UMAMI_PASSWORD?: string;
 }
 
 /** Subset of the Workers Cache API used for public GETs (QA-1 F16). */

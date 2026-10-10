@@ -16,3 +16,8 @@ CLERK_PUBLISHABLE_KEY=<clerk-publishable-key>
 # Optional: Svix signing secret of the Clerk webhook endpoint (user.deleted -> erasure, QA3-02).
 # Without it POST /api/v1/webhooks/clerk answers 404 (disabled).
 # CLERK_WEBHOOK_SIGNING_SECRET=whsec_<from-clerk-dashboard>
+# Optional: Umami audience in the admin "Métricas" tab (D44). Use a VIEW-ONLY Umami user.
+# UMAMI_API_URL=https://analytics.luqmarqs.dev
+# UMAMI_WEBSITE_ID=<website-uuid>
+# UMAMI_USERNAME=<read-only-user>
+# UMAMI_PASSWORD=<read-only-password>

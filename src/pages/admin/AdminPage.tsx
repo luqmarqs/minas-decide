@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { useMe, useSession } from '@/lib/auth';
 import { ActivitiesQueue, GroupsQueue, SecurityEvents } from '@/features/admin/AdminQueues';
 import { AdminManagement } from '@/features/admin/AdminManagement';
+import { AdminMetrics } from '@/features/admin/AdminMetrics';
 import { adminErrorMessage, ADMIN_FORBIDDEN_MESSAGE } from '@/features/admin/errors';
 import { SignedOutPanel } from '@/features/auth/SignedOutPanel';
 
@@ -52,6 +53,7 @@ export default function AdminPage() {
           <TabsList aria-label="Filas de moderação">
             <TabsTrigger value="groups">Grupos</TabsTrigger>
             <TabsTrigger value="activities">Atividades</TabsTrigger>
+            <TabsTrigger value="metrics">Métricas</TabsTrigger>
             <TabsTrigger value="admins">Administradores</TabsTrigger>
             <TabsTrigger value="security">Eventos de segurança</TabsTrigger>
           </TabsList>
@@ -60,6 +62,9 @@ export default function AdminPage() {
           </TabsContent>
           <TabsContent value="activities" className="mt-4">
             <ActivitiesQueue />
+          </TabsContent>
+          <TabsContent value="metrics" className="mt-4">
+            <AdminMetrics />
           </TabsContent>
           <TabsContent value="admins" className="mt-4">
             <AdminManagement />

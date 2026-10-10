@@ -5,7 +5,9 @@ import {
   AdminGrantInput,
   AdminGroupPatch,
   AdminQueueQuery,
+  AdminMetricsQuery,
   GroupManagerInput,
+  type AdminMetricsResponse,
   ModerationDecision,
   type AdminGrantResponse,
   type AdminListResponse,
@@ -28,6 +30,7 @@ import {
 import { rateLimitPerUser } from '../middleware/rate-limit.ts';
 import { activityPaths, noStore, purgeGroups, purgePublic } from '../middleware/cache.ts';
 import { decodeCursor, encodeCursor } from '../services/crypto.ts';
+import { getSiteMetrics } from '../services/umami.ts';
 import { toAdminActivity, toAdminProposal } from '../services/projections.ts';
 import type { Cursor, GroupPatch } from '../repositories/types.ts';
 
@@ -382,3 +385,22 @@ admin.delete(
     return ok(c, body);
   },
 );
+
+// ---------------------------------------------------------------- metrics panel
+// Aggregates only (no PII). `internal` comes from svc_admin_metrics; `site` (audience) is read
+// from Umami on the server with read-only credentials and degrades to null, never to a 500.
+admin.get('/admin/metrics', requireFreshAdmin, async (c) => {
+  const { days } = parse(AdminMetricsQuery, c.req.query());
+  const { repo, now } = c.get('deps');
+  const [internal, umami] = await Promise.all([
+    repo.adminMetrics(days),
+    getSiteMetrics(c.env, days, now()),
+  ]);
+  const body: AdminMetricsResponse = {
+    days,
+    internal,
+    site: umami.site,
+    site_status: umami.status,
+  };
+  return ok(c, body);
+});

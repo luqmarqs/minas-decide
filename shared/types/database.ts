@@ -794,6 +794,7 @@ export type Database = {
         Args: { p_created_by?: string; p_user: string };
         Returns: undefined;
       };
+      svc_admin_metrics: { Args: { p_days?: number }; Returns: Json };
       svc_list_admins: { Args: Record<PropertyKey, never>; Returns: Json };
       svc_remove_admin: { Args: { p_actor: string; p_user: string }; Returns: boolean };
       svc_is_admin: { Args: { p_user: string }; Returns: boolean };

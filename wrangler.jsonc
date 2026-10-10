@@ -60,6 +60,9 @@
         "ALLOWED_ORIGINS": "",
         "TURNSTILE_EXPECTED_HOSTNAMES": "minasdecide.com.br",
         "CLERK_ISSUER": "https://clerk.minasdecide.com.br",
+        // Umami (D44), public identifiers; credentials are secrets (see below).
+        "UMAMI_API_URL": "https://analytics.luqmarqs.dev",
+        "UMAMI_WEBSITE_ID": "659cb853-768c-4dfd-9919-6a05d87b2c74",
       },
     },
   },
@@ -69,6 +72,9 @@
   //   SUPABASE_TARGET_ANON_KEY (legacy, unused by the Worker since ADR 0005),
   //   TURNSTILE_SECRET_KEY, RSVP_DEVICE_SECRET, ADMIN_EMAILS,
   //   CLERK_WEBHOOK_SIGNING_SECRET (optional, `whsec_…`; enables POST /api/v1/webhooks/clerk).
+  // Optional secrets (admin "Métricas" > Audiência): UMAMI_USERNAME, UMAMI_PASSWORD of a view-only
+  //   Umami user (`wrangler secret put UMAMI_USERNAME --env production`). Without them the panel
+  //   shows "Audiência ainda não configurada". UMAMI_API_URL/UMAMI_WEBSITE_ID are vars (production only).
   // Non-secret Clerk settings: CLERK_ISSUER (`https://<frontend-api-host>`) or
   //   CLERK_PUBLISHABLE_KEY (issuer derived from it) — REQUIRED outside local/test (QA3-04);
   //   production must set the live instance issuer (e.g. https://clerk.<domain>) before deploy.

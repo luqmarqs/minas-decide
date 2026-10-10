@@ -11,6 +11,7 @@
     "dev": "vite",
     "dev:worker": "wrangler dev --env local",
     "build": "vite build",
+    "build:local": "vite build --mode dev",
     "preview": "wrangler dev --env local",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "lint": "eslint .",

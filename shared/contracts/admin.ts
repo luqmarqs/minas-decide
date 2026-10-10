@@ -148,3 +148,70 @@ export type AdminGrantResponse = z.infer<typeof AdminGrantResponse>;
 /** DELETE /admin/admins/:userId */
 export const AdminRevokeResponse = z.object({ user_id: ClerkUserId, removed: z.literal(true) });
 export type AdminRevokeResponse = z.infer<typeof AdminRevokeResponse>;
+
+// ---------------------------------------------------------------- metrics panel
+/** GET /admin/metrics?days=7|30|90 (default 30). Aggregates only: no PII, no per-person rows. */
+export const METRICS_PERIODS = [7, 30, 90] as const;
+export const AdminMetricsQuery = z.object({
+  days: z.coerce
+    .number()
+    .int()
+    .refine((n) => (METRICS_PERIODS as readonly number[]).includes(n), 'Período inválido.')
+    .default(30),
+});
+export type AdminMetricsQuery = z.infer<typeof AdminMetricsQuery>;
+
+const Count = z.number().int().nonnegative();
+const DayCount = z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), count: Count });
+
+/** Output of `public.svc_admin_metrics(p_days)` (migration 0015). */
+export const AdminInternalMetrics = z.object({
+  profiles: z.object({
+    total: Count,
+    last_7d: Count,
+    last_30d: Count,
+    by_day: z.array(DayCount),
+  }),
+  activities: z.object({
+    by_status: z.record(z.string(), Count),
+    upcoming_published: Count,
+  }),
+  rsvps: z.object({ total: Count, last_7d: Count }),
+  groups: z.object({ active: Count, suspended: Count, pending_proposals: Count }),
+  admins: z.object({ total: Count }),
+  top_territories: z.array(
+    z.object({ territory_id: TerritoryId, name: z.string(), registrations: Count }),
+  ),
+});
+export type AdminInternalMetrics = z.infer<typeof AdminInternalMetrics>;
+
+const LabelCount = z.object({ label: z.string(), count: Count });
+
+/** Audience read from Umami on the server (aggregates only). */
+export const AdminSiteMetrics = z.object({
+  days: z.number().int(),
+  visitors: Count,
+  visits: Count,
+  pageviews: Count,
+  bounces: Count,
+  /** 0..1, null when there were no visits */
+  bounce_rate: z.number().min(0).max(1).nullable(),
+  /** mean visit duration in seconds, null when there were no visits */
+  avg_visit_seconds: z.number().nonnegative().nullable(),
+  by_day: z.array(z.object({ day: z.string(), pageviews: Count, visitors: Count })),
+  top_pages: z.array(LabelCount),
+  top_referrers: z.array(LabelCount),
+  devices: z.array(LabelCount),
+});
+export type AdminSiteMetrics = z.infer<typeof AdminSiteMetrics>;
+
+export const AdminSiteStatus = z.enum(['ok', 'unconfigured', 'unavailable']);
+export type AdminSiteStatus = z.infer<typeof AdminSiteStatus>;
+
+export const AdminMetricsResponse = z.object({
+  days: z.number().int(),
+  internal: AdminInternalMetrics,
+  site: AdminSiteMetrics.nullable(),
+  site_status: AdminSiteStatus,
+});
+export type AdminMetricsResponse = z.infer<typeof AdminMetricsResponse>;

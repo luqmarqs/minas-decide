@@ -8,6 +8,7 @@ import type {
   ActivityType,
   PublicContactType,
 } from '../../shared/contracts/activities.ts';
+import type { AdminInternalMetrics } from '../../shared/contracts/admin.ts';
 import type { DataQuality, TerritoryType } from '../../shared/contracts/territory.ts';
 
 export interface TerritoryRow {
@@ -294,6 +295,8 @@ export interface Repo {
   /** true = removed; false = was not admin. Throws CONFLICT when it would leave no admin. */
   removeAdmin(userId: string, actor: string): Promise<boolean>;
   isEmailVerified(userId: string): Promise<boolean>;
+  /** Aggregate-only metrics for the admin panel (0015, svc_admin_metrics). */
+  adminMetrics(days: number): Promise<AdminInternalMetrics>;
   // moderation
   listGroupProposals(
     status: string | null,

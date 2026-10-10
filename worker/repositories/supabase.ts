@@ -8,6 +8,7 @@
  * - Postgres errors are mapped to stable AppError codes; raw messages are never forwarded.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { AdminInternalMetrics } from '../../shared/contracts/admin.ts';
 import type { ActivityStatus } from '../../shared/contracts/activities.ts';
 import type { Database } from '../../shared/types/database.ts';
 import type { Env } from '../env.ts';
@@ -411,6 +412,10 @@ export class SupabaseRepo implements Repo {
 
   removeAdmin(userId: string, actor: string): Promise<boolean> {
     return this.rpc('svc_remove_admin', { p_user: userId, p_actor: actor });
+  }
+
+  async adminMetrics(days: number): Promise<AdminInternalMetrics> {
+    return AdminInternalMetrics.parse(await this.rpc('svc_admin_metrics', { p_days: days }));
   }
 
   isEmailVerified(userId: string): Promise<boolean> {
