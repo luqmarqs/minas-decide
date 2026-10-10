@@ -31,13 +31,14 @@ export function AbsenceBars({ rows }: { rows: AbsenceRow[] }) {
         return (
           <div
             key={key}
-            className="grid gap-x-8 gap-y-2 border-t border-border py-5 first:border-t-0 first:pt-0 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:items-end lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]"
+            className="grid gap-x-8 gap-y-2 border-t border-border py-5 first:border-t-0 first:pt-0 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:grid-rows-[auto_auto] md:items-end lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]"
           >
-            <div className="min-w-0">
-              <dt className="ed-kicker">{label}</dt>
-              <dd className="ed-figure ed-figure-lg mt-1">{item ? formatInt(item.value) : '—'}</dd>
-            </div>
-            <dd className="min-w-0">
+            {/* dl > div > (dt, dd, dd): no extra wrapper, so the list stays a valid description list. */}
+            <dt className="ed-kicker min-w-0 self-start">{label}</dt>
+            <dd className="ed-figure ed-figure-lg mt-1 min-w-0">
+              {item ? formatInt(item.value) : '—'}
+            </dd>
+            <dd className="min-w-0 md:col-start-2 md:row-span-2 md:row-start-1 md:self-end">
               {share !== undefined && base ? (
                 <>
                   <p className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm text-secondary">

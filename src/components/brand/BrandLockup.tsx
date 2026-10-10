@@ -28,7 +28,9 @@ export function BrandLockup({ mono = false, label, className }: BrandLockupProps
       />
       <span aria-hidden="true" className="brand-display text-[1.6rem] tracking-[0.01em]">
         MINAS
-      </span>
+      </span>{' '}
+      {/* whitespace is not rendered between flex items; it only keeps the visible text "MINAS DECIDE"
+          matching the accessible name (axe label-content-name-mismatch). */}
       <span aria-hidden="true" className="brand-outline text-[1.45rem]">
         DECIDE
       </span>

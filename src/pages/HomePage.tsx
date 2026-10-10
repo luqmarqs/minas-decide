@@ -244,7 +244,7 @@ export default function HomePage() {
         id="agenda"
         aria-labelledby="agenda-title"
         // Rodada 4b: rendering skipped while far below the fold.
-        className="ed-section scroll-mt-(--header-height) [contain-intrinsic-size:auto_900px] [content-visibility:auto]"
+        className="ed-section scroll-mt-(--header-height)"
       >
         <div className="mx-auto grid max-w-(--content-max) grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-x-10">
           <PlateHeading
