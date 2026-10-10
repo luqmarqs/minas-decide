@@ -129,7 +129,7 @@ export function WhyMinasStrip({ className, start }: WhyMinasStripProps) {
       className={cn('ed-section bg-surface', className)}
       data-testid="why-minas"
     >
-      <div className="mx-auto max-w-(--content-max) xl:max-w-none">
+      <div className="mx-auto max-w-(--content-max)">
         <PlateHeading
           number={2}
           kicker="Números"

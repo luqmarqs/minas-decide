@@ -26,7 +26,7 @@ export function AppHeader() {
       <div className="mx-auto flex h-(--header-height) max-w-(--content-max) items-center gap-1 px-3 sm:gap-2 sm:px-(--gutter) lg:max-w-none lg:px-6">
         <Link
           to="/"
-          className="mr-auto flex min-h-11 items-center gap-2 rounded-md no-underline"
+          className="mr-auto flex min-h-11 min-w-0 items-center gap-2 rounded-md no-underline [&_.brand-outline]:max-[359px]:hidden"
           aria-label="Minas Decide — página inicial"
         >
           {brand ? (

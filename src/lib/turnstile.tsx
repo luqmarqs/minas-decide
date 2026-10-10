@@ -169,7 +169,13 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, TurnstileWidgetProps>
             Ambiente de teste: chave oficial de teste da Cloudflare (não é proteção real).
           </p>
         ) : null}
-        <div ref={box} aria-describedby={errorId} className="min-h-[65px]" />
+        {/* The widget iframe is a fixed 300 px: scale it down on very narrow screens (< 360 px) so the
+            page never scrolls sideways (WCAG 1.4.10 reflow). */}
+        <div
+          ref={box}
+          aria-describedby={errorId}
+          className="min-h-[65px] max-w-full origin-left max-[359px]:scale-[0.84]"
+        />
         {state === 'loading' ? (
           <p className="flex items-center gap-2 text-sm text-muted" role="status">
             <Spinner size={16} /> Carregando verificação…
