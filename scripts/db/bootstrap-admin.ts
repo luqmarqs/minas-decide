@@ -2,7 +2,7 @@
  * Bootstraps admins on the TARGET dev project (ADR 0005 — identity = Clerk): for each e-mail
  * in ADMIN_EMAILS, finds the Clerk user by e-mail (Backend API `users.getUserList`), creating
  * it when missing (`users.createUser`; addresses created through the Backend API are marked
- * verified by Clerk — observed in the dev instance), and inserts its Clerk id into
+ * verified by Clerk — observed in the dev instance), and inserts its Clerk id (created_by=bootstrap, needs migration 0014) into
  * app_private.admins via the service-role-only RPC `svc_grant_admin`.
  *
  * Runs ONLY with APP_ENV=local exported in the shell (never in staging/production) and only with
@@ -85,7 +85,10 @@ async function main() {
     if (!user.email_verified || user.email !== email) {
       throw new Error(`${maskEmail(email)}: primary e-mail is not verified in Clerk; refusing.`);
     }
-    const { error } = await db.rpc('svc_grant_admin', { p_user: user.id });
+    const { error } = await db.rpc('svc_grant_admin', {
+      p_user: user.id,
+      p_created_by: 'bootstrap',
+    });
     if (error) throw new Error(`svc_grant_admin failed (${error.code ?? 'unknown'})`);
     const check = await db.rpc('svc_is_admin', { p_user: user.id });
     console.log(`bootstrap-admin: ${maskEmail(email)} is admin = ${String(check.data)}.`);

@@ -16,6 +16,7 @@ import type {
   ActivityRow,
   ActivityUpdate,
   ActivityWrite,
+  AdminRow,
   Cursor,
   EraseUserResult,
   GroupPatch,
@@ -398,6 +399,18 @@ export class SupabaseRepo implements Repo {
 
   isAdmin(userId: string): Promise<boolean> {
     return this.rpc('svc_is_admin', { p_user: userId });
+  }
+
+  async listAdmins(): Promise<AdminRow[]> {
+    return (await this.rpc<AdminRow[] | null>('svc_list_admins', {})) ?? [];
+  }
+
+  addAdmin(userId: string, actor: string): Promise<boolean> {
+    return this.rpc('svc_add_admin', { p_user: userId, p_actor: actor });
+  }
+
+  removeAdmin(userId: string, actor: string): Promise<boolean> {
+    return this.rpc('svc_remove_admin', { p_user: userId, p_actor: actor });
   }
 
   isEmailVerified(userId: string): Promise<boolean> {

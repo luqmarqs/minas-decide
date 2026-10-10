@@ -111,3 +111,40 @@ export const SecurityEvent = z.object({
   event_type: z.string(),
   block_code: z.string().nullable(),
 });
+
+// ---------------------------------------------------------------- admin management
+/** POST /admin/admins — the e-mail is normalised (trim + lower-case) and never echoed back. */
+export const AdminGrantInput = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+});
+export type AdminGrantInput = z.infer<typeof AdminGrantInput>;
+
+/**
+ * GET /admin/admins item. E-mails are ALWAYS masked (`ab***@dominio`); `status: 'missing'` =
+ * the id is in app_private.admins but Clerk no longer has the user (no e-mail, cannot act).
+ */
+export const AdminListItem = z.object({
+  user_id: ClerkUserId,
+  email_masked: z.string().nullable(),
+  status: z.enum(['active', 'missing']),
+  created_at: z.string(),
+  /** who granted it: masked e-mail, 'bootstrap', or null when unknown/removed */
+  created_by_masked: z.string().nullable(),
+  is_self: z.boolean(),
+});
+export type AdminListItem = z.infer<typeof AdminListItem>;
+
+export const AdminListResponse = z.object({ items: z.array(AdminListItem) });
+export type AdminListResponse = z.infer<typeof AdminListResponse>;
+
+/** POST /admin/admins (201 inserted, 200 already admin) */
+export const AdminGrantResponse = z.object({
+  user_id: ClerkUserId,
+  email_masked: z.string(),
+  created: z.boolean(),
+});
+export type AdminGrantResponse = z.infer<typeof AdminGrantResponse>;
+
+/** DELETE /admin/admins/:userId */
+export const AdminRevokeResponse = z.object({ user_id: ClerkUserId, removed: z.literal(true) });
+export type AdminRevokeResponse = z.infer<typeof AdminRevokeResponse>;

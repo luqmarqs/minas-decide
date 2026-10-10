@@ -92,6 +92,7 @@ export class FakeRepo implements Repo {
   rsvps: Rsvp[] = [];
   profiles = new Map<string, ProfileRow>();
   admins = new Set<string>();
+  adminMeta = new Map<string, { created_at: string; created_by: string | null }>();
   /** user ids passed to eraseUserData (webhook tests) */
   erased: string[] = [];
   verified = new Set<string>();
@@ -381,6 +382,25 @@ export class FakeRepo implements Repo {
   }
   async isAdmin(id: string) {
     return this.admins.has(id);
+  }
+  async listAdmins() {
+    return [...this.admins].map((user_id) => ({
+      user_id,
+      created_at: this.adminMeta.get(user_id)?.created_at ?? new Date(this.clock()).toISOString(),
+      created_by: this.adminMeta.get(user_id)?.created_by ?? null,
+    }));
+  }
+  async addAdmin(id: string, actor: string) {
+    if (this.admins.has(id)) return false;
+    this.admins.add(id);
+    this.adminMeta.set(id, { created_at: new Date(this.clock()).toISOString(), created_by: actor });
+    return true;
+  }
+  async removeAdmin(id: string, _actor: string) {
+    if (!this.admins.has(id)) return false;
+    if (this.admins.size <= 1) throw fail('CONFLICT');
+    this.adminMeta.delete(id);
+    return this.admins.delete(id);
   }
   async isEmailVerified(id: string) {
     return this.verified.has(id);

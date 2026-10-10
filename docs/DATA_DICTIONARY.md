@@ -51,6 +51,7 @@ Projeção pública de grupos `active`. SELECT para anon/authenticated.
 - **`svc_*`:** pontos de entrada do Worker, executáveis **só por service_role** (EXECUTE revogado de public/anon/authenticated):
   - `svc_is_admin`, `svc_is_email_verified`, `svc_email_in_use`;
   - `svc_get_profile`, `svc_create_profile`, `svc_delete_profile`, `svc_update_profile`, `svc_grant_admin`;
+  - **0014:** `svc_list_admins` (jsonb `[{user_id, created_at, created_by}]`), `svc_add_admin(p_user, p_actor)` (boolean: inserido; idempotente), `svc_remove_admin(p_user, p_actor)` (boolean; PT409 se deixaria a tabela vazia; `lock table` evita remoção simultânea). Chamadas só por `requireFreshAdmin` + auditoria `admin.grant`/`admin.revoke`;
   - `svc_create_group_proposal` (0010: `p_idempotency_ttl_seconds`, só deduplica contra pendente não expirada), `svc_list_group_proposals` (0010: inclui `group_id`), `svc_approve_group_proposal` (0011: devolve `{group_id, territory_id}`), `svc_reject_group_proposal` (0011: devolve `{proposal_id, territory_id}`), `svc_add_group_manager`;
   - **0010:** `svc_reveal_proposal_contact` (lê e audita na mesma transação), `svc_erase_group_proposals` (eliminação por id, auditada), `svc_suspend_group`, `svc_unsuspend_group`, `svc_suspend_activity`, `svc_unsuspend_activity` (0011: devolve `{version, status}`);
   - `svc_update_profile` (0010: `p_phone`; 0011: `p_email_contact`, re-sincroniza com o e-mail principal verificado no Clerk; 0012: sem `p_review_required`, `p_user text`);
@@ -66,7 +67,7 @@ Todas as tabelas: RLS ligada, nenhuma policy (nega tudo), grants só para `servi
 | Tabela | Colunas | Observações |
 |---|---|---|
 | `profiles` | `user_id` PK (id do Clerk, 0012; antes → auth.users), `display_name`, `email_contact` (**não prova identidade**), `email_verification_state` unverified/pending/verified, `phone_e164`, `selected_territory_id`, `consent_version`, `contact_opt_in_at`, `account_state` active/suspended, `review_required_at` (0010; **descontinuado em 0012**, sempre nulo), timestamps | PII |
-| `admins` | `user_id` PK, `created_at`, `created_by` | sem rota pública de promoção; bootstrap só por script local |
+| `admins` | `user_id` PK, `created_at`, `created_by` | sem rota pública de promoção; concessão/remoção só por admin autenticado (`/admin/admins`, 0014, auditada) ou bootstrap local (`created_by='bootstrap'`) |
 | `group_proposals` | território (cascade), `name_proposed`, `join_url_proposed`, `proposer_name`, `proposer_email`, `proposer_phone` E.164, `proposer_user_id`, `consent_version`, `status` pending/active/rejected, `group_id`, `reviewed_by`, `reviewed_at`, `review_reason`, `idempotency_key_hash` (único parcial), `idempotency_expires_at` (0010; 24 h; liberado quando a proposta é decidida ou expira), `fingerprint_hash` (HMAC do IP), `fingerprint_expires_at` (30 dias). `group_id` é preenchido por `approve_group_proposal` | PII |
 | `group_managers` | `group_id` (cascade), `name`, `email`, `phone`, `role_label`, `created_by` | PII, só admin |
 | `activity_rsvps` | `activity_id` (cascade), `user_id` ou `anonymous_subject_hash` (exatamente um), `status` going/cancelled, `source` session/device, `idempotency_key_hash` | únicos parciais `(activity_id,user_id)` e `(activity_id,anonymous_subject_hash)` |

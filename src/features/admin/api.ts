@@ -8,8 +8,11 @@ import { ActivitySuspensionResult, GroupSuspensionResult } from '@shared/contrac
 import { z } from 'zod';
 import {
   AdminActivity,
+  AdminGrantResponse,
   AdminGroupProposal,
+  AdminListResponse,
   AdminRevealContactResponse,
+  AdminRevokeResponse,
   SecurityEvent,
   type AdminGroupPatch,
   type GroupManagerInput,
@@ -173,4 +176,21 @@ export function revealProposalContact(proposalId: string, reason?: string) {
     AdminRevealContactResponse,
     { method: 'POST', body: reason ? { reason } : {} },
   );
+}
+
+/** Administrators list (e-mails always masked by the server). Never cached. */
+export function fetchAdmins(signal?: AbortSignal) {
+  return authedRequest('/admin/admins', AdminListResponse, { signal });
+}
+
+/** Grants admin to an EXISTING Clerk account with a verified primary e-mail. Audited. */
+export function grantAdmin(email: string) {
+  return authedRequest('/admin/admins', AdminGrantResponse, { method: 'POST', body: { email } });
+}
+
+/** Removes an admin (never yourself nor the last one). Audited. */
+export function revokeAdmin(userId: string) {
+  return authedRequest(`/admin/admins/${encodeURIComponent(userId)}`, AdminRevokeResponse, {
+    method: 'DELETE',
+  });
 }

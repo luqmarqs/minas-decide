@@ -55,6 +55,14 @@ Resíduos dos testes: território sandbox `mg-9xxxxxx` apagado por cascata; iden
 
 > Histórico (rodadas 1–3, Supabase Auth): spike de sessão anônima, P-SEC-1, QA2-01/02 e riscos residuais deixaram de se aplicar com a 0012/ADR 0005. Ver versões anteriores deste arquivo no histórico do repositório.
 
+## Gestão de administradores (migration 0014)
+
+- **Superfície nova:** `GET|POST /admin/admins` e `DELETE /admin/admins/:userId`. Todas exigem **admin fresco** (`requireFreshAdmin`: estado atual no Clerk, sem cache, banido → 401), `no-store`, `account_read` + `admin_write` (30/10 min por IP+usuário) nas escritas.
+- **Concessão:** só a contas Clerk **existentes**, com e-mail **principal verificado**, localizadas por e-mail no servidor (404 neutro se não existir). O e-mail digitado nunca volta na resposta; listas mostram só e-mail mascarado.
+- **Auditoria:** `admin.grant` / `admin.revoke` em `audit_events` (`actor_user_id` = quem agiu, `entity_id` = id Clerk do alvo, sem PII). Idempotente: re-conceder não gera nova linha.
+- **Salvaguardas:** não é possível remover a si mesmo (400) nem o último administrador (409; o banco recusa esvaziar a tabela, inclusive em remoções simultâneas). `svc_*` só por `service_role`.
+- **Risco aceito/mitigado:** um admin comprometido pode adicionar outros admins. Mitigações: e-mail verificado obrigatório, auditoria de cada concessão, rate limit, revogação imediata por outro admin e re-checagem fresca no Clerk a cada chamada. MFA segue opcional (D35); recomenda-se ativá-lo nas contas de admin no Clerk.
+
 ## Turnstile
 Siteverify com `secret`, `response` e `remoteip` (`CF-Connecting-IP`). Checa:
 - `success`;

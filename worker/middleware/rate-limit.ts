@@ -73,6 +73,8 @@ export const RATE_LIMITS = {
    * every /admin/* route) — generous for people, bounds a token looping on the API.
    */
   account_read: { limit: 120, windowMs: 60 * 1000 },
+  /** per IP + Clerk user id: admin grant/revoke (sensitive writes) */
+  admin_write: { limit: 30, windowMs: TEN_MIN },
   /** per IP — Clerk webhook deliveries (Svix); signature is checked after this */
   webhook_ip: { limit: 300, windowMs: TEN_MIN },
 } as const;

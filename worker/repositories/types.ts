@@ -287,6 +287,12 @@ export interface Repo {
   updateProfile(userId: string, patch: ProfilePatch): Promise<ProfileRow | null>;
   emailInUse(email: string, excludeUserId: string): Promise<boolean>;
   isAdmin(userId: string): Promise<boolean>;
+  /** Admin management (0014). `actor` = who granted/removed (Clerk id or 'bootstrap'). */
+  listAdmins(): Promise<AdminRow[]>;
+  /** true = inserted; false = was already admin. */
+  addAdmin(userId: string, actor: string): Promise<boolean>;
+  /** true = removed; false = was not admin. Throws CONFLICT when it would leave no admin. */
+  removeAdmin(userId: string, actor: string): Promise<boolean>;
   isEmailVerified(userId: string): Promise<boolean>;
   // moderation
   listGroupProposals(
@@ -378,6 +384,12 @@ export interface ClerkUserInfo {
 }
 
 /** Identity provider (Clerk, ADR 0005). Fakes implement it in worker/tests/fakes.ts. */
+export interface AdminRow {
+  user_id: string;
+  created_at: string;
+  created_by: string | null;
+}
+
 export interface AuthGateway {
   /** Verifies a Clerk session token (JWKS signature, exp/nbf, azp). null when invalid. */
   verify(token: string): Promise<VerifiedSession | null>;

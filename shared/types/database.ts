@@ -789,10 +789,13 @@ export type Database = {
         Returns: Json;
       };
       svc_get_profile: { Args: { p_user: string }; Returns: Json };
+      svc_add_admin: { Args: { p_actor: string; p_user: string }; Returns: boolean };
       svc_grant_admin: {
         Args: { p_created_by?: string; p_user: string };
         Returns: undefined;
       };
+      svc_list_admins: { Args: Record<PropertyKey, never>; Returns: Json };
+      svc_remove_admin: { Args: { p_actor: string; p_user: string }; Returns: boolean };
       svc_is_admin: { Args: { p_user: string }; Returns: boolean };
       svc_is_email_verified: { Args: { p_user: string }; Returns: boolean };
       svc_list_group_proposals: {

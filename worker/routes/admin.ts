@@ -2,19 +2,29 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { ActivityStatus } from '../../shared/contracts/activities.ts';
 import {
+  AdminGrantInput,
   AdminGroupPatch,
   AdminQueueQuery,
   GroupManagerInput,
   ModerationDecision,
+  type AdminGrantResponse,
+  type AdminListResponse,
   type AdminRevealContactResponse,
+  type AdminRevokeResponse,
 } from '../../shared/contracts/admin.ts';
 import { isWhatsAppInviteUrl } from '../../shared/contracts/groups.ts';
-import { normalizeBrazilPhone } from '../../shared/schemas/phone.ts';
+import { ClerkUserId } from '../../shared/contracts/registration.ts';
+import { maskEmail, normalizeBrazilPhone } from '../../shared/schemas/phone.ts';
 import { sanitizePlainText } from '../../shared/schemas/sanitize.ts';
 import type { AppBindings } from '../env.ts';
 import { fail } from '../errors.ts';
 import { ok, parse, parseBody, readJson, uuidParam } from '../http.ts';
-import { requireAdmin, requireFreshAdmin, requireSession } from '../middleware/auth.ts';
+import {
+  invalidateUserCache,
+  requireAdmin,
+  requireFreshAdmin,
+  requireSession,
+} from '../middleware/auth.ts';
 import { rateLimitPerUser } from '../middleware/rate-limit.ts';
 import { activityPaths, noStore, purgeGroups, purgePublic } from '../middleware/cache.ts';
 import { decodeCursor, encodeCursor } from '../services/crypto.ts';
@@ -264,3 +274,111 @@ admin.get('/admin/security-events', async (c) => {
       rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
   });
 });
+
+// ---------------------------------------------------------------- admin management
+// Every route re-checks the caller against the CURRENT Clerk state (requireFreshAdmin, no
+// cache). E-mails are never returned in clear: only `maskEmail`. Grants/revocations are audited
+// (`admin.grant`/`admin.revoke`, entity_id = target Clerk id, no PII).
+
+const BOOTSTRAP_ACTOR = 'bootstrap';
+
+admin.get('/admin/admins', requireFreshAdmin, async (c) => {
+  const { repo, auth } = c.get('deps');
+  const me = c.get('user')!.id;
+  const rows = await repo.listAdmins();
+  const ids = new Set<string>();
+  for (const r of rows) {
+    ids.add(r.user_id);
+    if (r.created_by && ClerkUserId.safeParse(r.created_by).success) ids.add(r.created_by);
+  }
+  const looked = await Promise.all(
+    [...ids].map(async (id) => [id, await auth.getUser(id)] as const),
+  );
+  const people = new Map(looked);
+  const masked = (id: string): string | null => {
+    const email = people.get(id)?.email;
+    return email ? maskEmail(email) : null;
+  };
+  const body: AdminListResponse = {
+    items: rows.map((r) => ({
+      user_id: r.user_id,
+      email_masked: masked(r.user_id),
+      status: people.get(r.user_id) ? ('active' as const) : ('missing' as const),
+      created_at: r.created_at,
+      created_by_masked:
+        r.created_by === BOOTSTRAP_ACTOR
+          ? BOOTSTRAP_ACTOR
+          : r.created_by
+            ? masked(r.created_by)
+            : null,
+      is_self: r.user_id === me,
+    })),
+  };
+  return ok(c, body);
+});
+
+admin.post('/admin/admins', requireFreshAdmin, rateLimitPerUser('admin_write'), async (c) => {
+  const actor = c.get('user')!.id;
+  const { email } = await parseBody(c, AdminGrantInput);
+  const { repo, auth } = c.get('deps');
+  const target = await auth.findUserByEmail(email);
+  // Neutral 404: does not reveal whether the address exists with another state (banned etc.).
+  if (!target || target.banned) throw fail('NOT_FOUND');
+  // Only a VERIFIED PRIMARY address qualifies (an admin is a verified Clerk account).
+  if (!target.email_verified || target.email !== email) {
+    throw fail('VALIDATION_ERROR', undefined, {
+      email: 'O e-mail principal desta conta ainda não foi verificado.',
+    });
+  }
+  const created = await repo.addAdmin(target.id, actor);
+  if (created) {
+    await repo.recordAudit({
+      actor,
+      action: 'admin.grant',
+      entity_type: 'admin',
+      entity_id: target.id,
+      request_id: c.get('requestId'),
+    });
+  }
+  invalidateUserCache(c, target.id);
+  const body: AdminGrantResponse = {
+    user_id: target.id,
+    email_masked: maskEmail(email),
+    created,
+  };
+  return ok(c, body, created ? 201 : 200);
+});
+
+admin.delete(
+  '/admin/admins/:userId',
+  requireFreshAdmin,
+  rateLimitPerUser('admin_write'),
+  async (c) => {
+    const actor = c.get('user')!.id;
+    const parsed = ClerkUserId.safeParse(c.req.param('userId'));
+    if (!parsed.success) throw fail('NOT_FOUND');
+    const target = parsed.data;
+    if (target === actor) {
+      throw fail('VALIDATION_ERROR', 'Você não pode remover o seu próprio acesso.');
+    }
+    const { repo } = c.get('deps');
+    const rows = await repo.listAdmins();
+    if (!rows.some((r) => r.user_id === target)) throw fail('NOT_FOUND');
+    if (rows.length <= 1) {
+      throw fail('CONFLICT', 'Este é o último administrador e não pode ser removido.');
+    }
+    // The database refuses to empty the table too (PT409) — covers concurrent removals.
+    const removed = await repo.removeAdmin(target, actor);
+    if (!removed) throw fail('NOT_FOUND');
+    await repo.recordAudit({
+      actor,
+      action: 'admin.revoke',
+      entity_type: 'admin',
+      entity_id: target,
+      request_id: c.get('requestId'),
+    });
+    invalidateUserCache(c, target);
+    const body: AdminRevokeResponse = { user_id: target, removed: true };
+    return ok(c, body);
+  },
+);
