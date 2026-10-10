@@ -59,13 +59,13 @@ for (const [vp, { width, height, mobile }] of Object.entries(VIEWPORTS)) {
     await settle(page);
     const tag = `${vp}-${theme}`;
     await shotSection(page, 'section.brand-hero', `${out}/hero-${tag}.png`);
-    await page.screenshot({ path: `${out}/home-${tag}.png`, fullPage: true, animations: 'disabled' });
+    await page.screenshot({
+      path: `${out}/home-${tag}.png`,
+      fullPage: true,
+      animations: 'disabled',
+    });
     await shotSection(page, '[data-testid="story-intro"]', `${out}/story-${tag}.png`);
-    await shotSection(
-      page,
-      '[data-testid="why-minas"]',
-      `${out}/infografico-${tag}.png`,
-    );
+    await shotSection(page, '[data-testid="why-minas"]', `${out}/infografico-${tag}.png`);
     await shotSection(page, '#agenda', `${out}/agenda-${tag}.png`);
     await shotSection(page, '#participar', `${out}/participar-${tag}.png`);
 
@@ -78,7 +78,11 @@ for (const [vp, { width, height, mobile }] of Object.entries(VIEWPORTS)) {
       await map.scrollIntoViewIfNeeded();
       await page.waitForTimeout(1500);
     }
-    await page.screenshot({ path: `${out}/mapa-bh-${tag}.png`, fullPage: false, animations: 'disabled' });
+    await page.screenshot({
+      path: `${out}/mapa-bh-${tag}.png`,
+      fullPage: false,
+      animations: 'disabled',
+    });
     await ctx.close();
     console.log('ok', tag);
   }

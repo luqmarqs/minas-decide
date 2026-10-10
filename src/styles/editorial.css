@@ -86,11 +86,17 @@
   color: var(--color-text-muted);
 }
 
+/* Abaixo de 768 px a grade é uma coluna (os `col-span` só valem a partir de md). */
 .ed-grid-12 {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  column-gap: clamp(1rem, 2.5vw, 2.5rem);
+  grid-template-columns: minmax(0, 1fr);
   row-gap: clamp(1.5rem, 3vw, 3rem);
+}
+@media (min-width: 768px) {
+  .ed-grid-12 {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: clamp(1rem, 2.5vw, 2.5rem);
+  }
 }
 
 .ed-sticky {

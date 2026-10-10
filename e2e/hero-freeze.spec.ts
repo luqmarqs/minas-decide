@@ -25,7 +25,9 @@ test.describe('hero congelado', () => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
         await page.goto('/');
-        await page.evaluate(() => document.fonts.ready);
+        await page.waitForFunction('document.fonts.status === "loaded"', undefined, {
+          timeout: 10_000,
+        });
         const hero = page.locator('section.brand-hero');
         await expect(hero).toBeVisible();
         // Let the hero image settle (it is preloaded; srcset may still swap once).
