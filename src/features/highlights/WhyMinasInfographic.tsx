@@ -412,6 +412,68 @@ function TurnoutStack({ t }: { t: Infographic['turnout'] }) {
   );
 }
 
+/** Brancos e nulos como % do comparecimento: 2022 (2º turno) × 2026 (1º turno), escala 0–10 %. */
+function BlankNullBars({ b }: { b: NonNullable<Infographic['blankNull']> }) {
+  const rows = [
+    { key: '2022', label: '2022 · 2º turno', votes: b.votes2022, pct: b.pctTurnout2022 },
+    { key: '2026', label: '2026 · 1º turno', votes: b.votes, pct: b.pctTurnout },
+  ].filter((r): r is { key: string; label: string; votes: number; pct: number } => r.pct !== null);
+  if (rows.length === 0) return null;
+  const max = 10;
+  const aria = rows
+    .map((r) => `${r.label}: ${pct100(r.pct)} do comparecimento (${formatInt(r.votes)} votos)`)
+    .join('; ');
+  return (
+    <div>
+      <svg
+        viewBox="0 0 240 44"
+        className="block h-auto w-full max-w-[18rem]"
+        preserveAspectRatio="xMinYMid meet"
+        role="img"
+        aria-label={`Brancos e nulos para Presidente — ${aria}`}
+      >
+        {rows.map((r, i) => {
+          const w = (Math.min(max, r.pct) / max) * 150;
+          const y = i * 22;
+          return (
+            <g key={r.key}>
+              <text x="0" y={y + 12} fontSize="10" style={{ fill: 'var(--color-text-secondary)' }}>
+                {r.label}
+              </text>
+              <rect
+                x="80"
+                y={y + 3}
+                width="150"
+                height="12"
+                style={{ fill: 'var(--map-fill-low)' }}
+              />
+              <rect
+                x="80"
+                y={y + 3}
+                width={w}
+                height="12"
+                style={{
+                  fill: i === rows.length - 1 ? 'var(--map-fill-high)' : 'var(--map-fill-mid-high)',
+                }}
+              />
+              <text
+                x={80 + w + 4}
+                y={y + 13}
+                fontSize="10"
+                fontWeight="700"
+                style={{ fill: 'var(--color-text-primary)' }}
+              >
+                {pct100(r.pct)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <p className="ed-caption mt-1">Escala de 0 a 10% do comparecimento.</p>
+    </div>
+  );
+}
+
 function Blocks({ pct }: { pct: number }) {
   // 10 blocos = eleitorado apto; parte preenchida = quem não votou em nenhum dos dois.
   const n = 10;
@@ -544,7 +606,7 @@ export function WhyMinasInfographic({ data }: { data: Infographic }) {
         label="municípios · quem liderou em 2026"
         source="TSE · IBGE"
         alignSource
-        className={cn(multiple, 'md:col-span-6 lg:col-span-4')}
+        className={cn(multiple, 'md:col-span-6 lg:col-span-3')}
       >
         {data.municipalities.lula !== null && data.municipalities.bolsonaro !== null ? (
           <SplitBar lula={data.municipalities.lula} bolsonaro={data.municipalities.bolsonaro} />
@@ -558,7 +620,7 @@ export function WhyMinasInfographic({ data }: { data: Infographic }) {
         label="foram votar no 1º turno de 2026"
         source="TSE"
         alignSource
-        className={cn(multiple, 'md:col-span-6 lg:col-span-4')}
+        className={cn(multiple, 'md:col-span-6 lg:col-span-3')}
       >
         <TurnoutStack t={data.turnout} />
       </Figure>
@@ -571,9 +633,39 @@ export function WhyMinasInfographic({ data }: { data: Infographic }) {
           label="não votaram em nenhum dos dois"
           source="TSE"
           alignSource
-          className={cn(multiple, 'md:col-span-12 lg:col-span-4')}
+          className={cn(multiple, 'md:col-span-6 lg:col-span-3')}
         >
           {data.neither.pctEligible !== null ? <Blocks pct={data.neither.pctEligible} /> : null}
+        </Figure>
+      ) : null}
+
+      {data.blankNull ? (
+        <Figure
+          testId="fig-brancos-nulos"
+          kicker="Quantos votaram branco ou nulo?"
+          figure={formatInt(data.blankNull.votes)}
+          label={
+            <>
+              votos brancos e nulos para Presidente no 1º turno de 2026
+              {data.blankNull.pctTurnout !== null ? (
+                <>
+                  {' · '}
+                  <strong className="font-semibold text-primary">
+                    {pct100(data.blankNull.pctTurnout)} do comparecimento
+                  </strong>
+                </>
+              ) : null}
+              {' — '}
+              <strong className="font-semibold text-primary">
+                votos que podem ser conquistados
+              </strong>
+            </>
+          }
+          source="TSE"
+          alignSource
+          className={cn(multiple, 'md:col-span-6 lg:col-span-3')}
+        >
+          <BlankNullBars b={data.blankNull} />
         </Figure>
       ) : null}
     </ul>

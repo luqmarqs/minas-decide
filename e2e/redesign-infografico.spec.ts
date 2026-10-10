@@ -127,9 +127,9 @@ test('acessibilidade estrutural da seção (sem axe instalado)', async ({ page }
   await expect(section.getByRole('heading', { level: 2, name: 'Por que Minas decide' })).toHaveId(
     'why-minas-title',
   );
-  await expect(section.getByRole('heading', { level: 3 })).toHaveCount(6);
+  await expect(section.getByRole('heading', { level: 3 })).toHaveCount(7);
   const imgs = section.getByRole('img');
-  await expect(imgs).toHaveCount(6);
+  await expect(imgs).toHaveCount(7);
   for (const label of await imgs.evaluateAll((els) =>
     els.map((e) => e.getAttribute('aria-label') ?? ''),
   ))

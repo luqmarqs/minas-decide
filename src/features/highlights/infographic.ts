@@ -28,6 +28,13 @@ export interface Infographic {
     blankNull: number | null;
   };
   neither: { people: number; pctEligible: number | null } | null;
+  /** Brancos e nulos para Presidente (votos que podem ser conquistados), 2026 r1 × 2022 r2. */
+  blankNull: {
+    votes: number;
+    pctTurnout: number | null;
+    votes2022: number | null;
+    pctTurnout2022: number | null;
+  } | null;
 }
 
 export function buildInfographic(h: Highlights | null | undefined): Infographic | null {
@@ -100,6 +107,7 @@ export function buildInfographic(h: Highlights | null | undefined): Infographic 
   ].filter((r): r is DuelRound => !!r);
 
   const neither = v('mg_2026_r1_neither_of_two');
+  const blankNull = v('mg_2026_r1_blank_null_votes');
   return {
     national: { sharePct, rank, ufs: cmp('mg_rank_eligible_2026'), eligible },
     duel,
@@ -112,6 +120,15 @@ export function buildInfographic(h: Highlights | null | undefined): Infographic 
     turnout: { eligible, turnout, abstention, blankNull: v('mg_2026_r1_blank_null_votes') },
     neither:
       neither === null ? null : { people: neither, pctEligible: cmp('mg_2026_r1_neither_of_two') },
+    blankNull:
+      blankNull === null
+        ? null
+        : {
+            votes: blankNull,
+            pctTurnout: cmp('mg_2026_r1_blank_null_votes'),
+            votes2022: v('mg_2022_r2_blank_null_votes'),
+            pctTurnout2022: cmp('mg_2022_r2_blank_null_votes'),
+          },
   };
 }
 

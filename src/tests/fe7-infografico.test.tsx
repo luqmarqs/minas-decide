@@ -90,7 +90,7 @@ describe('infographic data', () => {
 });
 
 describe('infographic as an editorial spread (redesign A, D4/D5)', () => {
-  it('six figures in one asymmetric grid, no carousel, accessible visuals, short sources', () => {
+  it('seven figures in one asymmetric grid, no carousel, accessible visuals, short sources', () => {
     render(<WhyMinasInfographic data={buildInfographic(HIGHLIGHTS)!} />);
     const list = screen.getByRole('list', { name: 'Números de Minas Gerais' });
     // D5: never a carousel for the main infographic (no snap scroller, no dots).
@@ -98,7 +98,7 @@ describe('infographic as an editorial spread (redesign A, D4/D5)', () => {
     expect(list.className).not.toMatch(/snap-x|overflow-x/);
     expect(screen.queryByRole('button', { name: /Ir para o número/ })).not.toBeInTheDocument();
     const figs = within(list).getAllByRole('listitem');
-    expect(figs).toHaveLength(6);
+    expect(figs).toHaveLength(7);
     // Hierarchy by scale: the anchor is the only XL figure; multiples use LG.
     const anchor = screen.getByTestId('fig-nacional');
     expect(within(anchor).getByText('10,3%').className).toContain('ed-figure-xl');
@@ -113,13 +113,22 @@ describe('infographic as an editorial spread (redesign A, D4/D5)', () => {
       'aria-label',
       'Minas tem 10,3% do eleitorado do Brasil',
     );
-    // Asymmetric layout: anchor 4 + comparison 8; multiples 4/4/4 on desktop.
+    // Asymmetric layout: anchor 4 + comparison 8; four multiples 3/3/3/3 on desktop.
     expect(anchor.className).toContain('lg:col-span-4');
     expect(screen.getByTestId('fig-duelo').className).toContain('lg:col-span-8');
     expect(screen.getByTestId('fig-duelo').className).toContain('lg:row-span-2');
     expect(screen.getByTestId('fig-margem-2022').className).toContain('lg:col-start-1');
-    for (const id of ['fig-municipios', 'fig-comparecimento', 'fig-nenhum'])
-      expect(screen.getByTestId(id).className).toContain('lg:col-span-4');
+    for (const id of ['fig-municipios', 'fig-comparecimento', 'fig-nenhum', 'fig-brancos-nulos'])
+      expect(screen.getByTestId(id).className).toContain('lg:col-span-3');
+    // Blank and null votes (owner: "falta falar de brancos e nulos"): count, share of turnout,
+    // 2022 × 2026 bars, framed as votes that can be won.
+    const bn = screen.getByTestId('fig-brancos-nulos');
+    expect(bn).toHaveTextContent('661.039');
+    expect(bn).toHaveTextContent('5,2% do comparecimento');
+    expect(bn).toHaveTextContent('votos que podem ser conquistados');
+    expect(within(bn).getByRole('img').getAttribute('aria-label')).toMatch(
+      /^Brancos e nulos para Presidente — 2022 · 2º turno: 4,2% do comparecimento \(534\.014 votos\); 2026 · 1º turno: 5,2% do comparecimento \(661\.039 votos\)$/,
+    );
     expect(screen.getByTestId('fig-margem-2022')).toHaveTextContent('+49.650');
     expect(screen.getByTestId('fig-margem-2022')).toHaveTextContent('+0,4 p.p.');
     expect(screen.getByTestId('fig-nenhum')).toHaveTextContent('5,4 mi');
@@ -138,9 +147,10 @@ describe('infographic as an editorial spread (redesign A, D4/D5)', () => {
       'Quem liderou nos municípios?',
       'Quantos foram votar?',
       'Quantos ficaram fora do duelo?',
+      'Quantos votaram branco ou nulo?',
     ]);
     const imgs = within(list).getAllByRole('img');
-    expect(imgs).toHaveLength(6);
+    expect(imgs).toHaveLength(7);
     const duel = within(screen.getByTestId('fig-duelo')).getByRole('img');
     expect(duel.getAttribute('aria-label')).toContain(
       '2026 · 1º turno: Lula 43,3%, Flávio Bolsonaro 48,2%',
@@ -184,7 +194,7 @@ describe('infographic as an editorial spread (redesign A, D4/D5)', () => {
     // No boxes: no rounded/bordered card chrome, no shadows.
     for (const f of figs) expect(f.className).not.toMatch(/rounded|shadow|bg-surface-raised/);
     // D10: short sources; the comparison and the 2022 margin share one line → 5 source lines.
-    expect(screen.getAllByText(/^Fonte: /)).toHaveLength(5);
+    expect(screen.getAllByText(/^Fonte: /)).toHaveLength(6);
     expect(screen.getByTestId('fig-margem-2022')).not.toHaveTextContent('Fonte:');
     expect(screen.getByTestId('fig-duelo')).toHaveTextContent(
       /Fonte: TSE · 2022 e 2026 \(inclui a margem de 2022\)$/,
