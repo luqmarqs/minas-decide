@@ -8,7 +8,7 @@ import type {
   ActivityType,
   PublicContactType,
 } from '../../shared/contracts/activities.ts';
-import type { AdminInternalMetrics } from '../../shared/contracts/admin.ts';
+import type { AdminInternalMetrics, AdminRegistration } from '../../shared/contracts/admin.ts';
 import type { DataQuality, TerritoryType } from '../../shared/contracts/territory.ts';
 
 export interface TerritoryRow {
@@ -297,6 +297,17 @@ export interface Repo {
   isEmailVerified(userId: string): Promise<boolean>;
   /** Aggregate-only metrics for the admin panel (0015, svc_admin_metrics). */
   adminMetrics(days: number): Promise<AdminInternalMetrics>;
+  /**
+   * Registrations (PERSONAL DATA, admin only; 0016 svc_list_profiles). KEYSET pagination by
+   * (created_at desc, user_id desc): `after` = last row of the previous page. `limit` 1..1000.
+   * `q` = optional substring over name / e-mail / territory name.
+   */
+  listProfiles(opts: {
+    after: Cursor | null;
+    limit: number;
+    q: string | null;
+  }): Promise<AdminRegistration[]>;
+  countProfiles(q: string | null): Promise<number>;
   // moderation
   listGroupProposals(
     status: string | null,

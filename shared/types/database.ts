@@ -795,6 +795,16 @@ export type Database = {
         Returns: undefined;
       };
       svc_admin_metrics: { Args: { p_days?: number }; Returns: Json };
+      svc_list_profiles: {
+        Args: {
+          p_after_created_at?: string;
+          p_after_user_id?: string;
+          p_limit?: number;
+          p_q?: string;
+        };
+        Returns: Json;
+      };
+      svc_count_profiles: { Args: { p_q?: string }; Returns: number };
       svc_list_admins: { Args: Record<PropertyKey, never>; Returns: Json };
       svc_remove_admin: { Args: { p_actor: string; p_user: string }; Returns: boolean };
       svc_is_admin: { Args: { p_user: string }; Returns: boolean };

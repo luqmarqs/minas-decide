@@ -12,13 +12,17 @@ import {
   AdminGroupProposal,
   AdminListResponse,
   AdminMetricsResponse,
+  AdminRegistrationsResponse,
+  REGISTRATIONS_PAGE_SIZE,
   AdminRevealContactResponse,
   AdminRevokeResponse,
   SecurityEvent,
   type AdminGroupPatch,
   type GroupManagerInput,
 } from '@shared/contracts/admin.ts';
-import { authedRequest } from '@/lib/auth';
+import { ApiError } from '@shared/contracts/api.ts';
+import { ApiClientError, buildApiUrl, GENERIC_ERROR_MESSAGES } from '@/lib/api';
+import { authedRequest, getSessionToken } from '@/lib/auth';
 
 export const GroupQueue = z.object({
   kind: z.literal('groups'),
@@ -199,4 +203,66 @@ export function revokeAdmin(userId: string) {
 /** Metrics panel (aggregates only; internal numbers + Umami audience, read server-side). */
 export function fetchAdminMetrics(days: 7 | 30 | 90, signal?: AbortSignal) {
   return authedRequest('/admin/metrics', AdminMetricsResponse, { query: { days }, signal });
+}
+
+/** Registrations list (PERSONAL DATA, admin only, audited server-side). Page size is fixed (50). */
+export function fetchRegistrations(cursor: string | null, q: string, signal?: AbortSignal) {
+  return authedRequest('/admin/registrations', AdminRegistrationsResponse, {
+    query: { limit: REGISTRATIONS_PAGE_SIZE, cursor: cursor ?? undefined, q: q || undefined },
+    signal,
+  });
+}
+
+/**
+ * Downloads the whole (filtered) base as CSV. The route streams text/csv, so this is a plain
+ * `fetch` with the Clerk token (not `authedRequest`, which expects the JSON envelope); errors
+ * still come back as the JSON envelope and are mapped to `ApiClientError`.
+ */
+export async function downloadRegistrationsCsv(
+  q: string,
+  signal?: AbortSignal,
+): Promise<{ blob: Blob; filename: string }> {
+  const send = async (token: string): Promise<Response> => {
+    try {
+      return await fetch(buildApiUrl('/admin/registrations/export.csv', { q: q || undefined }), {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'text/csv' },
+        credentials: 'include',
+        signal,
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') throw err;
+      throw new ApiClientError('NETWORK_ERROR', GENERIC_ERROR_MESSAGES.NETWORK_ERROR);
+    }
+  };
+  const token = await getSessionToken();
+  if (!token) throw new ApiClientError('UNAUTHENTICATED', GENERIC_ERROR_MESSAGES.UNAUTHENTICATED);
+  let res = await send(token);
+  if (res.status === 401) {
+    const fresh = await getSessionToken({ skipCache: true });
+    if (fresh && fresh !== token) res = await send(fresh);
+  }
+  if (!res.ok) {
+    const parsed = ApiError.safeParse(await res.json().catch(() => null));
+    if (parsed.success) {
+      const e = parsed.data.error;
+      throw new ApiClientError(e.code, e.message || GENERIC_ERROR_MESSAGES[e.code], {
+        status: res.status,
+        requestId: parsed.data.meta.request_id,
+      });
+    }
+    throw new ApiClientError('HTTP_ERROR', GENERIC_ERROR_MESSAGES.HTTP_ERROR, {
+      status: res.status,
+    });
+  }
+  let blob: Blob;
+  try {
+    blob = await res.blob();
+  } catch {
+    // the stream broke mid-way (server error): never hand a truncated file to the person
+    throw new ApiClientError('HTTP_ERROR', GENERIC_ERROR_MESSAGES.HTTP_ERROR, {
+      status: res.status,
+    });
+  }
+  const m = /filename="([^"/]+)"/.exec(res.headers.get('Content-Disposition') ?? '');
+  return { blob, filename: m?.[1] ?? 'cadastros-minas-decide.csv' };
 }

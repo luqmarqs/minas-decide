@@ -69,6 +69,14 @@ Resíduos dos testes: território sandbox `mg-9xxxxxx` apagado por cascata; iden
 - **Umami (D44):** as credenciais (`UMAMI_USERNAME`/`UMAMI_PASSWORD`, usuário **somente leitura** do Umami) existem só como secrets do Worker; o navegador nunca as vê nem chama o Umami com elas. O JWT fica só em memória do isolate (~50 min). `UMAMI_API_URL` precisa ser `https` (ou localhost) e `UMAMI_WEBSITE_ID` é validado como UUID antes de entrar na URL. Falhas viram `site_status: 'unavailable'` com `warn` sem URL, token ou senha.
 - **Risco:** o Umami é um serviço externo ao projeto; se as credenciais vazarem, o alcance é leitura das estatísticas do site (usuário view-only). Rotacione a senha no Umami e rode `wrangler secret put` de novo.
 
+## Lista e exportação de cadastros (migration 0016)
+
+- **Superfície nova:** `GET /admin/registrations` (50 por página, keyset) e `GET /admin/registrations/export.csv`. É **PII em massa** (nome, e-mail, WhatsApp, território, consentimento). Só admin **fresco** (`requireFreshAdmin`), `no-store`; a exportação ainda passa pelo bucket `admin_write` (30/10 min por IP+usuário). O navegador nunca chama o banco; `svc_list_profiles`/`svc_count_profiles` são `SECURITY DEFINER`, `search_path=''`, só `service_role`.
+- **Auditoria fail-closed:** `admin.registrations.list` (por página; `reason` só diz se `q` e cursor estavam presentes) e `admin.registrations.export` (`row_count`) são gravadas **antes** de qualquer leitura/envio; sem a linha de auditoria nada sai. Nenhum valor pessoal vai para `audit_events` nem para os logs.
+- **Limites:** a exportação é por stream em lotes de 1000 (memória plana, teto de 1000 lotes = 1 milhão de linhas); erro no meio encerra o stream com erro (o navegador não recebe arquivo truncado como se fosse completo) e o log registra só `request_id`, `rows_sent` e o desfecho.
+- **CSV seguro:** células que começam com `= + - @`, tab ou CR recebem `'` (injeção de fórmula); `;`, aspas e quebras de linha são escapadas; `X-Content-Type-Options: nosniff`.
+- **Risco aceito/mitigado:** um admin comprometido pode baixar a base. Mitigações: e-mail verificado + lista de admins re-checada no Clerk a cada chamada, rate limit, auditoria de cada acesso com contagem, revogação imediata por outro admin. O arquivo baixado fica fora do nosso controle: o aviso no painel lembra o uso restrito à campanha.
+
 ## Turnstile
 Siteverify com `secret`, `response` e `remoteip` (`CF-Connecting-IP`). Checa:
 - `success`;

@@ -32,6 +32,8 @@ Supabase (São Paulo) — dados ficam no Brasil; Cloudflare — tráfego pela bo
 ## 5. Segurança (fatos)
 RLS e grants mínimos; dados privados em schema não exposto; PII nunca em respostas públicas; segredos fora do código; CSP; auditoria de moderação; administradores autenticados pelo Clerk com e-mail verificado e lista de admins no servidor (MFA não exigido — decisão D35); revelação de contato de proponente auditada.
 
+Administradores podem consultar e exportar a base de cadastros (nome, e-mail, WhatsApp, território e consentimentos); acesso auditado.
+
 ## 6. Cookies e armazenamento local
 `mm_device` (HttpOnly, 1 ano, antifraude de RSVP); sessão do Clerk (cookie `__client`/`__session` do domínio do Clerk e token em memória; o Clerk recebe e-mail, IP e user-agent do titular para autenticação); rascunhos de formulário (localStorage, 7 dias); preferências de UI. Sem cookies de publicidade. Analytics: Umami self-hosted, sem cookies e sem captura de formulários (D44).
 

@@ -6,8 +6,11 @@ import {
   AdminGroupPatch,
   AdminQueueQuery,
   AdminMetricsQuery,
+  AdminRegistrationsExportQuery,
+  AdminRegistrationsQuery,
   GroupManagerInput,
   type AdminMetricsResponse,
+  type AdminRegistrationsResponse,
   ModerationDecision,
   type AdminGrantResponse,
   type AdminListResponse,
@@ -30,6 +33,11 @@ import {
 import { rateLimitPerUser } from '../middleware/rate-limit.ts';
 import { activityPaths, noStore, purgeGroups, purgePublic } from '../middleware/cache.ts';
 import { decodeCursor, encodeCursor } from '../services/crypto.ts';
+import {
+  brasiliaDate,
+  EXPORT_BATCH_SIZE,
+  registrationsCsvStream,
+} from '../services/registrations-csv.ts';
 import { getSiteMetrics } from '../services/umami.ts';
 import { toAdminActivity, toAdminProposal } from '../services/projections.ts';
 import type { Cursor, GroupPatch } from '../repositories/types.ts';
@@ -404,3 +412,91 @@ admin.get('/admin/metrics', requireFreshAdmin, async (c) => {
   };
   return ok(c, body);
 });
+
+// ---------------------------------------------------------------- registrations (PERSONAL DATA)
+// Full name / e-mail / WhatsApp of every registered person, admin only. No cache (fresh admin
+// check + no-store); every access is audited WITHOUT values (only whether `q`/cursor were used,
+// and the row count of exports). The audit row is written BEFORE any data is read, so a failed
+// audit means nothing leaves.
+const flag = (v: unknown) => (v ? 'present' : 'absent');
+
+admin.get('/admin/registrations', requireFreshAdmin, async (c) => {
+  const q = parse(AdminRegistrationsQuery, c.req.query());
+  const cursor = cursorOrThrow(q.cursor);
+  const { repo } = c.get('deps');
+  await repo.recordAudit({
+    actor: c.get('user')!.id,
+    action: 'admin.registrations.list',
+    entity_type: 'profile',
+    entity_id: null,
+    request_id: c.get('requestId'),
+    reason: `q=${flag(q.q)};cursor=${flag(cursor)};limit=${q.limit}`,
+  });
+  const [rows, total] = await Promise.all([
+    repo.listProfiles({ after: cursor, limit: q.limit + 1, q: q.q ?? null }),
+    repo.countProfiles(q.q ?? null),
+  ]);
+  const page = rows.slice(0, q.limit);
+  const last = page[page.length - 1];
+  const body: AdminRegistrationsResponse = {
+    items: page,
+    next_cursor:
+      rows.length > q.limit && last
+        ? encodeCursor({ at: last.created_at, id: last.user_id })
+        : null,
+    total,
+  };
+  return ok(c, body);
+});
+
+/**
+ * CSV of the whole (filtered) base. Streams in keyset batches of 1000 until the end: never
+ * `range`/offset, so the PostgREST 1000-row ceiling does not truncate it. Bulk PII: admin_write
+ * bucket (30/10 min) on top of account_read.
+ */
+admin.get(
+  '/admin/registrations/export.csv',
+  requireFreshAdmin,
+  rateLimitPerUser('admin_write'),
+  async (c) => {
+    const { q } = parse(AdminRegistrationsExportQuery, c.req.query());
+    const { repo, now } = c.get('deps');
+    const requestId = c.get('requestId');
+    const total = await repo.countProfiles(q ?? null);
+    await repo.recordAudit({
+      actor: c.get('user')!.id,
+      action: 'admin.registrations.export',
+      entity_type: 'profile',
+      entity_id: null,
+      request_id: requestId,
+      reason: `row_count=${total};q=${flag(q)}`,
+    });
+    const stream = await registrationsCsvStream(
+      (after) => repo.listProfiles({ after, limit: EXPORT_BATCH_SIZE, q: q ?? null }),
+      {
+        onEnd: ({ rows, error, cancelled }) => {
+          if (error || cancelled) {
+            console.error(
+              JSON.stringify({
+                level: 'error',
+                where: 'admin.registrations.export',
+                request_id: requestId,
+                rows_sent: rows,
+                outcome: error ? 'repo_error' : 'client_cancelled',
+              }),
+            );
+          }
+        },
+      },
+    );
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="cadastros-minas-decide-${brasiliaDate(now())}.csv"`,
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  },
+);

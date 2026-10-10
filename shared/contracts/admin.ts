@@ -215,3 +215,53 @@ export const AdminMetricsResponse = z.object({
   site_status: AdminSiteStatus,
 });
 export type AdminMetricsResponse = z.infer<typeof AdminMetricsResponse>;
+
+// ---------------------------------------------------------------- registrations list / export
+/** Page size of the panel (the CSV export ignores it and walks the whole base in batches). */
+export const REGISTRATIONS_PAGE_SIZE = 50;
+
+/** GET /admin/registrations. `q` filters name / e-mail / territory name (case-insensitive). */
+export const AdminRegistrationsQuery = z.object({
+  cursor: z.string().max(400).optional(),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(REGISTRATIONS_PAGE_SIZE)
+    .default(REGISTRATIONS_PAGE_SIZE),
+  q: z
+    .string()
+    .trim()
+    .max(100)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+});
+export type AdminRegistrationsQuery = z.infer<typeof AdminRegistrationsQuery>;
+
+/** GET /admin/registrations/export.csv (same filter, no cursor/limit). */
+export const AdminRegistrationsExportQuery = AdminRegistrationsQuery.pick({ q: true });
+
+/** One registration. PERSONAL DATA: admin only, every access audited, never in public routes. */
+export const AdminRegistration = z.object({
+  user_id: ClerkUserId,
+  display_name: z.string(),
+  email: z.string(),
+  phone: z.string().nullable(),
+  territory_id: z.string().nullable(),
+  territory_name: z.string().nullable(),
+  /** agreed to receive campaign communications */
+  contact_opt_in: z.boolean(),
+  consent_version: z.string(),
+  email_verification_state: z.enum(['unverified', 'pending', 'verified']),
+  account_state: z.enum(['active', 'suspended']),
+  created_at: z.string(),
+});
+export type AdminRegistration = z.infer<typeof AdminRegistration>;
+
+export const AdminRegistrationsResponse = z.object({
+  items: z.array(AdminRegistration),
+  next_cursor: z.string().nullable(),
+  /** rows matching `q` (all pages) */
+  total: z.number().int().nonnegative(),
+});
+export type AdminRegistrationsResponse = z.infer<typeof AdminRegistrationsResponse>;

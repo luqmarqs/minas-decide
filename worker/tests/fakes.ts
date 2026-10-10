@@ -4,7 +4,7 @@
  * so route logic can be exercised with app.request(). These are NOT a substitute for the
  * real RLS tests in supabase/tests (which run against the TARGET dev project).
  */
-import type { AdminInternalMetrics } from '../../shared/contracts/admin.ts';
+import type { AdminInternalMetrics, AdminRegistration } from '../../shared/contracts/admin.ts';
 import { createApp } from '../app.ts';
 import type { AuthUser, Deps, EdgeCache, Env } from '../env.ts';
 import { fail } from '../errors.ts';
@@ -402,6 +402,58 @@ export class FakeRepo implements Repo {
     if (this.admins.size <= 1) throw fail('CONFLICT');
     this.adminMeta.delete(id);
     return this.admins.delete(id);
+  }
+  /** listProfiles calls (route tests): limit and whether a cursor was sent. */
+  listProfilesCalls: { limit: number; after: Cursor | null; q: string | null }[] = [];
+  /** make the Nth (1-based) listProfiles call throw (stream failure tests) */
+  failListProfilesAt: number | null = null;
+  private matchProfile(p: ProfileRow, q: string | null): boolean {
+    if (!q) return true;
+    const needle = q.toLowerCase();
+    const terr = this.territories.find((t) => t.id === p.selected_territory_id)?.name ?? '';
+    return [p.display_name, p.email_contact, terr].some((v) => v.toLowerCase().includes(needle));
+  }
+  private registration(p: ProfileRow): AdminRegistration {
+    return {
+      user_id: p.user_id,
+      display_name: p.display_name,
+      email: p.email_contact,
+      phone: p.phone_e164,
+      territory_id: p.selected_territory_id,
+      territory_name: this.territories.find((t) => t.id === p.selected_territory_id)?.name ?? null,
+      contact_opt_in: p.contact_opt_in_at !== null,
+      consent_version: p.consent_version,
+      email_verification_state: p.email_verification_state,
+      account_state: p.account_state,
+      created_at: p.created_at,
+    };
+  }
+  /** Mirrors svc_list_profiles (0016): keyset (created_at desc, user_id desc), limit 1..1000. */
+  async listProfiles(opts: { after: Cursor | null; limit: number; q: string | null }) {
+    this.listProfilesCalls.push({ limit: opts.limit, after: opts.after, q: opts.q });
+    if (this.failListProfilesAt === this.listProfilesCalls.length) throw new Error('db down');
+    const limit = Math.min(Math.max(opts.limit, 1), 1000);
+    const rows = [...this.profiles.values()]
+      .filter((p) => this.matchProfile(p, opts.q))
+      .sort((a, b) =>
+        a.created_at === b.created_at
+          ? a.user_id < b.user_id
+            ? 1
+            : -1
+          : a.created_at < b.created_at
+            ? 1
+            : -1,
+      )
+      .filter(
+        (p) =>
+          !opts.after ||
+          p.created_at < opts.after.at ||
+          (p.created_at === opts.after.at && p.user_id < opts.after.id),
+      );
+    return rows.slice(0, limit).map((p) => this.registration(p));
+  }
+  async countProfiles(q: string | null) {
+    return [...this.profiles.values()].filter((p) => this.matchProfile(p, q)).length;
   }
   /** `days` values passed to adminMetrics (route tests). */
   metricsCalls: number[] = [];

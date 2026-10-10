@@ -1,0 +1,87 @@
+/*
+ * "Cadastros" tab of /admin. A real <table> on wide screens; on phones each row becomes a block
+ * with the column labels (data-label) in front of the values. Hairlines and tokens only.
+ */
+.adm-reg {
+  --adm-reg-hair: var(--color-border);
+}
+
+.adm-reg .adm-reg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.adm-reg .adm-reg-table caption {
+  text-align: left;
+  padding-bottom: 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.adm-reg .adm-reg-table th {
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.adm-reg .adm-reg-table td {
+  padding: 0.625rem 0.75rem 0.625rem 0;
+  border-bottom: 1px solid var(--adm-reg-hair);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.adm-reg .adm-reg-table td.adm-reg-num {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 47.99rem) {
+  .adm-reg .adm-reg-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .adm-reg .adm-reg-table,
+  .adm-reg .adm-reg-table tbody,
+  .adm-reg .adm-reg-table tr,
+  .adm-reg .adm-reg-table td {
+    display: block;
+  }
+
+  .adm-reg .adm-reg-table tr {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--color-border-strong);
+  }
+
+  .adm-reg .adm-reg-table td {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    border-bottom: 0;
+    padding: 0.125rem 0;
+    text-align: right;
+  }
+
+  .adm-reg .adm-reg-table td::before {
+    content: attr(data-label);
+    flex: none;
+    max-width: 40%;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+}

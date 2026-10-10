@@ -8,7 +8,8 @@
  * - Postgres errors are mapped to stable AppError codes; raw messages are never forwarded.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { AdminInternalMetrics } from '../../shared/contracts/admin.ts';
+import { z } from 'zod';
+import { AdminInternalMetrics, AdminRegistration } from '../../shared/contracts/admin.ts';
 import type { ActivityStatus } from '../../shared/contracts/activities.ts';
 import type { Database } from '../../shared/types/database.ts';
 import type { Env } from '../env.ts';
@@ -412,6 +413,28 @@ export class SupabaseRepo implements Repo {
 
   removeAdmin(userId: string, actor: string): Promise<boolean> {
     return this.rpc('svc_remove_admin', { p_user: userId, p_actor: actor });
+  }
+
+  async listProfiles(opts: {
+    after: Cursor | null;
+    limit: number;
+    q: string | null;
+  }): Promise<AdminRegistration[]> {
+    const data = await this.rpc('svc_list_profiles', {
+      p_after_created_at: opts.after?.at ?? null,
+      p_after_user_id: opts.after?.id ?? null,
+      p_limit: opts.limit,
+      p_q: opts.q,
+    });
+    return z.array(AdminRegistration).parse(data ?? []);
+  }
+
+  async countProfiles(q: string | null): Promise<number> {
+    return z
+      .number()
+      .int()
+      .nonnegative()
+      .parse(await this.rpc('svc_count_profiles', { p_q: q }));
   }
 
   async adminMetrics(days: number): Promise<AdminInternalMetrics> {
