@@ -2,6 +2,7 @@ import { memo, useMemo, type ReactNode } from 'react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
 import type { ProjectedMap } from './geo';
+import './story.css';
 
 export type StoryMapSize = 'default' | 'small' | 'fill';
 
@@ -26,9 +27,7 @@ export interface StoryMapProps {
   legend?: ReactNode;
   /** Small label above the map ("Resumo", "Município a município"). */
   kicker?: ReactNode;
-  /** Decorative layer drawn over the map (e.g. the sun legend in step 5). */
-  overlay?: ReactNode;
-  /** Mute the fill (one opacity on the <svg>, never per path). */
+  /** Mute the fill (one opacity on the <svg>, never per path; see story.css). */
   dim?: boolean;
   /** `default` ≤ 42vh (46vh on tablets) · `small` for side-by-side · `fill` for the sticky panel. */
   size?: StoryMapSize;
@@ -63,7 +62,6 @@ export const StoryMap = memo(function StoryMap({
   failed,
   legend,
   kicker,
-  overlay,
   dim,
   size = 'default',
   className,
@@ -83,7 +81,7 @@ export const StoryMap = memo(function StoryMap({
             role="img"
             aria-label={label}
             aria-describedby={[descId, ...(describedBy ?? [])].join(' ')}
-            className={cn(SVG_SIZE[size], dim && 'opacity-55')}
+            className={cn(SVG_SIZE[size], dim && 'story-dim')}
             data-testid="story-map"
           >
             {uniformFill ? (
@@ -112,7 +110,6 @@ export const StoryMap = memo(function StoryMap({
             <Skeleton className="mx-auto h-full w-full" />
           </div>
         )}
-        {overlay}
       </div>
       {legend}
       <figcaption id={descId} className="ed-note">

@@ -78,7 +78,8 @@ function Step({
       className={cn(
         'min-w-0 border-t border-border py-8 first:border-t-0 sm:py-10',
         sticky && !wide && 'flex min-h-[min(80vh,720px)] flex-col justify-center',
-        sticky && wide && 'py-16',
+        // Bottom breathing room: the 2022 map (act B) only enters when step 4 starts.
+        sticky && wide && 'lg:pt-16 lg:pb-[26vh]',
         side && 'lg:grid lg:grid-cols-12 lg:gap-x-10 lg:py-14',
         band && 'ed-band-ink -mx-(--gutter) border-t-0 px-(--gutter) lg:-mx-6 lg:px-6',
         'motion-safe:transition-[opacity,translate] motion-safe:duration-(--duration-panel) motion-safe:ease-(--easing-standard)',
@@ -145,12 +146,14 @@ function MarginLegend({ year, round }: { year: number; round: number }) {
   );
 }
 
-/** Decorative sun of step 5: the legend symbol of activities on the interactive map below. */
-function SunOverlay({ large }: { large?: boolean }) {
+/** Step 5 legend: the sun is the activity symbol of the interactive map below (not placed on
+ *  this map — the narrative has no activity data). */
+function SunLegend() {
   return (
-    <div className="pointer-events-none absolute right-0 bottom-0" aria-hidden="true">
-      <SunMark size={large ? 96 : 56} className="text-(--map-activity)" />
-    </div>
+    <p className="flex items-center gap-2 text-xs text-secondary">
+      <SunMark size={20} className="shrink-0 text-(--map-activity)" />
+      <span>No mapa interativo, logo abaixo, o sol marca onde já tem atividade.</span>
+    </p>
   );
 }
 
@@ -357,10 +360,8 @@ export function StoryIntroView({
       ? ` Lula liderou em ${formatInt(ledLula22.value)} municípios e Jair Bolsonaro em ${formatInt(ledBolso22.value)}.`
       : ''
   }`;
-  const label5 =
-    'Minas Gerais município a município pela margem do 1º turno de 2026, em tom suave, com o símbolo do sol';
-  const cap5 =
-    'O mosaico do 1º turno de 2026, como no passo 2. No mapa interativo, logo abaixo, o sol marca onde já tem atividade.';
+  const label5 = 'Minas Gerais município a município pela margem do 1º turno de 2026, em tom suave';
+  const cap5 = 'O mosaico do 1º turno de 2026, atenuado, como no passo 2.';
 
   const wall = (size: StoryMapSize, descId: string, extra: string[], caption: ReactNode) => (
     <StoryMap
@@ -413,7 +414,7 @@ export function StoryIntroView({
       caption={cap5}
       size={size}
       dim
-      overlay={<SunOverlay large={size === 'fill'} />}
+      legend={<SunLegend />}
     />
   );
 
@@ -559,7 +560,7 @@ export function StoryIntroView({
               mode={mode}
               title="A gente não pode se sentir sozinho, independente do resultado"
               source={SRC_MAP}
-              srMap={`${label5}. ${cap5}`}
+              srMap={`${label5}. ${cap5} No mapa interativo, logo abaixo, o sol marca onde já tem atividade.`}
               figure={sun26('default', 'story-desc-5', ['story-src-5'])}
             >
               <p className="flex items-start gap-3">
