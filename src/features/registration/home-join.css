@@ -1,0 +1,24 @@
+/*
+ * Cartaz de fechamento da home (#participar, redesign editorial 2026-10).
+ *
+ * A faixa usa `.ed-band-ink` (editorial.css), que remapeia superfícies, texto, borda, ação e
+ * foco para a "ilha oliva". O formulário de cadastro também usa os tokens de ESTADO (erro,
+ * aviso, sucesso, info, demo), que lá não são remapeados: no tema claro eles têm cores escuras
+ * (#a83a2e etc.) que perdem contraste sobre o oliva. Aqui eles recebem os MESMOS valores do tema
+ * escuro de `tokens.css` (bloco `prefers-color-scheme: dark`), só dentro desta faixa — tokens.css
+ * não muda. Se o tema escuro de tokens.css mudar, atualizar este bloco junto.
+ */
+.join-band {
+  --color-success: #7fcf9b;
+  --color-success-soft: #1d3a2a;
+  --color-warning: #e3a85a;
+  --color-warning-soft: #3d2b12;
+  --color-error: #ef8b7d;
+  --color-error-soft: #431d18;
+  --color-info: #8db6e3;
+  --color-info-soft: #1c2d40;
+  --color-demo: #b9a4e8;
+  --color-demo-soft: #2b2340;
+  --color-accent: #e8ba1f;
+  --color-surface-overlay: rgb(0 0 0 / 0.6);
+}

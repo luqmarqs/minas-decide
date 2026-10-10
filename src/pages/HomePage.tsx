@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router';
+import type { TerritoryIndexEntry } from '@shared/contracts/territory.ts';
 import { BrandHero } from '@/components/brand/BrandHero';
+import { PlateHeading } from '@/components/editorial/PlateHeading';
 import { Badge } from '@/components/ui/Badge';
 import { ButtonLink } from '@/components/ui/Button';
 import { LoadingBlock } from '@/components/ui/Skeleton';
@@ -37,6 +39,7 @@ function AgendaPlaceholder() {
 }
 
 const SEARCH_ID = 'busca-territorio';
+const MAP_SEARCH_ID = 'busca-territorio-mapa';
 
 /**
  * FE-10: content above the map (narrative maps, key numbers) can still change height while
@@ -69,9 +72,10 @@ function realignMap(section: HTMLElement | null) {
 }
 
 /**
- * Home (spec §12.5 + rodadas 3/D28): campaign hero (CTA + search) → narrative → "Por que
- * Minas decide" key numbers + CTA → map+layers (activities always on) → panel → agenda →
- * sign-up (#participar) → footer. Every "participar" CTA scrolls to the sign-up section.
+ * Home (spec §12.5 + rodadas 3/D28 + redesign editorial): campaign hero (CTA + search, frozen)
+ * → prancha 01 narrative → prancha 02 "Por que Minas decide" → prancha 03 map+layers+panel →
+ * prancha 04 agenda (editorial rows) → closing sign-up band (#participar) → footer. Every
+ * "participar" CTA scrolls to the sign-up section.
  */
 export default function HomePage() {
   const [state, update] = useMapUrlState();
@@ -90,24 +94,21 @@ export default function HomePage() {
     if (location.hash === '#participar') scrollToJoin();
   }, [location.hash, location.key]);
 
+  const onSelectTerritory = (e: TerritoryIndexEntry) => {
+    setInteracted(true);
+    update({ territoryId: e.id, view: state.view }, { push: true });
+    // Bring the map up (the key numbers sit between hero and map): on mobile the
+    // half-open sheet then leaves the map visible above it (P-UX-2); on desktop the
+    // camera flies to the territory with the side panel open.
+    mapSectionRef.current?.scrollIntoView?.({
+      block: 'start',
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+    });
+    realignMap(mapSectionRef.current);
+  };
+
   const search = (
-    <TerritorySearch
-      id={SEARCH_ID}
-      size="lg"
-      className="w-full"
-      onSelect={(e) => {
-        setInteracted(true);
-        update({ territoryId: e.id, view: state.view }, { push: true });
-        // Bring the map up (the key numbers sit between hero and map): on mobile the
-        // half-open sheet then leaves the map visible above it (P-UX-2); on desktop the
-        // camera flies to the territory with the side panel open.
-        mapSectionRef.current?.scrollIntoView?.({
-          block: 'start',
-          behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-        });
-        realignMap(mapSectionRef.current);
-      }}
-    />
+    <TerritorySearch id={SEARCH_ID} size="lg" className="w-full" onSelect={onSelectTerritory} />
   );
 
   return (
@@ -176,17 +177,31 @@ export default function HomePage() {
 
         <WhyMinasStrip start={interacted} />
 
-        <section
-          aria-label="Entre para a campanha"
-          className="border-b border-border bg-surface px-(--gutter) py-5 lg:px-6"
-        >
-          <div className="mx-auto flex max-w-(--content-max) flex-wrap items-center justify-between gap-3 xl:max-w-none">
-            <p className="text-lg font-semibold text-primary">
-              Minas se decide no corpo a corpo. Entre para a campanha.
-            </p>
-            <JoinCta>Quero participar</JoinCta>
+        {/* Prancha 03 — abertura curta do mapa (redesign editorial, D7/D8): a narrativa termina
+            convidando a ver o bairro e desemboca aqui, sem faixa de CTA no meio. No desktop a
+            busca se repete ao lado do título (o hero ficou duas seções acima); no celular o mapa
+            ocupa a tela logo abaixo e a busca do hero basta. */}
+        <div className="px-(--gutter) pt-10 pb-5 sm:pt-14 lg:px-6 lg:pt-16 lg:pb-6">
+          <div className="mx-auto flex max-w-(--content-max) flex-col gap-5 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
+            <PlateHeading
+              number={3}
+              kicker="Mapa"
+              title="Veja o seu bairro"
+              id="mapa-title"
+              size="md"
+              className="min-w-0 flex-1"
+              lead="Abstenção, brancos e nulos e votação por cidade e bairro. Bairros são aproximados pelos locais de votação."
+            />
+            <div className="hidden w-full max-w-sm shrink-0 lg:block" data-testid="map-search">
+              <TerritorySearch
+                id={MAP_SEARCH_ID}
+                label="Busque uma cidade ou bairro no mapa"
+                className="w-full"
+                onSelect={onSelectTerritory}
+              />
+            </div>
           </div>
-        </section>
+        </div>
 
         <section
           ref={mapSectionRef}
@@ -228,36 +243,34 @@ export default function HomePage() {
       <section
         id="agenda"
         aria-labelledby="agenda-title"
-        // FE-10: compact on phones; rendering skipped while far below the fold.
-        className="scroll-mt-(--header-height) px-(--gutter) py-6 [contain-intrinsic-size:auto_900px] [content-visibility:auto] lg:px-6 lg:py-10"
+        // Rodada 4b: rendering skipped while far below the fold.
+        className="ed-section scroll-mt-(--header-height) [contain-intrinsic-size:auto_900px] [content-visibility:auto]"
       >
-        <div className="mx-auto max-w-(--content-max)">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 id="agenda-title" className="text-2xl">
-                Agenda da campanha
-              </h2>
-              <p className="text-sm text-secondary sm:text-base">
-                Panfletagens, encontros, caminhadas e mutirões da campanha de Lula em Minas,
-                publicados depois de revisão. Horários de Brasília.
-              </p>
-            </div>
-            <JoinCta>Quero participar</JoinCta>
-          </div>
-          <div className="max-w-3xl">
+        <div className="mx-auto grid max-w-(--content-max) grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-x-10">
+          <PlateHeading
+            number={4}
+            kicker="Agenda"
+            title="Agenda da campanha"
+            id="agenda-title"
+            className="lg:col-span-4 lg:self-start"
+            lead="Panfletagens, encontros, caminhadas e mutirões da campanha de Lula em Minas, publicados depois de revisão. Horários de Brasília."
+          />
+          <div className="min-w-0 lg:col-span-8">
             {agendaReady ? (
               <Suspense fallback={<AgendaPlaceholder />}>
-                <ActivityAgenda />
+                <ActivityAgenda variant="row" />
               </Suspense>
             ) : (
               <AgendaPlaceholder />
             )}
-            <p className="mt-4 text-secondary">
+            <p className="mt-5 text-secondary">
               Não encontrou uma atividade perto de você?{' '}
-              <Link to="/criar-atividade" className="font-semibold text-primary underline">
-                Proponha uma
+              <Link
+                to="/criar-atividade"
+                className="inline-flex min-h-11 items-center font-semibold text-primary underline decoration-2 underline-offset-4"
+              >
+                Proponha uma atividade
               </Link>
-              .
             </p>
           </div>
         </div>

@@ -40,4 +40,29 @@ describe('home first paint (P-PERF-1)', () => {
     await user.click(screen.getByRole('combobox', { name: /Cidade ou bairro/ }));
     await vi.waitFor(() => expect(snapshotCalls(fetchMock).length).toBeGreaterThan(0));
   });
+
+  it('editorial sequence after the hero: map plate 03, agenda plate 04, closing sign-up; no CTA strip', () => {
+    stubFetch();
+    renderWithApp(<HomePage />);
+    const map = screen.getByRole('heading', { level: 2, name: 'Veja o seu bairro' });
+    const agenda = screen.getByRole('heading', { level: 2, name: 'Agenda da campanha' });
+    const join = screen.getByRole('heading', { level: 2, name: 'Entre para a campanha em Minas' });
+    const mapSection = document.getElementById('mapa')!;
+    const follows = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(map, mapSection)).toBe(true);
+    expect(follows(mapSection, agenda)).toBe(true);
+    expect(follows(agenda, join)).toBe(true);
+    // D7: the "corpo a corpo" strip is gone; the agenda offers a text link, not a button.
+    expect(screen.queryByText(/corpo a corpo/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Proponha uma atividade' })).toHaveAttribute(
+      'href',
+      '/criar-atividade',
+    );
+    // Desktop-only repeated search has its own label (the hero combobox stays unique).
+    expect(screen.getAllByRole('combobox', { name: /Cidade ou bairro/ })).toHaveLength(1);
+    expect(
+      screen.getByRole('combobox', { name: 'Busque uma cidade ou bairro no mapa' }),
+    ).toBeInTheDocument();
+  });
 });

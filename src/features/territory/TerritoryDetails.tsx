@@ -49,10 +49,9 @@ function Section({
   className?: string;
 }) {
   return (
-    <section className={cn('flex flex-col gap-2', className)}>
-      <h2 className="font-body text-sm font-semibold tracking-wide text-muted uppercase">
-        {title}
-      </h2>
+    <section className={cn('flex flex-col gap-3', className)}>
+      <hr className="ed-rule" aria-hidden="true" />
+      <h2 className="ed-kicker font-body">{title}</h2>
       {children}
     </section>
   );
