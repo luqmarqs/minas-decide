@@ -1,10 +1,12 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import type { AdminInternalMetrics, AdminSiteMetrics } from '@shared/contracts/admin.ts';
 import { Button } from '@/components/ui/Button';
 import { LoadingBlock } from '@/components/ui/Skeleton';
 import { ErrorState, Note } from '@/components/ui/States';
 import { formatInt, formatPercent, plural } from '@/lib/format';
+import { Figure, RankedBars, Section } from './metricsParts';
+import { DadosSection } from './AdminDados';
 import { fetchAdminMetrics } from './api';
 import { adminErrorMessage, isForbidden } from './errors';
 import './metrics.css';
@@ -34,15 +36,6 @@ function duration(seconds: number | null): string {
   if (s < 60) return `${formatInt(s)} s`;
   const m = Math.floor(s / 60);
   return `${formatInt(m)} min ${formatInt(s % 60)} s`;
-}
-
-function Figure({ value, label, large }: { value: ReactNode; label: string; large?: boolean }) {
-  return (
-    <div className="min-w-0">
-      <p className={large ? 'ed-figure-lg' : 'ed-figure'}>{value}</p>
-      <p className="ed-caption mt-1">{label}</p>
-    </div>
-  );
 }
 
 /** Simple SVG column chart; the numbers live in the aria-label, the axis shows 3 dates. */
@@ -105,60 +98,6 @@ function DayBars({
         <span>{last ? dayLabel(last.day) : ''}</span>
       </div>
     </figure>
-  );
-}
-
-/** Labelled horizontal bars as a list (value is real text; the bar is decoration). */
-function RankedBars({
-  items,
-  label,
-  empty,
-}: {
-  items: { key: string; label: string; count: number }[];
-  label: string;
-  empty: string;
-}) {
-  if (items.length === 0) return <p className="ed-caption">{empty}</p>;
-  const max = Math.max(1, ...items.map((i) => i.count));
-  return (
-    <ul aria-label={label} className="m-0 flex list-none flex-col gap-2 p-0">
-      {items.map((i) => (
-        <li key={i.key}>
-          <div className="flex items-baseline justify-between gap-3 text-sm">
-            <span className="min-w-0 break-words text-primary">{i.label}</span>
-            <span className="font-semibold tabular-nums">{formatInt(i.count)}</span>
-          </div>
-          <div className="adm-hbar mt-1" aria-hidden="true">
-            <span style={{ width: `${Math.max(2, (i.count / max) * 100)}%` }} />
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Section({
-  id,
-  kicker,
-  title,
-  children,
-}: {
-  id: string;
-  kicker: string;
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <section aria-labelledby={id} className="flex flex-col gap-5">
-      <hr className="ed-rule" />
-      <header>
-        <p className="ed-kicker">{kicker}</p>
-        <h2 id={id} className="font-body text-xl font-semibold tracking-normal">
-          {title}
-        </h2>
-      </header>
-      {children}
-    </section>
   );
 }
 
@@ -344,6 +283,8 @@ export function AdminMetrics() {
           </Section>
         </>
       ) : null}
+
+      <DadosSection />
     </div>
   );
 }
