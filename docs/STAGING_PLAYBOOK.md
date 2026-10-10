@@ -91,3 +91,13 @@ Enumeração de e-mail (manter 409 — recomendado), conteúdo do snapshot (top 
 | Webhook `user.deleted` | **pendente** (painel do Clerk, instância live → `https://minasdecide.com.br/api/v1/webhooks/clerk`; depois `wrangler secret put CLERK_WEBHOOK_SIGNING_SECRET --env production`) | §1c |
 | Verificação | `/api/v1/health` 200 (`writes_enabled: true`), CSP com host live, `www` 301, `/me` 401, `/auth/send-link` 404, e2e 35/35 contra produção, probe de CSP: 0 violações próprias (só o beacon do Web Analytics da Cloudflare bloqueado, D43) | `curl`, Playwright |
 
+## A. Analytics (Umami self-hosted, D44) — variáveis por ambiente
+
+| Variável (pública, build) | Produção (`.env.production`) | Staging (`.env.staging`) | Local |
+|---|---|---|---|
+| `VITE_UMAMI_SCRIPT_URL` | `https://analytics.luqmarqs.dev/script.js` | idem | vazio (desligado) |
+| `VITE_UMAMI_WEBSITE_ID` | id do site "minasdecide.com.br" no painel do Umami | id de um site separado "staging" (ou vazio para não medir) | vazio |
+| `VITE_UMAMI_DOMAINS` | `minasdecide.com.br` | `minas-em-movimento-staging.luq-marqs.workers.dev` | vazio |
+
+No painel do Umami: *Settings → Websites → Add website* (nome, domínio `minasdecide.com.br`) e copie o **Website ID**. O tracker só entra na CSP quando `VITE_UMAMI_SCRIPT_URL` está definido no build; `?analytics=0` na URL desliga para depuração. Nenhuma credencial de API do Umami é necessária no site.
+

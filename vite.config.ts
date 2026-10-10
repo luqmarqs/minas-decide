@@ -15,6 +15,16 @@ export function clerkFrontendApiOrigin(publishableKey: string | undefined): stri
   return /^[a-z0-9.-]+$/.test(host) ? `https://${host}` : null;
 }
 
+/** `https://host` of an absolute https URL (Umami tracker), or null. */
+export function httpsOrigin(url: string | undefined): string | null {
+  try {
+    const u = new URL(url ?? '');
+    return u.protocol === 'https:' ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * `public/_headers` carries the CSP with the placeholder `__CLERK_FAPI_ORIGIN__`; after the build
  * it is replaced with the origin decoded from VITE_CLERK_PUBLISHABLE_KEY of the active mode
@@ -32,9 +42,15 @@ function cspClerkOrigin(mode: string): Plugin {
     closeBundle() {
       const env = loadEnv(mode, process.cwd(), 'VITE_');
       const origin = clerkFrontendApiOrigin(env.VITE_CLERK_PUBLISHABLE_KEY) ?? '';
+      const umami = httpsOrigin(env.VITE_UMAMI_SCRIPT_URL) ?? '';
       const file = resolve(outDir, '_headers');
       const text = readFileSync(file, 'utf8');
-      writeFileSync(file, text.replace(/ ?__CLERK_FAPI_ORIGIN__/g, origin ? ` ${origin}` : ''));
+      writeFileSync(
+        file,
+        text
+          .replace(/ ?__CLERK_FAPI_ORIGIN__/g, origin ? ` ${origin}` : '')
+          .replace(/ ?__UMAMI_ORIGIN__/g, umami ? ` ${umami}` : ''),
+      );
     },
   };
 }
