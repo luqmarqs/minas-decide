@@ -200,7 +200,7 @@
     --map-lula-soft: #5b2a25;
     --map-bolsonaro: #4f86d0;
     --map-bolsonaro-soft: #233a5e;
-    --map-margin-zero: #2a2820;
+    --map-margin-zero: #4f4b42; /* empate técnico no escuro: neutro legível (≥ 3:1 contra o fundo), não 'buraco' */
   }
 }
 
@@ -254,7 +254,7 @@
   --map-lula-soft: #5b2a25;
   --map-bolsonaro: #4f86d0;
   --map-bolsonaro-soft: #233a5e;
-  --map-margin-zero: #2a2820;
+  --map-margin-zero: #4f4b42; /* empate técnico no escuro: neutro legível (≥ 3:1 contra o fundo), não 'buraco' */
 }
 
 /* ==========================================================================

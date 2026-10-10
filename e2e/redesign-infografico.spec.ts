@@ -94,10 +94,17 @@ test('desktop: grade assimétrica (âncora + margem 4 col | comparativo 8 col; m
   // Âncora e comparativo lado a lado, comparativo ≈ 2× mais largo e sozinho na coluna direita.
   expect(Math.abs(nac!.y - duel!.y)).toBeLessThan(4);
   expect(duel!.width / nac!.width).toBeGreaterThan(1.7);
-  // Margem de 2022 na coluna da âncora, abaixo dela, alinhada pela base com o fim do comparativo.
+  // Margem de 2022 na coluna da âncora, abaixo dela; o comparativo fica alinhado ao topo e a sua
+  // fonte vem logo depois da nota de escala (sem esticar até a base da coluna esquerda).
   expect(Math.abs(marg!.x - nac!.x)).toBeLessThan(2);
   expect(marg!.y).toBeGreaterThan(nac!.y + nac!.height - 1);
-  expect(Math.abs(marg!.y + marg!.height - (duel!.y + duel!.height))).toBeLessThan(2);
+  const gap = await section.getByTestId('fig-duelo').evaluate((el) => {
+    const ps = el.querySelectorAll('p.ed-caption');
+    const note = ps[ps.length - 2]!.getBoundingClientRect();
+    const src = ps[ps.length - 1]!.getBoundingClientRect();
+    return src.top - note.bottom;
+  });
+  expect(gap).toBeLessThan(40);
   // Três múltiplos na mesma linha, de larguras iguais.
   expect(Math.abs(mun!.y - comp!.y)).toBeLessThan(2);
   expect(Math.abs(comp!.y - nen!.y)).toBeLessThan(2);

@@ -495,6 +495,8 @@ export function WhyMinasInfographic({ data }: { data: Infographic }) {
         <Figure
           testId="fig-duelo"
           kicker="O que mudou de 2022 para 2026?"
+          // LG, never XL: the 10,3% anchor stays the unambiguous first read (P3-1).
+          figureSize="lg"
           figure={
             <>
               <span>{pct100(last.lula.share)}</span>
@@ -504,9 +506,7 @@ export function WhyMinasInfographic({ data }: { data: Infographic }) {
           }
           label="Lula × Flávio Bolsonaro no 1º turno de 2026, em votos válidos para Presidente. Em 2022, o adversário foi Jair Bolsonaro."
           source="TSE · 2022 e 2026 (inclui a margem de 2022)"
-          // Source pinned to the bottom: on ≥ lg it closes the spread level with the margin block.
-          alignSource
-          className="border-t border-border pt-5 md:col-span-7 md:border-t-0 md:pt-0 lg:col-span-8 lg:col-start-5 lg:row-span-2 lg:row-start-1 lg:border-l lg:border-border lg:pl-10"
+          className="border-t border-border pt-5 md:col-span-7 md:border-t-0 md:pt-0 lg:col-span-8 lg:col-start-5 lg:row-span-2 lg:row-start-1 lg:self-start lg:border-l lg:border-border lg:pl-10"
         >
           <DuelLegend />
           <div className="mt-6">

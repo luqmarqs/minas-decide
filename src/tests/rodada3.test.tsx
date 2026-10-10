@@ -610,6 +610,13 @@ describe('StoryIntro (D25)', () => {
     const paths = maps[2]!.querySelectorAll('path');
     expect(paths[0]!.getAttribute('style')).toContain('--map-lula');
     expect(paths[1]!.getAttribute('style')).toContain('--map-bolsonaro');
+    // Step 5 legend does not promise suns on this map (it has none).
+    expect(
+      screen.getByText(
+        /Este é o mosaico de 2026\. As atividades da campanha aparecem no mapa interativo/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('story-wall-thumb')).not.toBeInTheDocument();
     // The colour bands are explained once (step 2), not under every map.
     expect(screen.getAllByText(/tons claros: margem de até 15 p\.p\./)).toHaveLength(1);
     // D6/D28: one sign-up invite (step 5, secondary) next to the primary "see the map" link.
@@ -687,6 +694,16 @@ describe('StoryIntro (D25)', () => {
         section.querySelector('ol')!.querySelectorAll('[data-testid="story-map"]'),
       ).toHaveLength(0);
       expect(screen.getAllByText(/^Mapa: /)).toHaveLength(4);
+      // Step 1 = impact: act A (steps 1–2, panel, backdrop) wears the olive band.
+      const li1 = section.querySelector('li[data-step="1"]')!;
+      const backdrop = section.querySelector('[data-story-backdrop]')!;
+      expect(li1).toHaveClass('ed-band-ink');
+      expect(panels[0]).toHaveClass('ed-band-ink');
+      expect(backdrop).toHaveClass('opacity-100');
+      // Desktop step 2 keeps a tiny "wall" next to its text (decorative, 1 path).
+      const thumb = screen.getByTestId('story-wall-thumb');
+      expect(thumb).toHaveAttribute('aria-hidden', 'true');
+      expect(thumb.querySelectorAll('path')).toHaveLength(1);
       expect(screen.getByText('3.735.098')).toBeInTheDocument();
       const stepObserver = observers.find((o) => o.els.length === 5)!;
       const scrollTo = (n: number) =>
@@ -707,6 +724,10 @@ describe('StoryIntro (D25)', () => {
       expect(panels[0]).toHaveAttribute('data-story-state', '2');
       expect(panels[0]!.querySelector('[data-layer="2"]')).toHaveAttribute('data-active', 'true');
       expect(panels[0]!.querySelector('[data-layer="1"]')).not.toHaveAttribute('data-active');
+      // Reveal: back to cream on step 2.
+      expect(li1).not.toHaveClass('ed-band-ink');
+      expect(panels[0]).not.toHaveClass('ed-band-ink');
+      expect(backdrop).toHaveClass('opacity-0');
       scrollTo(5);
       expect(panels[1]).toHaveAttribute('data-story-state', '5');
       expect(panels[1]!.querySelector('[data-layer="5"]')).toHaveAttribute('data-active', 'true');

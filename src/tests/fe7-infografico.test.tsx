@@ -103,6 +103,10 @@ describe('infographic as an editorial spread (redesign A, D4/D5)', () => {
     const anchor = screen.getByTestId('fig-nacional');
     expect(within(anchor).getByText('10,3%').className).toContain('ed-figure-xl');
     expect(list.querySelectorAll('.ed-figure-xl')).toHaveLength(1);
+    expect(screen.getByTestId('fig-duelo').querySelector('.ed-figure')?.className).toContain(
+      'ed-figure-lg',
+    );
+    expect(screen.getByTestId('fig-duelo').className).toContain('lg:self-start');
     expect(anchor).toHaveTextContent('2º maior');
     expect(anchor).toHaveTextContent('16,4 mi pessoas aptas a votar');
     expect(within(anchor).getByRole('img')).toHaveAttribute(

@@ -49,6 +49,14 @@ test.describe('narrativa — desktop com movimento', () => {
     // Nenhum mapa dentro da lista no modo fixo (o painel desenha; os passos descrevem).
     await expect(section.locator('ol [data-testid="story-map"]')).toHaveCount(0);
 
+    // Impact: act A wears the olive band on step 1 and returns to cream on step 2.
+    const li1 = section.locator('li[data-step="1"]');
+    await centerStep(page, 1);
+    await expect(li1).toHaveClass(/ed-band-ink/);
+    await centerStep(page, 2);
+    await expect(li1).not.toHaveClass(/ed-band-ink/);
+    await expect(page.getByTestId('story-wall-thumb')).toBeVisible();
+
     for (const n of [1, 2, 4, 5]) {
       await centerStep(page, n);
       await expect(section).toHaveAttribute('data-story-state', String(n), { timeout: 5_000 });
@@ -122,6 +130,8 @@ test.describe('narrativa — celular', () => {
     expect(b.y).toBeLessThan(a.y + a.height / 2);
     expect(a.y).toBeLessThan(b.y + b.height / 2);
     expect(b.x).toBeGreaterThan(a.x + a.width - 1);
+    // Summary small, mosaic large (legible).
+    expect(b.width).toBeGreaterThan(a.width * 2);
     const overflow = await page.evaluate(
       'document.documentElement.scrollWidth > document.documentElement.clientWidth',
     );

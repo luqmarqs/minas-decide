@@ -6,6 +6,7 @@ import {
   type CSSProperties,
   type ReactNode,
   type RefObject,
+  useSyncExternalStore,
 } from 'react';
 import type { MapLayerValues } from '@shared/contracts/metrics.ts';
 import type { Highlights } from '@shared/contracts/snapshot.ts';
@@ -36,6 +37,32 @@ export interface StoryData {
   demo: boolean;
 }
 
+export interface ActiveStore {
+  get: () => number;
+  set: (n: number) => void;
+  subscribe: (cb: () => void) => () => void;
+}
+function createActiveStore(): ActiveStore {
+  let value = 1;
+  const subs = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (n) => {
+      if (n === value) return;
+      value = n;
+      subs.forEach((cb) => cb());
+    },
+    subscribe: (cb) => {
+      subs.add(cb);
+      return () => {
+        subs.delete(cb);
+      };
+    },
+  };
+}
+const noopSubscribe = () => () => {};
+const zero = () => 0;
+
 function Step({
   n,
   title,
@@ -46,6 +73,7 @@ function Step({
   source,
   impact,
   wide,
+  actStore,
 }: {
   n: number;
   title: string;
@@ -61,13 +89,22 @@ function Step({
   impact?: boolean;
   /** Step 3: full width (the bars are the figure). */
   wide?: boolean;
+  /** Act A steps (1–2) in sticky mode: wear the olive band while step 1 is active. */
+  actStore?: ActiveStore;
 }) {
   const [ref, shown] = useReveal<HTMLLIElement>();
   const sticky = mode === 'sticky';
   const gridStyle: CSSProperties | undefined = sticky
     ? { gridColumn: wide ? '1 / -1' : '1 / 6', gridRow: n }
     : undefined;
+  const act = useSyncExternalStore(
+    actStore?.subscribe ?? noopSubscribe,
+    actStore?.get ?? zero,
+    zero,
+  );
   const band = impact && !sticky;
+  // Sticky mode: act A (steps 1–2 + its panel + a full-bleed backdrop) turns olive on step 1.
+  const actBand = sticky && !!actStore && act === 1;
   const side = !!figure && !sticky;
   return (
     <li
@@ -79,10 +116,13 @@ function Step({
         'min-w-0 border-t border-border py-8 first:border-t-0 sm:py-10',
         sticky && !wide && 'flex min-h-[min(80vh,720px)] flex-col justify-center',
         // Bottom breathing room: the 2022 map (act B) only enters when step 4 starts.
-        sticky && wide && 'lg:pt-16 lg:pb-[26vh]',
+        sticky && wide && 'lg:pt-16 lg:pb-[12vh]',
+        // Last step: content to the bottom (no centred slack) — ~80 px to the next section.
+        sticky && n === 5 && 'justify-end lg:pb-10',
+        actBand && 'ed-band-ink',
         side && 'lg:grid lg:grid-cols-12 lg:gap-x-10 lg:py-14',
         band && 'ed-band-ink -mx-(--gutter) border-t-0 px-(--gutter) lg:-mx-6 lg:px-6',
-        'motion-safe:transition-[opacity,translate] motion-safe:duration-(--duration-panel) motion-safe:ease-(--easing-standard)',
+        'motion-safe:transition-[opacity,translate,background-color,color] motion-safe:duration-(--duration-panel) motion-safe:ease-(--easing-standard)',
         shown ? 'translate-y-0 opacity-100' : 'motion-safe:translate-y-4 motion-safe:opacity-0',
       )}
     >
@@ -146,14 +186,32 @@ function MarginLegend({ year, round }: { year: number; round: number }) {
   );
 }
 
+const SUN_LEGEND =
+  'Este é o mosaico de 2026. As atividades da campanha aparecem no mapa interativo, logo abaixo, marcadas com o sol.';
+
 /** Step 5 legend: the sun is the activity symbol of the interactive map below (not placed on
  *  this map — the narrative has no activity data). */
 function SunLegend() {
   return (
     <p className="flex items-center gap-2 text-xs text-secondary">
       <SunMark size={20} className="shrink-0 text-(--map-activity)" />
-      <span>No mapa interativo, logo abaixo, o sol marca onde já tem atividade.</span>
+      <span>{SUN_LEGEND}</span>
     </p>
+  );
+}
+
+/** Desktop step 2: tiny "wall" (1 path) beside the text, so the comparison stays visible after
+ *  the panel crossfades to the mosaic. Decorative (the step text says the same). */
+function WallThumb({ map, fill }: { map: ProjectedMap | null; fill: string }) {
+  const d = useMemo(() => (map ? map.paths.map((p) => p.d).join('') : ''), [map]);
+  if (!map) return null;
+  return (
+    <div className="flex items-center gap-3" aria-hidden="true" data-testid="story-wall-thumb">
+      <svg viewBox={`0 0 ${map.width} ${map.height}`} width={72} className="h-auto shrink-0">
+        <path d={d} style={{ fill, stroke: 'var(--color-surface)', strokeWidth: 0.8 }} />
+      </svg>
+      <span className="ed-kicker">Resumo · o estado numa cor só</span>
+    </div>
   );
 }
 
@@ -171,18 +229,27 @@ function StickyPanel({
   rows,
   state,
   layers,
+  band,
+  offsetTop,
 }: {
   rows: string;
+  /** Act B starts a little lower so the 2022 map stays out while step 3 is read. */
+  offsetTop?: string;
   state: number;
   layers: PanelLayer[];
+  band?: boolean;
 }) {
   return (
     <div
       aria-hidden="true"
       data-testid="story-sticky"
       data-story-state={state}
-      className="min-w-0"
-      style={{ gridColumn: '6 / -1', gridRow: rows }}
+      className={cn(
+        'relative z-[1] min-w-0',
+        'motion-safe:transition-[background-color,color] motion-safe:duration-(--duration-panel) motion-safe:ease-(--easing-standard)',
+        band && 'ed-band-ink',
+      )}
+      style={{ gridColumn: '6 / -1', gridRow: rows, paddingTop: offsetTop }}
     >
       <div
         className="ed-sticky grid grid-cols-1 grid-rows-1"
@@ -226,13 +293,16 @@ function ScrollyStage({
   sectionRef,
   first,
   second,
+  actStore,
 }: {
   listRef: RefObject<HTMLOListElement | null>;
   sectionRef: RefObject<HTMLElement | null>;
   first: PanelLayer[];
   second: PanelLayer[];
+  actStore: ActiveStore;
 }) {
   const active = useActiveStep(listRef, true);
+  useEffect(() => actStore.set(active), [active, actStore]);
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
@@ -243,8 +313,26 @@ function ScrollyStage({
   }, [active, sectionRef]);
   return (
     <>
-      <StickyPanel rows="1 / 3" state={Math.min(active, 2)} layers={first} />
-      <StickyPanel rows="4 / 6" state={Math.max(active, 4)} layers={second} />
+      {/* Act A backdrop: full-bleed olive band while step 1 is active (impact), back to cream
+          on step 2 (the reveal). In the dark theme the band is nearly the page colour, so the
+          change is subtle there — accepted (owner review). */}
+      <div
+        aria-hidden="true"
+        data-story-backdrop
+        className={cn(
+          'ed-band-ink pointer-events-none',
+          'motion-safe:transition-opacity motion-safe:duration-(--duration-panel) motion-safe:ease-(--easing-standard)',
+          active === 1 ? 'opacity-100' : 'opacity-0',
+        )}
+        style={{
+          gridColumn: '1 / -1',
+          gridRow: '1 / 3',
+          zIndex: 0,
+          marginInline: 'calc((100% - 100vw) / 2)',
+        }}
+      />
+      <StickyPanel rows="1 / 3" state={Math.min(active, 2)} layers={first} band={active === 1} />
+      <StickyPanel rows="4 / 6" state={Math.max(active, 4)} layers={second} offsetTop="8vh" />
     </>
   );
 }
@@ -285,6 +373,7 @@ export function StoryIntroView({
   const sticky = mode === 'sticky';
   const listRef = useRef<HTMLOListElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
+  const actStore = useMemo(() => createActiveStore(), []);
 
   const items = useMemo(
     () => new Map((highlights?.items ?? []).map((i) => [i.id, i])),
@@ -422,7 +511,10 @@ export function StoryIntroView({
     <section
       ref={sectionRef}
       aria-labelledby="story-title"
-      className="ed-section border-b border-border bg-surface"
+      className={cn(
+        'ed-section border-b border-border bg-surface lg:pb-10!',
+        sticky && '[overflow-x:clip]',
+      )}
       data-testid="story-intro"
       data-story-mode={mode}
     >
@@ -448,12 +540,13 @@ export function StoryIntroView({
           <ol
             ref={listRef}
             className={cn('min-w-0', sticky ? 'grid grid-cols-subgrid grid-rows-subgrid' : '')}
-            style={sticky ? { gridColumn: '1 / -1', gridRow: '1 / 6' } : undefined}
+            style={sticky ? { gridColumn: '1 / -1', gridRow: '1 / 6', zIndex: 1 } : undefined}
           >
             <Step
               n={1}
               impact
               mode={mode}
+              actStore={actStore}
               title="O mapa do primeiro turno assusta"
               source={SRC_MAP}
               srMap={`${label1}. ${cap1}`}
@@ -475,12 +568,13 @@ export function StoryIntroView({
             <Step
               n={2}
               mode={mode}
+              actStore={actStore}
               title="Mas ele não é exatamente assim"
               source={SRC_MAP}
               srMap={`${label2}. ${cap2} ${bands}`}
               figure={
                 <div className="flex flex-col gap-3" data-testid="story-compare">
-                  <div className="grid grid-cols-2 items-start gap-3 sm:gap-6">
+                  <div className="grid grid-cols-1 items-start gap-3 min-[360px]:grid-cols-[6rem_minmax(0,1fr)] sm:gap-5 md:grid-cols-[9rem_minmax(0,1fr)]">
                     {wall('small', 'story-desc-2a', ['story-src-2'], 'O estado numa cor só.')}
                     {mosaic26('small', 'story-desc-2b', ['story-bands', 'story-src-2'], cap2)}
                   </div>
@@ -491,6 +585,7 @@ export function StoryIntroView({
                 </div>
               }
             >
+              {sticky ? <WallThumb map={map} fill={solid} /> : null}
               <p>
                 A cor sólida causa a impressão de uma parede impenetrável, o que não é verdade.
                 Município a município, o mapa é um mosaico — com muita disputa apertada.
@@ -560,7 +655,7 @@ export function StoryIntroView({
               mode={mode}
               title="A gente não pode se sentir sozinho, independente do resultado"
               source={SRC_MAP}
-              srMap={`${label5}. ${cap5} No mapa interativo, logo abaixo, o sol marca onde já tem atividade.`}
+              srMap={`${label5}. ${cap5} ${SUN_LEGEND}`}
               figure={sun26('default', 'story-desc-5', ['story-src-5'])}
             >
               <p className="flex items-start gap-3">
@@ -583,6 +678,7 @@ export function StoryIntroView({
           </ol>
           {sticky ? (
             <ScrollyStage
+              actStore={actStore}
               listRef={listRef}
               sectionRef={sectionRef}
               first={[
