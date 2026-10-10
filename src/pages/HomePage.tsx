@@ -178,9 +178,9 @@ export default function HomePage() {
         <WhyMinasStrip start={interacted} />
 
         {/* Prancha 03 — abertura curta do mapa (redesign editorial, D7/D8): a narrativa termina
-            convidando a ver o bairro e desemboca aqui, sem faixa de CTA no meio. No desktop a
-            busca se repete ao lado do título (o hero ficou duas seções acima); no celular o mapa
-            ocupa a tela logo abaixo e a busca do hero basta. */}
+            convidando a ver o bairro e desemboca aqui, sem faixa de CTA no meio. A busca por
+            cidade/bairro fica sempre visível junto do mapa (pedido do proprietário, 2026-10-10):
+            ao lado do título no desktop, a toda a largura abaixo dele no celular. */}
         <div className="px-(--gutter) pt-10 pb-5 sm:pt-14 lg:px-6 lg:pt-16 lg:pb-6">
           <div className="mx-auto flex max-w-(--content-max) flex-col gap-5 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
             <PlateHeading
@@ -192,7 +192,7 @@ export default function HomePage() {
               className="min-w-0 flex-1"
               lead="Abstenção, brancos e nulos e votação por cidade e bairro. Bairros são aproximados pelos locais de votação."
             />
-            <div className="hidden w-full max-w-sm shrink-0 lg:block" data-testid="map-search">
+            <div className="w-full shrink-0 lg:max-w-sm" data-testid="map-search">
               <TerritorySearch
                 id={MAP_SEARCH_ID}
                 label="Busque uma cidade ou bairro no mapa"
