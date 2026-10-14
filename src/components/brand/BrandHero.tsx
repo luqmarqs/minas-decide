@@ -5,15 +5,15 @@ export interface BrandHeroProps {
   titleId: string;
   /** Optional DEMO notice (must stay visible when data is synthetic). */
   notice?: ReactNode;
-  /** Territorial search. */
-  search: ReactNode;
+  /** Territorial search (optional: the simplified home keeps search next to the map). */
+  search?: ReactNode;
   /** Calls to action (campaign participation). */
   actions?: ReactNode;
 }
 
 /**
  * Home hero of the official "Minas Decide" identity (default): official key visual (responsive JPG,
- * eager + high priority: it is the LCP), title in Anton/Bungee Outline on the dark
+ * eager + high priority: it is the LCP), title ("Minas decide: é hora da virada!") + Emicida epigraph in Anton/Bungee Outline on the dark
  * olive band that continues the artwork's lower edge, search below, ochre horizon
  * as divider. Always a dark "island" (tokens remapped in .brand-hero). No motion.
  */
@@ -42,20 +42,27 @@ export function BrandHero({ titleId, notice, search, actions }: BrandHeroProps) 
         <div className="relative z-[3] -mt-8 px-(--gutter) pb-6 sm:-mt-10 lg:px-6 xl:mt-0 xl:flex xl:min-w-0 xl:flex-1 xl:flex-col xl:justify-center xl:py-8 xl:pr-10">
           <h1 id={titleId} className="leading-[1.02] uppercase">
             <span className="brand-display block text-[2.4rem] sm:text-5xl xl:text-[3.6rem]">
-              Minas decide.
+              Minas decide:
             </span>{' '}
             <span className="brand-outline mt-1 block text-[1.6rem] leading-[1.15] sm:text-[2.3rem] xl:text-[2.6rem]">
-              Minas decide Lula.
+              é hora da virada!
             </span>
           </h1>
-          <p className="mt-2 max-w-xl text-secondary sm:mt-3">
-            Venha fazer a campanha de Lula em Minas Gerais: encontre uma atividade perto de você,
-            marque “Eu vou” ou organize uma ação no seu bairro. E veja, cidade por cidade, como
-            Minas votou.
-          </p>
+          <figure className="mt-3 max-w-xl sm:mt-4">
+            <blockquote className="text-lg leading-snug text-primary italic sm:text-xl">
+              <p>
+                “Mas eu sei que vai
+                <br />
+                Que o sonho te traz coisas que te faz prosseguir
+                <br />
+                Vai, levanta e anda”
+              </p>
+            </blockquote>
+            <figcaption className="mt-1 text-sm text-secondary">Emicida</figcaption>
+          </figure>
           {notice ? <div className="mt-2">{notice}</div> : null}
           {actions ? <div className="mt-3 flex flex-wrap gap-2 sm:mt-4">{actions}</div> : null}
-          <div className="mt-3 w-full max-w-md sm:mt-4">{search}</div>
+          {search ? <div className="mt-3 w-full max-w-md sm:mt-4">{search}</div> : null}
         </div>
       </div>
       <HorizonDivider />

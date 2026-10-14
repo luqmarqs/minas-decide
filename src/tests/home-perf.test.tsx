@@ -12,13 +12,13 @@ const snapshotCalls = (fetchMock: ReturnType<typeof stubFetch>) =>
   fetchMock.mock.calls.filter(([u]) => String(u).includes('/data/'));
 
 describe('home first paint (P-PERF-1)', () => {
-  it('renders hero, search and a static map placeholder before any snapshot request', async () => {
+  it('renders hero, map search and a static map placeholder before any snapshot request', async () => {
     const fetchMock = stubFetch();
     renderWithApp(<HomePage />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      'Minas decide. Minas decide Lula.',
+      'Minas decide: é hora da virada!',
     );
-    expect(screen.getByRole('combobox', { name: /Cidade ou bairro/ })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /cidade ou bairro/ })).toBeInTheDocument();
     expect(screen.getByTestId('map-placeholder')).toBeInTheDocument();
     // Placeholder keeps the legend label and the mandatory attribution.
     // (FE-10: phone chip + desktop legend, one of them hidden by CSS per breakpoint.)
@@ -37,30 +37,32 @@ describe('home first paint (P-PERF-1)', () => {
     const fetchMock = stubFetch();
     const user = userEvent.setup();
     renderWithApp(<HomePage />);
-    await user.click(screen.getByRole('combobox', { name: /Cidade ou bairro/ }));
+    await user.click(screen.getByRole('combobox', { name: /cidade ou bairro/ }));
     await vi.waitFor(() => expect(snapshotCalls(fetchMock).length).toBeGreaterThan(0));
   });
 
-  it('editorial sequence after the hero: map plate 03, agenda plate 04, closing sign-up; no CTA strip', () => {
+  it('simplified sequence: hero → text → sign-up → calendar → map (one search, by the map)', () => {
     stubFetch();
     renderWithApp(<HomePage />);
-    const map = screen.getByRole('heading', { level: 2, name: 'Veja o seu bairro' });
-    const agenda = screen.getByRole('heading', { level: 2, name: 'Agenda da campanha' });
-    const join = screen.getByRole('heading', { level: 2, name: 'Entre para a campanha em Minas' });
+    const text = screen.getByRole('heading', { level: 2, name: 'É hora de disputar voto a voto!' });
+    const join = screen.getByRole('heading', { level: 2, name: 'Inscreva-se' });
+    const agenda = screen.getByRole('heading', { level: 2, name: 'Calendário' });
+    const map = screen.getByRole('heading', { level: 2, name: 'Entenda a votação em Minas' });
     const mapSection = document.getElementById('mapa')!;
     const follows = (a: Node, b: Node) =>
       Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(text, join)).toBe(true);
+    expect(follows(join, agenda)).toBe(true);
+    expect(follows(agenda, map)).toBe(true);
     expect(follows(map, mapSection)).toBe(true);
-    expect(follows(mapSection, agenda)).toBe(true);
-    expect(follows(agenda, join)).toBe(true);
-    // D7: the "corpo a corpo" strip is gone; the agenda offers a text link, not a button.
-    expect(screen.queryByText(/corpo a corpo/)).not.toBeInTheDocument();
+    expect(screen.getByText('Emicida')).toBeInTheDocument();
+    // The narrative and "Por que Minas decide" plates are gone.
+    expect(screen.queryByTestId('story-intro')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Proponha uma atividade' })).toHaveAttribute(
       'href',
       '/criar-atividade',
     );
-    // Desktop-only repeated search has its own label (the hero combobox stays unique).
-    expect(screen.getAllByRole('combobox', { name: /Cidade ou bairro/ })).toHaveLength(1);
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
     expect(
       screen.getByRole('combobox', { name: 'Busque uma cidade ou bairro no mapa' }),
     ).toBeInTheDocument();

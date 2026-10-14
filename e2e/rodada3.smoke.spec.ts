@@ -10,13 +10,13 @@ import { expect, test, type Page } from '@playwright/test';
 const mapZoom = async (page: Page): Promise<number> =>
   Number((await page.locator('[data-zoom]').first().getAttribute('data-zoom')) ?? 'NaN');
 
-test('hero search zooms the map to the territory and opens the panel', async ({ page }, info) => {
+test('map search zooms the map to the territory and opens the panel', async ({ page }, info) => {
   // FE-10: the map starts when its section approaches the screen.
   await page.goto('/#mapa');
   // Map started (after idle) and settled on the whole state.
   await expect(page.locator('[data-zoom]')).toHaveCount(1, { timeout: 30_000 });
   const before = await mapZoom(page);
-  const input = page.getByRole('combobox', { name: /Cidade ou bairro/ });
+  const input = page.getByRole('combobox', { name: /^Busque uma cidade ou bairro/ });
   await input.fill('Juiz de Fora');
   await expect(page.getByRole('option').first()).toContainText('Juiz de Fora');
   await input.press('ArrowDown');
@@ -118,14 +118,12 @@ test('terminals overlay is off by default and credits OpenStreetMap when on', as
   await expect(legend).toContainText(/\d+ locais/);
 });
 
-test('home shows the narrative steps and the key numbers before the map', async ({ page }) => {
+test('home shows the campaign text before the sign-up and the map', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Minas decide Lula.');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('é hora da virada!');
   await expect(
-    page.getByRole('heading', { name: 'O mapa do primeiro turno assusta' }),
+    page.getByRole('heading', { name: 'Minas Gerais pode decidir o futuro do Brasil!' }),
   ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Por que Minas decide' })).toBeVisible();
-  await expect(page.getByTestId('story-map').first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('footer-responsavel')).toContainText('[a definir');
   const overflow = await page.evaluate(
     'document.documentElement.scrollWidth > document.documentElement.clientWidth',
@@ -133,13 +131,11 @@ test('home shows the narrative steps and the key numbers before the map', async 
   expect(overflow).toBe(false);
 });
 
-test('FE-7: header "Participar" scrolls to the sign-up at the end of the home', async ({
-  page,
-}) => {
+test('FE-7: header "Participar" scrolls to the sign-up on the home', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('banner').getByRole('link', { name: 'Participar' }).click();
   await expect(page).toHaveURL(/#participar$/);
-  const title = page.getByRole('heading', { name: 'Entre para a campanha em Minas' });
+  const title = page.getByRole('heading', { name: 'Inscreva-se' });
   await expect(title).toBeInViewport({ timeout: 10_000 });
   await expect(title).toBeFocused();
   await expect(page.getByTestId('home-participar').getByLabel(/^Nome/)).toBeVisible({
@@ -151,7 +147,7 @@ test('FE-8: Mariana shows approximate neighborhood areas; choosing Centro outlin
   page,
 }) => {
   await page.goto('/');
-  const input = page.getByRole('combobox', { name: /Cidade ou bairro/ });
+  const input = page.getByRole('combobox', { name: /^Busque uma cidade ou bairro/ });
   await input.fill('Mariana');
   await expect(page.getByRole('option').first()).toContainText('Mariana');
   await page

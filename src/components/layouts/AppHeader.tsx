@@ -57,11 +57,11 @@ export function AppHeader() {
           )}
         </Link>
         <nav aria-label="Principal" className="hidden items-center gap-1 md:flex">
-          <NavLink to="/" end className={navClass}>
-            Mapa
-          </NavLink>
           <Link to={{ pathname: '/', hash: 'agenda' }} className={navClass({ isActive: false })}>
-            Agenda
+            Calendário
+          </Link>
+          <Link to={{ pathname: '/', hash: 'mapa' }} className={navClass({ isActive: false })}>
+            Mapa
           </Link>
           <NavLink to="/metodologia" className={navClass}>
             Metodologia

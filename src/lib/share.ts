@@ -162,5 +162,5 @@ export function territoryShareText(t: TerritoryShareInput): string {
 
 export function homeShareText(origin?: string): string {
   const o = origin ?? (typeof window !== 'undefined' ? window.location.origin : '');
-  return `Minas decide. Minas decide Lula. Veja o mapa de Minas cidade por cidade, encontre uma atividade da campanha perto de você e marque “Eu vou”: ${o}/\n${SITE_SIGNATURE}`;
+  return `Minas decide: é hora da virada! Inscreva-se, veja o calendário de atividades perto de você e entenda a votação em Minas: ${o}/\n${SITE_SIGNATURE}`;
 }

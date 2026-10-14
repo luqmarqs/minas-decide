@@ -45,12 +45,12 @@ describe('home sign-up section (#participar)', () => {
   it('is a labelled landmark with the Anton title, below the fixed header, with the real form', async () => {
     stubFetch();
     renderWithApp(<HomeJoinSection territoryId={null} start />);
-    const section = screen.getByRole('region', { name: 'Entre para a campanha em Minas' });
+    const section = screen.getByRole('region', { name: 'Inscreva-se' });
     expect(section).toHaveAttribute('id', 'participar');
     expect(section.className).toContain('scroll-mt-(--header-height)');
-    expect(
-      within(section).getByRole('heading', { name: 'Entre para a campanha em Minas' }).className,
-    ).toContain('brand-display');
+    expect(within(section).getByRole('heading', { name: 'Inscreva-se' }).className).toContain(
+      'brand-display',
+    );
     // Same RegistrationForm as /participar (lazy, after the session check).
     expect(await within(section).findByLabelText(/^Nome/)).toBeInTheDocument();
     expect(within(section).getByLabelText(/^WhatsApp/)).toBeInTheDocument();

@@ -25,7 +25,7 @@ export interface HomeJoinSectionProps {
 }
 
 /**
- * Sign-up at the end of the home page (owner decision D28): same panel as `/participar`
+ * Sign-up, part 2 of the simplified home (client request 2026-10-14; was the closing band, D28): same panel as `/participar`
  * (Turnstile, server confirmation, then `/obrigado`), territory pre-filled from the map.
  * Labelled landmark section; `scroll-margin-top` keeps the title below the fixed header.
  */
@@ -49,11 +49,11 @@ export function HomeJoinSection({ territoryId, start }: HomeJoinSectionProps) {
             tabIndex={-1}
             className="brand-display text-[2.1rem] leading-[1.05] uppercase outline-none sm:text-5xl lg:text-6xl"
           >
-            Entre para a campanha em Minas
+            Inscreva-se
           </h2>
           <p className="ed-measure max-w-md text-secondary sm:text-lg">
-            Cadastro rápido: nome, e-mail, WhatsApp e onde você quer atuar. Em seguida mostramos o
-            grupo da campanha na sua região.
+            Junte-se a quem já está na rua pela virada. Cadastro rápido: nome, e-mail, WhatsApp e
+            onde você quer atuar. Em seguida mostramos o grupo da campanha na sua região.
           </p>
         </div>
         <div className="min-w-0 rounded-card border border-border-strong bg-surface-raised p-4 sm:p-6">

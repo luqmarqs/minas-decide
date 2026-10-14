@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn';
 
 export interface PlateHeadingProps {
   /** Número da "prancha" (1, 2, 3…): elemento de continuidade entre as seções depois do hero. */
-  number: number;
+  number?: number;
   /** Rótulo curto em caixa alta acima do título (ex.: "Narrativa", "Números", "Mapa"). */
   kicker: string;
   /** Título da seção (vira o h2; o id é usado por aria-labelledby). */
@@ -37,11 +37,13 @@ export function PlateHeading({
     <header className={cn('flex flex-col gap-3', className)}>
       <hr className="ed-rule-strong" aria-hidden="true" />
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <span className="ed-figure ed-figure-md tabular-nums" aria-hidden="true">
-          {String(number).padStart(2, '0')}
-        </span>
+        {number !== undefined ? (
+          <span className="ed-figure ed-figure-md tabular-nums" aria-hidden="true">
+            {String(number).padStart(2, '0')}
+          </span>
+        ) : null}
         <p className="ed-kicker">
-          <span className="sr-only">Seção {number}: </span>
+          {number !== undefined ? <span className="sr-only">Seção {number}: </span> : null}
           {kicker}
         </p>
         {aside ? <div className="ml-auto flex items-center gap-2">{aside}</div> : null}

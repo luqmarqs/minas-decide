@@ -11,7 +11,7 @@ test('home renders search, map (or list fallback), legend status and attribution
 }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: /Cidade ou bairro/ })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: /^Busque uma cidade ou bairro/ })).toBeVisible();
   // FE-10: the map starts when its section approaches the screen.
   await page.locator('#mapa').scrollIntoViewIfNeeded();
   if (isMobile) {
@@ -43,7 +43,7 @@ test('home renders search, map (or list fallback), legend status and attribution
 
 test('search selects a territory and the link restores it (T24)', async ({ page }) => {
   await page.goto('/');
-  const input = page.getByRole('combobox', { name: /Cidade ou bairro/ });
+  const input = page.getByRole('combobox', { name: /^Busque uma cidade ou bairro/ });
   await input.fill('centro');
   // Territories index is a lazy JSON: allow for full-suite load.
   await expect(page.getByRole('option').first()).toContainText('Centro —', { timeout: 15_000 });

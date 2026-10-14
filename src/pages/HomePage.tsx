@@ -14,11 +14,10 @@ import { useSnapshot } from '@/features/electoral-map/hooks';
 import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshotStatus';
 import { useMapUrlState } from '@/features/electoral-map/useMapUrlState';
 import { TerritorySearch } from '@/features/territory/TerritorySearch';
-import { WhyMinasStrip } from '@/features/highlights/WhyMinasStrip';
 import { HomeJoinSection } from '@/features/registration/HomeJoinSection';
+import { Manifesto } from '@/features/manifesto/Manifesto';
 import { JoinCta } from '@/features/registration/JoinCta';
 import { scrollToJoin } from '@/features/registration/join';
-import { StoryIntro } from '@/features/story/StoryIntro';
 import { WhatsAppShare } from '@/components/ui/WhatsAppShare';
 import { homeShareText } from '@/lib/share';
 
@@ -39,7 +38,6 @@ function AgendaPlaceholder() {
 }
 
 const SEARCH_ID = 'busca-territorio';
-const MAP_SEARCH_ID = 'busca-territorio-mapa';
 
 /**
  * FE-10: content above the map (narrative maps, key numbers) can still change height while
@@ -72,10 +70,10 @@ function realignMap(section: HTMLElement | null) {
 }
 
 /**
- * Home (spec §12.5 + rodadas 3/D28 + redesign editorial): campaign hero (CTA + search, frozen)
- * → prancha 01 narrative → prancha 02 "Por que Minas decide" → prancha 03 map+layers+panel →
- * prancha 04 agenda (editorial rows) → closing sign-up band (#participar) → footer. Every
- * "participar" CTA scrolls to the sign-up section.
+ * Home simplificada (pedido do cliente, 2026-10-14; D47): hero "é hora da virada" →
+ * 1. texto da campanha → 2. inscrição (#participar) → 3. calendário (#agenda) →
+ * 4. mapa "Entenda a votação em Minas" (#mapa, com busca). Every "participar" CTA scrolls
+ * to the sign-up section.
  */
 export default function HomePage() {
   const [state, update] = useMapUrlState();
@@ -107,153 +105,67 @@ export default function HomePage() {
     realignMap(mapSectionRef.current);
   };
 
-  const search = (
-    <TerritorySearch id={SEARCH_ID} size="lg" className="w-full" onSelect={onSelectTerritory} />
+  const demoNotice =
+    snap?.status === 'demo' ? (
+      <p className="flex flex-wrap items-center gap-2 text-sm text-secondary">
+        <Badge variant="demo">{SNAPSHOT_STATUS_LABEL.demo}</Badge>
+        Snapshot oficial ainda não publicado: os números do mapa são sintéticos.
+      </p>
+    ) : null;
+
+  const actions = (
+    <>
+      <JoinCta size="lg">Inscreva-se</JoinCta>
+      <ButtonLink to="/#agenda" variant="secondary" size="lg">
+        Ver calendário
+      </ButtonLink>
+      <WhatsAppShare text={homeShareText()} variant="ghost" size="lg" />
+    </>
   );
 
   return (
     <>
-      <title>Minas Decide Lula — campanha, agenda e mapa eleitoral de Minas Gerais</title>
-      {/* Desktop: hero + map fill the viewport whatever the hero height (DEMO badge
-          included), so the map attribution is never cut (P-UX-4). −1px: header border.
-          Official identity (default): the illustrated hero is taller, so the map gets its own
-          viewport; the compact hero only remains under the `provisorio` rollback theme. */}
-      <div
-        className={
-          brand
-            ? 'flex flex-col'
-            : 'flex flex-col lg:h-[calc(100dvh-var(--header-height)-1px)] lg:min-h-[44rem]'
-        }
-      >
-        {brand ? (
-          <BrandHero
-            titleId="home-title"
-            notice={
-              snap?.status === 'demo' ? (
-                <p className="flex flex-wrap items-center gap-2 text-sm text-secondary">
-                  <Badge variant="demo">{SNAPSHOT_STATUS_LABEL.demo}</Badge>
-                  Snapshot oficial ainda não publicado: os números abaixo são sintéticos.
-                </p>
-              ) : null
-            }
-            search={search}
-            actions={
-              <>
-                <JoinCta size="lg">Quero participar da campanha</JoinCta>
-                <ButtonLink to="/#agenda" variant="secondary" size="lg">
-                  Ver atividades
-                </ButtonLink>
-                <WhatsAppShare text={homeShareText()} variant="ghost" size="lg" />
-              </>
-            }
-          />
-        ) : (
-          <section
-            className="border-b border-border bg-surface px-(--gutter) pt-5 pb-4 lg:px-6"
-            aria-labelledby="home-title"
-          >
-            <div className="mx-auto flex max-w-(--content-max) flex-col gap-4 lg:max-w-none lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-2xl">
-                <h1 id="home-title" className="text-2xl sm:text-3xl">
-                  Minas Gerais, território por território
-                </h1>
-                <p className="mt-1 text-secondary">
-                  Veja participação e votação por cidade e bairro, e encontre atividades presenciais
-                  perto de você.
-                </p>
-                {snap?.status === 'demo' ? (
-                  <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-secondary">
-                    <Badge variant="demo">{SNAPSHOT_STATUS_LABEL.demo}</Badge>
-                    Snapshot oficial ainda não publicado: os números abaixo são sintéticos.
-                  </p>
-                ) : null}
-              </div>
-              <div className="w-full lg:max-w-md">{search}</div>
-            </div>
-          </section>
-        )}
-
-        <StoryIntro start={interacted} />
-
-        <WhyMinasStrip start={interacted} />
-
-        {/* Prancha 03 — abertura curta do mapa (redesign editorial, D7/D8): a narrativa termina
-            convidando a ver o bairro e desemboca aqui, sem faixa de CTA no meio. A busca por
-            cidade/bairro fica sempre visível junto do mapa (pedido do proprietário, 2026-10-10):
-            ao lado do título no desktop, a toda a largura abaixo dele no celular. */}
-        <div className="px-(--gutter) pt-10 pb-5 sm:pt-14 lg:px-6 lg:pt-16 lg:pb-6">
-          <div className="mx-auto flex max-w-(--content-max) flex-col gap-5 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
-            <PlateHeading
-              number={3}
-              kicker="Mapa"
-              title="Veja o seu bairro"
-              id="mapa-title"
-              size="md"
-              className="min-w-0 flex-1"
-              lead="Abstenção, brancos e nulos e votação por cidade e bairro. Bairros são aproximados pelos locais de votação."
-            />
-            <div className="w-full shrink-0 lg:max-w-sm" data-testid="map-search">
-              <TerritorySearch
-                id={MAP_SEARCH_ID}
-                label="Busque uma cidade ou bairro no mapa"
-                className="w-full"
-                onSelect={onSelectTerritory}
-              />
-            </div>
-          </div>
-        </div>
-
+      <title>Minas Decide: é hora da virada!</title>
+      {brand ? (
+        <BrandHero titleId="home-title" notice={demoNotice} actions={actions} />
+      ) : (
+        // Rollback theme (`?brand=0`): compact hero with the same copy.
         <section
-          ref={mapSectionRef}
-          id="mapa"
-          aria-label="Mapa de Minas Gerais"
-          // FE-10 (phones): the map takes the whole screen under the header (the compact bar
-          // and the collapsed sheet are overlays), so selecting a territory leaves ≥ 55 % of
-          // the viewport as visible map. Page scroll still works (cooperative gestures).
-          className={
-            brand
-              ? 'h-[calc(100dvh-var(--header-height))] min-h-[440px] scroll-mt-(--header-height) lg:h-[calc(100dvh-var(--header-height)-1px)] lg:min-h-[560px]'
-              : 'h-[calc(100dvh-var(--header-height))] min-h-[440px] scroll-mt-(--header-height) lg:h-auto lg:min-h-[560px] lg:flex-1'
-          }
+          className="border-b border-border bg-surface px-(--gutter) pt-5 pb-4 lg:px-6"
+          aria-labelledby="home-title"
         >
-          <DeferredMapShell
-            start={interacted}
-            className="h-full"
-            state={state}
-            onStateChange={update}
-            panel={
-              <Suspense fallback={null}>
-                <TerritoryPanel
-                  territoryId={state.territoryId}
-                  year={state.year}
-                  round={state.round}
-                  candidateId={state.candidateId}
-                  onClose={() => update({ territoryId: null }, { push: true })}
-                  onSelectTerritory={(id) =>
-                    update({ territoryId: id === 'mg' ? null : id }, { push: true })
-                  }
-                  onYearRoundChange={(year, round) => update({ year, round })}
-                />
-              </Suspense>
-            }
-          />
+          <div className="mx-auto flex max-w-(--content-max) flex-col gap-3">
+            <h1 id="home-title" className="text-2xl sm:text-3xl">
+              Minas decide: é hora da virada!
+            </h1>
+            {demoNotice}
+            <div className="flex flex-wrap gap-2">{actions}</div>
+          </div>
         </section>
-      </div>
+      )}
 
+      {/* Parte 1 — texto da campanha. */}
+      <Manifesto />
+
+      {/* Parte 2 — inscrição. */}
+      <HomeJoinSection
+        territoryId={state.territoryId}
+        start={interacted || location.hash === '#participar'}
+      />
+
+      {/* Parte 3 — calendário. */}
       <section
         id="agenda"
         aria-labelledby="agenda-title"
-        // Rodada 4b: rendering skipped while far below the fold.
         className="ed-section scroll-mt-(--header-height)"
       >
         <div className="mx-auto grid max-w-(--content-max) grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-x-10">
           <PlateHeading
-            number={4}
             kicker="Agenda"
-            title="Agenda da campanha"
+            title="Calendário"
             id="agenda-title"
             className="lg:col-span-4 lg:self-start"
-            lead="Panfletagens, encontros, caminhadas e mutirões da campanha de Lula em Minas, publicados depois de revisão. Horários de Brasília."
+            lead="Panfletagens, conversas, caminhadas e mutirões pela virada em Minas, publicados depois de revisão. Horários de Brasília."
           />
           <div className="min-w-0 lg:col-span-8">
             {agendaReady ? (
@@ -276,10 +188,60 @@ export default function HomePage() {
         </div>
       </section>
 
-      <HomeJoinSection
-        territoryId={state.territoryId}
-        start={interacted || location.hash === '#participar'}
-      />
+      {/* Parte 4 — entenda a votação em Minas. A busca por cidade/bairro fica junto do mapa:
+          ao lado do título no desktop, a toda a largura abaixo dele no celular. */}
+      <div className="px-(--gutter) pt-10 pb-5 sm:pt-14 lg:px-6 lg:pt-16 lg:pb-6">
+        <div className="mx-auto flex max-w-(--content-max) flex-col gap-5 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
+          <PlateHeading
+            kicker="Mapa"
+            title="Entenda a votação em Minas"
+            id="mapa-title"
+            size="md"
+            className="min-w-0 flex-1"
+            lead="Abstenção, brancos e nulos e votação por cidade e bairro. Bairros são aproximados pelos locais de votação."
+          />
+          <div className="w-full shrink-0 lg:max-w-sm" data-testid="map-search">
+            <TerritorySearch
+              id={SEARCH_ID}
+              label="Busque uma cidade ou bairro no mapa"
+              className="w-full"
+              onSelect={onSelectTerritory}
+            />
+          </div>
+        </div>
+      </div>
+
+      <section
+        ref={mapSectionRef}
+        id="mapa"
+        aria-label="Mapa de Minas Gerais"
+        // FE-10 (phones): the map takes the whole screen under the header (the compact bar
+        // and the collapsed sheet are overlays), so selecting a territory leaves ≥ 55 % of
+        // the viewport as visible map. Page scroll still works (cooperative gestures).
+        className="h-[calc(100dvh-var(--header-height))] min-h-[440px] scroll-mt-(--header-height) lg:h-[calc(100dvh-var(--header-height)-1px)] lg:min-h-[560px]"
+      >
+        <DeferredMapShell
+          start={interacted}
+          className="h-full"
+          state={state}
+          onStateChange={update}
+          panel={
+            <Suspense fallback={null}>
+              <TerritoryPanel
+                territoryId={state.territoryId}
+                year={state.year}
+                round={state.round}
+                candidateId={state.candidateId}
+                onClose={() => update({ territoryId: null }, { push: true })}
+                onSelectTerritory={(id) =>
+                  update({ territoryId: id === 'mg' ? null : id }, { push: true })
+                }
+                onYearRoundChange={(year, round) => update({ year, round })}
+              />
+            </Suspense>
+          }
+        />
+      </section>
     </>
   );
 }

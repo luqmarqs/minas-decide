@@ -29,7 +29,7 @@ async function visibleMapRatio(page: Page): Promise<number> {
 
 async function selectMariana(page: Page) {
   await page.goto('/');
-  const input = page.getByRole('combobox', { name: /Cidade ou bairro/ });
+  const input = page.getByRole('combobox', { name: /^Busque uma cidade ou bairro/ });
   await input.fill('Mariana');
   await page
     .getByRole('option', { name: /^Mariana\/MG/ })
