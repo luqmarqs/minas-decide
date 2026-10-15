@@ -44,8 +44,12 @@ export default function ObrigadoPage() {
         )}
         {fromForm ? (
           <p className="text-secondary">
-            Seu e-mail foi confirmado pelo código e você já entrou neste navegador. Você pode propor
-            atividades da campanha na sua região.
+            Guardamos seu contato para a equipe da campanha falar com você; não foi criada nenhuma
+            conta. Para propor atividades no mapa, é preciso{' '}
+            <Link to="/criar-conta" className="underline">
+              criar uma conta de organizador
+            </Link>
+            .
           </p>
         ) : null}
         <div className="flex flex-wrap gap-2">

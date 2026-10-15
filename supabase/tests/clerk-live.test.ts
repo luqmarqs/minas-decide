@@ -145,7 +145,7 @@ describe.skipIf(!configured)('Clerk live: registration -> /me -> activity -> RSV
       consent_version: '2026-10',
       turnstile_token: turnstile(),
     };
-    const reg = await api('/registrations', {
+    const reg = await api('/registrations/account', {
       method: 'POST',
       token: await person.token(),
       json: body,
@@ -157,7 +157,7 @@ describe.skipIf(!configured)('Clerk live: registration -> /me -> activity -> RSV
       email_verification_state: 'verified',
       session_state: 'verified',
     });
-    const again = await api('/registrations', {
+    const again = await api('/registrations/account', {
       method: 'POST',
       token: await person.token(),
       json: { ...body, turnstile_token: turnstile() },

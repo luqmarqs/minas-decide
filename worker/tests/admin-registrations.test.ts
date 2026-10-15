@@ -87,6 +87,8 @@ describe('GET /admin/registrations', () => {
       >[]
     )[0]!;
     expect(item).toMatchObject({
+      id: 'user_seed000000',
+      source: 'account',
       user_id: 'user_seed000000',
       display_name: 'Pessoa 0',
       email: 'pessoa0@example.org',
@@ -97,6 +99,61 @@ describe('GET /admin/registrations', () => {
       email_verification_state: 'verified',
       account_state: 'active',
     });
+  });
+
+  it('D48: lists volunteers without an account next to account profiles (keyset over both)', async () => {
+    const t = setup();
+    const a = t.users.admin();
+    seed(t, 3);
+    for (let i = 0; i < 4; i++) {
+      t.advance(1000);
+      await t.repo.createVolunteerSignup({
+        display_name: `Voluntária ${i}`,
+        email: `vol${i}@example.org`,
+        phone: '+5531988887777',
+        territory_id: 'mg-3106200',
+        consent_version: 'v1',
+        contact_opt_in: i === 0,
+      });
+    }
+    const seen: { id: string; source: string }[] = [];
+    let cursor: string | null = null;
+    do {
+      const res: Response = await t.request(`${LIST}?limit=2${cursor ? `&cursor=${cursor}` : ''}`, {
+        token: a.token,
+      });
+      const data = (await body(res)).data as {
+        items: { id: string; source: string }[];
+        next_cursor: string | null;
+        total: number;
+      };
+      expect(data.total).toBe(7);
+      seen.push(...data.items);
+      cursor = data.next_cursor;
+    } while (cursor);
+    expect(new Set(seen.map((r) => r.id)).size).toBe(7);
+    expect(seen.filter((r) => r.source === 'volunteer')).toHaveLength(4);
+    const vol = (
+      (await body(await t.request(`${LIST}?q=vol0@`, { token: a.token }))).data!.items as Record<
+        string,
+        unknown
+      >[]
+    )[0]!;
+    expect(vol).toMatchObject({
+      source: 'volunteer',
+      user_id: null,
+      display_name: 'Voluntária 0',
+      email: 'vol0@example.org',
+      phone: '+5531988887777',
+      territory_name: 'Belo Horizonte',
+      contact_opt_in: true,
+      email_verification_state: 'unverified',
+      account_state: null,
+    });
+    const csv = parseCsv(await (await t.request(`${EXPORT}?q=vol0@`, { token: a.token })).text());
+    expect(csv[1]).toContain(
+      'Voluntária 0;voluntário (sem conta);vol0@example.org;(31) 98888-7777',
+    );
   });
 
   it('filters by q (name, e-mail, territory) and reports the filtered total', async () => {
@@ -151,7 +208,7 @@ describe('GET /admin/registrations', () => {
     expect((await t.request(LIST, { token: u.token })).status).toBe(403);
     expect((await t.request(LIST)).status).toBe(401);
     expect((await t.request(EXPORT, { token: u.token })).status).toBe(403);
-    expect(t.repo.listProfilesCalls).toEqual([]);
+    expect(t.repo.listRegistrationsCalls).toEqual([]);
     expect(t.repo.audit.filter((e) => e.action.startsWith('admin.registrations'))).toEqual([]);
   });
 });
@@ -172,15 +229,15 @@ describe('GET /admin/registrations/export.csv', () => {
     expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]); // UTF-8 BOM
     const lines = parseCsv(new TextDecoder().decode(bytes));
     expect(lines[0]).toBe(
-      'Nome;E-mail;WhatsApp;Território;Aceita comunicações;E-mail verificado;Situação da conta;Versão do termo;Cadastrado em (Brasília)',
+      'Nome;Origem;E-mail;WhatsApp;Território;Aceita comunicações;E-mail verificado;Situação da conta;Versão do termo;Cadastrado em (Brasília)',
     );
     expect(lines).toHaveLength(2501);
-    expect(new Set(lines.slice(1).map((l) => l.split(';')[1])).size).toBe(2500);
+    expect(new Set(lines.slice(1).map((l) => l.split(';')[2])).size).toBe(2500);
     // limits: 1000/1000/1000 (the last one returns 500 rows, ending the walk) — never offset
-    expect(t.repo.listProfilesCalls.map((c) => c.limit)).toEqual([1000, 1000, 1000]);
-    expect(t.repo.listProfilesCalls.map((c) => c.after !== null)).toEqual([false, true, true]);
+    expect(t.repo.listRegistrationsCalls.map((c) => c.limit)).toEqual([1000, 1000, 1000]);
+    expect(t.repo.listRegistrationsCalls.map((c) => c.after !== null)).toEqual([false, true, true]);
     expect(lines[1]).toBe(
-      `Pessoa 2499;pessoa2499@example.org;(31) 99999-0000;Belo Horizonte;sim;verificado;ativa;v1;${formatBrasilia(profile(2499).created_at)}`,
+      `Pessoa 2499;conta;pessoa2499@example.org;(31) 99999-0000;Belo Horizonte;sim;verificado;ativa;v1;${formatBrasilia(profile(2499).created_at)}`,
     );
     // audited with the row count, no PII
     const audit = t.repo.audit.filter((e) => e.action === 'admin.registrations.export');
@@ -200,7 +257,7 @@ describe('GET /admin/registrations/export.csv', () => {
     seed(t, 1000);
     const lines = parseCsv(await (await t.request(EXPORT, { token: a.token })).text());
     expect(lines).toHaveLength(1001);
-    expect(t.repo.listProfilesCalls).toHaveLength(2);
+    expect(t.repo.listRegistrationsCalls).toHaveLength(2);
   });
 
   it('respects q and still audits the row count', async () => {
@@ -254,7 +311,7 @@ describe('GET /admin/registrations/export.csv', () => {
     const t = setup();
     const a = t.users.admin();
     seed(t, 5);
-    t.repo.failListProfilesAt = 1;
+    t.repo.failListRegistrationsAt = 1;
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const res = await t.request(EXPORT, { token: a.token });
     expect(res.status).toBe(500);
@@ -265,7 +322,7 @@ describe('GET /admin/registrations/export.csv', () => {
     const t = setup();
     const a = t.users.admin();
     seed(t, 2500);
-    t.repo.failListProfilesAt = 2;
+    t.repo.failListRegistrationsAt = 2;
     const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const res = await t.request(EXPORT, { token: a.token });
     expect(res.status).toBe(200);

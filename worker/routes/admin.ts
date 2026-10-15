@@ -414,7 +414,8 @@ admin.get('/admin/metrics', requireFreshAdmin, async (c) => {
 });
 
 // ---------------------------------------------------------------- registrations (PERSONAL DATA)
-// Full name / e-mail / WhatsApp of every registered person, admin only. No cache (fresh admin
+// Full name / e-mail / WhatsApp of every registered person (volunteers without an account, D48,
+// and account profiles), admin only. No cache (fresh admin
 // check + no-store); every access is audited WITHOUT values (only whether `q`/cursor were used,
 // and the row count of exports). The audit row is written BEFORE any data is read, so a failed
 // audit means nothing leaves.
@@ -433,17 +434,15 @@ admin.get('/admin/registrations', requireFreshAdmin, async (c) => {
     reason: `q=${flag(q.q)};cursor=${flag(cursor)};limit=${q.limit}`,
   });
   const [rows, total] = await Promise.all([
-    repo.listProfiles({ after: cursor, limit: q.limit + 1, q: q.q ?? null }),
-    repo.countProfiles(q.q ?? null),
+    repo.listRegistrations({ after: cursor, limit: q.limit + 1, q: q.q ?? null }),
+    repo.countRegistrations(q.q ?? null),
   ]);
   const page = rows.slice(0, q.limit);
   const last = page[page.length - 1];
   const body: AdminRegistrationsResponse = {
     items: page,
     next_cursor:
-      rows.length > q.limit && last
-        ? encodeCursor({ at: last.created_at, id: last.user_id })
-        : null,
+      rows.length > q.limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
     total,
   };
   return ok(c, body);
@@ -462,7 +461,7 @@ admin.get(
     const { q } = parse(AdminRegistrationsExportQuery, c.req.query());
     const { repo, now } = c.get('deps');
     const requestId = c.get('requestId');
-    const total = await repo.countProfiles(q ?? null);
+    const total = await repo.countRegistrations(q ?? null);
     await repo.recordAudit({
       actor: c.get('user')!.id,
       action: 'admin.registrations.export',
@@ -472,7 +471,7 @@ admin.get(
       reason: `row_count=${total};q=${flag(q)}`,
     });
     const stream = await registrationsCsvStream(
-      (after) => repo.listProfiles({ after, limit: EXPORT_BATCH_SIZE, q: q ?? null }),
+      (after) => repo.listRegistrations({ after, limit: EXPORT_BATCH_SIZE, q: q ?? null }),
       {
         onEnd: ({ rows, error, cancelled }) => {
           if (error || cancelled) {

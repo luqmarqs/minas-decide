@@ -13,6 +13,7 @@ const MAX_BATCHES = 1000;
 
 export const CSV_HEADER = [
   'Nome',
+  'Origem',
   'E-mail',
   'WhatsApp',
   'Território',
@@ -71,16 +72,18 @@ export function brasiliaDate(ms: number): string {
 
 const VERIFICATION = { verified: 'verificado', pending: 'pendente', unverified: 'não verificado' };
 const ACCOUNT = { active: 'ativa', suspended: 'suspensa' };
+const SOURCE = { volunteer: 'voluntário (sem conta)', account: 'conta' };
 
 export function registrationLine(r: AdminRegistration): string {
   return csvLine([
     r.display_name,
+    SOURCE[r.source],
     r.email,
     formatPhoneBr(r.phone),
     r.territory_name,
     r.contact_opt_in ? 'sim' : 'não',
     VERIFICATION[r.email_verification_state],
-    ACCOUNT[r.account_state],
+    r.account_state ? ACCOUNT[r.account_state] : '',
     r.consent_version,
     formatBrasilia(r.created_at),
   ]);
@@ -122,7 +125,7 @@ export async function registrationsCsvStream(
             controller.close();
             return;
           }
-          page = await fetchBatch({ at: last.created_at, id: last.user_id });
+          page = await fetchBatch({ at: last.created_at, id: last.id });
           if (page.length === 0) {
             finish(false, false);
             controller.close();

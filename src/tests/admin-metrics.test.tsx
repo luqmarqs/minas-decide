@@ -40,7 +40,13 @@ function metrics(n: number, site: 'ok' | 'unconfigured' | 'unavailable' = 'ok') 
   return {
     days: n,
     internal: {
-      profiles: { total: 1234, last_7d: 21, last_30d: 88, by_day: days(n, 'count') },
+      profiles: {
+        total: 1234,
+        last_7d: 21,
+        last_30d: 88,
+        by_source: { volunteer: 1200, account: 34 },
+        by_day: days(n, 'count'),
+      },
       activities: {
         by_status: { pending_review: 3, published: 9, suspended: 1 },
         upcoming_published: 4,

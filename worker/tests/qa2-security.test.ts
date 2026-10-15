@@ -57,7 +57,7 @@ describe('QA-2 P-SEC-1 (Clerk): no profile can be created for an e-mail the call
   it('control: attacker registering with the victim e-mail -> 400, no profile', async () => {
     const s = setup();
     const attacker = s.users.signedUp('atacante@example.org');
-    const reg = await s.request('/api/v1/registrations', {
+    const reg = await s.request('/api/v1/registrations/account', {
       method: 'POST',
       token: attacker.token,
       json: registration(),
@@ -69,7 +69,7 @@ describe('QA-2 P-SEC-1 (Clerk): no profile can be created for an e-mail the call
   it('control: attacker whose Clerk e-mail is not verified -> 403, no profile', async () => {
     const s = setup();
     const attacker = s.users.unverified('vitima@example.org');
-    const reg = await s.request('/api/v1/registrations', {
+    const reg = await s.request('/api/v1/registrations/account', {
       method: 'POST',
       token: attacker.token,
       json: registration(),

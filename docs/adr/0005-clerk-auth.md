@@ -2,6 +2,8 @@
 
 **Status:** aceito — 2026-10-09 (decisão do proprietário: "vamos trocar o auth"; app Clerk `minas-decide`, id `app_3KTDdv0NZbv3wTVloogIbNwLqt9`)
 
+> **Nota 2026-10-14 (D48):** o cadastro de **voluntário** (`/participar`, `#participar` da home) saiu do Clerk: não cria conta nem pede código; vai para o `POST /api/v1/registrations` público (`app_private.volunteer_signups`). O item 2 abaixo vale agora só para a **conta de organizador**, em `/criar-conta` → `POST /api/v1/registrations/account`. Login, organizadores, admin e sessão continuam como descritos aqui. Ver `docs/DECISIONS.md` D48.
+
 ## Contexto
 O fluxo Supabase Auth (sessão anônima → vínculo de e-mail → magic link → promoção → revisão de perfil) era frágil: cota de SMTP do Supabase esgotava com poucos cadastros; a promoção abria janela de pré-sequestro (QA2-01); MFA foi dispensado (D35). Clerk entrega e-mail de verificação por código no cadastro, login por código/link, componentes prontos e sessão com JWT verificável na borda.
 

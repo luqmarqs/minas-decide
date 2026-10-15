@@ -142,7 +142,7 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
   it('Q01 (Clerk): an attacker cannot register a profile with someone else’s e-mail', async () => {
     const att = await clerkUser('att');
     const victimEmail = `mm-qa2-victim+${tag}@example.org`;
-    const reg = await api('/registrations', {
+    const reg = await api('/registrations/account', {
       method: 'POST',
       token: await att.token(),
       json: registration(victimEmail),
@@ -152,7 +152,7 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
     const prof = await svc.rpc('svc_get_profile', { p_user: att.id });
     expect(prof.data).toBeNull();
     // with its own (Clerk-verified) e-mail the registration works and is verified at once
-    const ok = await api('/registrations', {
+    const ok = await api('/registrations/account', {
       method: 'POST',
       token: await att.token(),
       json: registration(att.email),

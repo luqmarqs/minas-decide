@@ -112,7 +112,7 @@ describe('/criar-atividade guard', () => {
     );
     expect(screen.getByRole('link', { name: 'Criar conta' })).toHaveAttribute(
       'href',
-      '/participar',
+      '/criar-conta?next=%2Fcriar-atividade',
     );
     expect(callsTo(fetchMock, '/api/v1/')).toHaveLength(0);
   });

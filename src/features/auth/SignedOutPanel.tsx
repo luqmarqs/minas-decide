@@ -19,7 +19,7 @@ export function SignedOutPanel({ next, children, allowSignUp = true }: SignedOut
       <div className="flex flex-wrap gap-2">
         <ButtonLink to={signInHref(next)}>Entrar com código</ButtonLink>
         {allowSignUp ? (
-          <ButtonLink to="/participar" variant="secondary">
+          <ButtonLink to={`/criar-conta?next=${encodeURIComponent(next)}`} variant="secondary">
             Criar conta
           </ButtonLink>
         ) : null}

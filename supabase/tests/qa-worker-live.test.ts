@@ -288,7 +288,7 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
   it('L11 registration: another account cannot take an e-mail (400, no enumeration oracle)', async () => {
     const email = fresh.email;
     const reg = (tok: string) =>
-      api('/registrations', {
+      api('/registrations/account', {
         method: 'POST',
         token: tok,
         json: {

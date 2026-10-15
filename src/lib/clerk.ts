@@ -101,7 +101,7 @@ export function clerkErrorMessage(err: unknown): string {
     case 'form_identifier_exists':
       return 'Este e-mail já tem cadastro. Entre com um código enviado para ele.';
     case 'form_identifier_not_found':
-      return 'Não encontramos cadastro com este e-mail. Confira o endereço ou faça o cadastro.';
+      return 'Não encontramos conta com este e-mail. Confira o endereço ou crie uma conta de organizador.';
     case 'form_code_incorrect':
       return 'Código incorreto. Confira os 6 números e tente de novo.';
     case 'verification_expired':

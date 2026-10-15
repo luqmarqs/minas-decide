@@ -123,7 +123,7 @@ describe('QA3-01: Clerk user cache (60 s, per isolate) + per-user limit on authe
     const signed = s.users.signedUp();
     await s.request('/api/v1/me', { token: signed.token }); // warms the cache
     s.auth.people.get(signed.user.id)!.banned = true;
-    const reg = await s.request('/api/v1/registrations', {
+    const reg = await s.request('/api/v1/registrations/account', {
       method: 'POST',
       token: signed.token,
       json: { email: signed.user.email },

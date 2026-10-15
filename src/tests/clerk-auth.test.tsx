@@ -68,10 +68,10 @@ describe('/entrar — sign-in by e-mail code', () => {
     renderEntrar();
     await user.type(await screen.findByLabelText(/^E-mail/), 'nova@exemplo.com.br');
     await user.click(screen.getByRole('button', { name: 'Receber código' }));
-    expect(await screen.findByText(/Não encontramos cadastro com este e-mail/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Fazer cadastro' })).toHaveAttribute(
+    expect(await screen.findByText(/Não encontramos conta com este e-mail/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Criar conta de organizador' })).toHaveAttribute(
       'href',
-      '/participar',
+      '/criar-conta',
     );
   });
 

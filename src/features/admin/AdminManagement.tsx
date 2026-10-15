@@ -236,7 +236,7 @@ function AddAdminForm({ onDone }: { onDone: (text: string) => void }) {
           Adicionar administrador
         </h2>
         <p className="text-sm text-secondary">
-          A pessoa precisa já ter conta criada em /participar, com o e-mail verificado.
+          A pessoa precisa já ter conta criada em /criar-conta, com o e-mail verificado.
           Administradores têm acesso total à moderação e aos contatos.
         </p>
         <Field label="E-mail da pessoa" required id="admin-add-email" error={fieldError}>
@@ -264,7 +264,7 @@ function AddAdminForm({ onDone }: { onDone: (text: string) => void }) {
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent
           title="Conceder acesso de administrador?"
-          description="Esta pessoa receberá acesso total à moderação e aos contatos dos proponentes. Ela precisa já ter conta criada em /participar com o e-mail verificado. A concessão fica registrada na auditoria com seu usuário e horário."
+          description="Esta pessoa receberá acesso total à moderação e aos contatos dos proponentes. Ela precisa já ter conta criada em /criar-conta com o e-mail verificado. A concessão fica registrada na auditoria com seu usuário e horário."
         >
           <div className="flex flex-wrap gap-2">
             <Button loading={busy} loadingText="Concedendo…" onClick={() => void confirm()}>

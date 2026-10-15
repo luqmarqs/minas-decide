@@ -105,6 +105,28 @@ describe('GET /admin/metrics', () => {
     expect(text).not.toMatch(/@example|\+55|user_test|display_name/);
   });
 
+  it('D48: registrations count volunteers without an account + account profiles (by_source)', async () => {
+    const t = setup();
+    const a = t.users.admin();
+    t.users.verified();
+    await t.repo.createVolunteerSignup({
+      display_name: 'Voluntária',
+      email: 'vol@example.org',
+      phone: '+5531988887777',
+      territory_id: 'mg-3140001',
+      consent_version: 'v1',
+      contact_opt_in: false,
+    });
+    const res = await t.request(URL_, { token: a.token });
+    const text = await res.clone().text();
+    expect(text).not.toMatch(/@example|\+55|user_test/);
+    const internal = (await body(res)).data!.internal as {
+      profiles: { total: number; by_source: { volunteer: number; account: number } };
+    };
+    expect(internal.profiles.total).toBe(2);
+    expect(internal.profiles.by_source).toEqual({ volunteer: 1, account: 1 });
+  });
+
   it('days=7|90 reaches the repo; invalid days -> 400', async () => {
     const t = setup();
     const a = t.users.admin();

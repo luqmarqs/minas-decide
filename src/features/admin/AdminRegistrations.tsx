@@ -35,12 +35,14 @@ function Row({ r }: { r: AdminRegistration }) {
       <td data-label="Comunicações">{r.contact_opt_in ? 'sim' : 'não'}</td>
       <td data-label="Situação">
         <span className="flex flex-wrap justify-end gap-1 md:justify-start">
-          {r.account_state === 'suspended' ? (
-            <Badge variant="warning">suspensa</Badge>
+          {r.source === 'volunteer' ? (
+            <span>voluntário, sem conta</span>
+          ) : r.account_state === 'suspended' ? (
+            <Badge variant="warning">conta suspensa</Badge>
           ) : (
-            <span>ativa</span>
+            <span>conta ativa</span>
           )}
-          {r.email_verification_state !== 'verified' ? (
+          {r.source === 'account' && r.email_verification_state !== 'verified' ? (
             <Badge variant="info">e-mail não verificado</Badge>
           ) : null}
         </span>
@@ -184,7 +186,7 @@ export function AdminRegistrations() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <Row key={r.user_id} r={r} />
+                <Row key={r.id} r={r} />
               ))}
             </tbody>
           </table>

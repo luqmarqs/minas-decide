@@ -56,7 +56,13 @@ const TEN_MIN = 10 * 60 * 1000;
  * looser per-IP ceiling, so many people behind one public IP are not blocked together.
  */
 export const RATE_LIMITS = {
-  /** per IP — runs before the session is resolved (protects Auth from token spraying) */
+  /**
+   * per IP — public volunteer sign-up without an account (D48). Looser than the other public
+   * forms (event Wi-Fi / CGNAT: many people sign up together); Turnstile (single use) and the
+   * unique e-mail are the real guards.
+   */
+  volunteer_ip: { limit: 60, windowMs: TEN_MIN },
+  /** per IP — organizer profile; runs before the session is resolved (token spraying) */
   registrations_ip: { limit: 30, windowMs: TEN_MIN },
   /** per IP + Clerk user id */
   registrations: { limit: 5, windowMs: TEN_MIN },

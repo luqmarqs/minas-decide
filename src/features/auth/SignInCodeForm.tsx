@@ -134,10 +134,10 @@ export function SignInCodeForm({ onSignedIn, idPrefix = 'entrar' }: SignInCodeFo
               <p className="text-sm text-primary">{formError}</p>
               {notFound ? (
                 <Link
-                  to="/participar"
+                  to="/criar-conta"
                   className="mt-1 inline-flex min-h-6 items-center text-sm underline"
                 >
-                  Fazer cadastro
+                  Criar conta de organizador
                 </Link>
               ) : null}
             </div>

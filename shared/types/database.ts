@@ -299,6 +299,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      volunteer_signups: {
+        Row: {
+          consent_version: string;
+          contact_opt_in_at: string | null;
+          created_at: string;
+          display_name: string;
+          email: string;
+          id: string;
+          phone_e164: string;
+          territory_id: string | null;
+        };
+        Insert: {
+          consent_version: string;
+          contact_opt_in_at?: string | null;
+          created_at?: string;
+          display_name: string;
+          email: string;
+          id?: string;
+          phone_e164: string;
+          territory_id?: string | null;
+        };
+        Update: {
+          consent_version?: string;
+          contact_opt_in_at?: string | null;
+          created_at?: string;
+          display_name?: string;
+          email?: string;
+          id?: string;
+          phone_e164?: string;
+          territory_id?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -712,6 +745,10 @@ export type Database = {
     };
     Functions: {
       activity_rsvp_count: { Args: { p_activity: string }; Returns: number };
+      svc_add_admin: {
+        Args: { p_actor: string; p_user: string };
+        Returns: boolean;
+      };
       svc_add_group_manager: {
         Args: {
           p_admin: string;
@@ -724,6 +761,7 @@ export type Database = {
         };
         Returns: string;
       };
+      svc_admin_metrics: { Args: { p_days?: number }; Returns: Json };
       svc_approve_activity: {
         Args: {
           p_admin: string;
@@ -746,6 +784,8 @@ export type Database = {
         Args: { p_hash: string; p_ttl_seconds?: number };
         Returns: boolean;
       };
+      svc_count_profiles: { Args: { p_q?: string }; Returns: number };
+      svc_count_registrations: { Args: { p_q?: string }; Returns: number };
       svc_create_group_proposal: {
         Args: {
           p_consent_version: string;
@@ -775,6 +815,17 @@ export type Database = {
         };
         Returns: Json;
       };
+      svc_create_volunteer_signup: {
+        Args: {
+          p_consent_version: string;
+          p_contact_opt_in: boolean;
+          p_display_name: string;
+          p_email: string;
+          p_phone: string;
+          p_territory_id: string;
+        };
+        Returns: Json;
+      };
       svc_delete_profile: { Args: { p_user: string }; Returns: undefined };
       svc_email_in_use: {
         Args: { p_email: string; p_exclude: string };
@@ -788,13 +839,27 @@ export type Database = {
         Args: { p_request_id?: string; p_user: string };
         Returns: Json;
       };
+      svc_erase_volunteer_signup: {
+        Args: { p_email: string; p_request_id?: string };
+        Returns: number;
+      };
       svc_get_profile: { Args: { p_user: string }; Returns: Json };
-      svc_add_admin: { Args: { p_actor: string; p_user: string }; Returns: boolean };
       svc_grant_admin: {
         Args: { p_created_by?: string; p_user: string };
         Returns: undefined;
       };
-      svc_admin_metrics: { Args: { p_days?: number }; Returns: Json };
+      svc_is_admin: { Args: { p_user: string }; Returns: boolean };
+      svc_is_email_verified: { Args: { p_user: string }; Returns: boolean };
+      svc_list_admins: { Args: never; Returns: Json };
+      svc_list_group_proposals: {
+        Args: {
+          p_cursor_created?: string;
+          p_cursor_id?: string;
+          p_limit: number;
+          p_status: string;
+        };
+        Returns: Json;
+      };
       svc_list_profiles: {
         Args: {
           p_after_created_at?: string;
@@ -804,17 +869,12 @@ export type Database = {
         };
         Returns: Json;
       };
-      svc_count_profiles: { Args: { p_q?: string }; Returns: number };
-      svc_list_admins: { Args: Record<PropertyKey, never>; Returns: Json };
-      svc_remove_admin: { Args: { p_actor: string; p_user: string }; Returns: boolean };
-      svc_is_admin: { Args: { p_user: string }; Returns: boolean };
-      svc_is_email_verified: { Args: { p_user: string }; Returns: boolean };
-      svc_list_group_proposals: {
+      svc_list_registrations: {
         Args: {
-          p_cursor_created?: string;
-          p_cursor_id?: string;
-          p_limit: number;
-          p_status: string;
+          p_after_created_at?: string;
+          p_after_id?: string;
+          p_limit?: number;
+          p_q?: string;
         };
         Returns: Json;
       };
@@ -864,6 +924,10 @@ export type Database = {
           p_request_id?: string;
         };
         Returns: Json;
+      };
+      svc_remove_admin: {
+        Args: { p_actor: string; p_user: string };
+        Returns: boolean;
       };
       svc_reveal_proposal_contact: {
         Args: {

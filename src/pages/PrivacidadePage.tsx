@@ -24,8 +24,8 @@ export default function PrivacidadePage() {
         <h2>Cadastro</h2>
         <p>
           Se você se cadastrar, pedimos apenas nome, e-mail, WhatsApp e território de interesse —
-          sem CPF, endereço residencial ou senha. Esses dados não aparecem em nenhuma página
-          pública.
+          sem CPF, endereço residencial ou senha. O cadastro de voluntário não cria conta: o e-mail
+          serve só para contato. Esses dados não aparecem em nenhuma página pública.
         </p>
         <h2>“Eu vou”</h2>
         <p>

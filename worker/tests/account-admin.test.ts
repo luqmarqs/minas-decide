@@ -17,7 +17,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
   it('T03: invalid e-mail -> 400 with field error and nothing stored', async () => {
     const { request, users, repo } = setup();
     const s = users.signedUp();
-    const res = await request('/api/v1/registrations', {
+    const res = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: registration({ email: 'nope' }),
@@ -33,14 +33,14 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
     const { request, users, repo } = setup();
     const s = users.signedUp();
     const { turnstile_token: _omit, ...noToken } = registration({ email: s.user.email });
-    const missing = await request('/api/v1/registrations', {
+    const missing = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: noToken,
     });
     expect(missing.status).toBe(400);
     expect((await body(missing)).error?.fields?.turnstile_token).toBeDefined();
-    const invalid = await request('/api/v1/registrations', {
+    const invalid = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: registration({ email: s.user.email, turnstile_token: 'bad-1' }),
@@ -52,15 +52,16 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
   it('requires a Clerk session: 401 without token, malformed header or invalid token', async () => {
     const { request, repo } = setup();
     expect(
-      (await request('/api/v1/registrations', { method: 'POST', json: registration() })).status,
+      (await request('/api/v1/registrations/account', { method: 'POST', json: registration() }))
+        .status,
     ).toBe(401);
-    const malformed = await request('/api/v1/registrations', {
+    const malformed = await request('/api/v1/registrations/account', {
       method: 'POST',
       headers: { Authorization: 'Basic abc' },
       json: registration(),
     });
     expect(malformed.status).toBe(401);
-    const invalid = await request('/api/v1/registrations', {
+    const invalid = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: 'not-a-valid-clerk-session-token',
       json: registration(),
@@ -73,7 +74,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
   it('e-mail not verified in Clerk -> 403 EMAIL_NOT_VERIFIED, no profile, Turnstile not spent', async () => {
     const { request, users, repo, turnstile } = setup();
     const s = users.unverified();
-    const res = await request('/api/v1/registrations', {
+    const res = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: registration({ email: s.user.email }),
@@ -88,7 +89,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
     const { request, users, repo } = setup();
     const s = users.signedUp('maria.silva@example.org');
     const input = registration({ email: 'Maria.Silva@Example.org' });
-    const res = await request('/api/v1/registrations', {
+    const res = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: input,
@@ -109,7 +110,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
       true,
     );
     // idempotent re-submit from the same account
-    const again = await request('/api/v1/registrations', {
+    const again = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: { ...input, turnstile_token: 'tok-again' },
@@ -121,7 +122,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
   it('the form e-mail must be the verified Clerk e-mail (400, nothing stored)', async () => {
     const { request, users, repo } = setup();
     const s = users.signedUp('dona@example.org');
-    const res = await request('/api/v1/registrations', {
+    const res = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: registration({ email: 'outra@example.org' }),
@@ -135,7 +136,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
     const { request, users, repo } = setup();
     const owner = users.verified(undefined, 'dup@example.org');
     const s = users.signedUp('dup@example.org');
-    const res = await request('/api/v1/registrations', {
+    const res = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: registration({ email: owner.user.email }),
@@ -150,7 +151,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
     const { request, users, repo, auth } = setup();
     const s = users.signedUp();
     auth.outage = true;
-    const res = await request('/api/v1/registrations', {
+    const res = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: registration({ email: s.user.email }),
@@ -183,7 +184,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
       { id: 'user_claims000001', email: 'claims@example.org', email_confirmed: true },
       { claims: { email: 'claims@example.org', email_verified: true } },
     );
-    const ok = await request('/api/v1/registrations', {
+    const ok = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: 'tok-claims-padding-padding-padding',
       json: registration({ email: 'claims@example.org' }),
@@ -198,7 +199,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
       { id: 'user_claims000002', email: 'banned@example.org', email_confirmed: true },
       { claims: { email: 'banned@example.org', email_verified: true }, banned: true },
     );
-    const banned = await request('/api/v1/registrations', {
+    const banned = await request('/api/v1/registrations/account', {
       method: 'POST',
       token: 'tok-claims-banned-padding-padding',
       json: registration({ email: 'banned@example.org' }),
@@ -252,7 +253,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
     let status = 0;
     for (let i = 0; i < 6; i++) {
       status = (
-        await request('/api/v1/registrations', {
+        await request('/api/v1/registrations/account', {
           method: 'POST',
           token: one.token,
           json: registration({ email: one.user.email, turnstile_token: `bad-${i}` }),
@@ -263,7 +264,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
     // many people behind the same IP (CGNAT) are not blocked by one another
     for (let i = 0; i < 20; i++) {
       const p = users.signedUp(`pessoa${i}@example.org`);
-      const r = await request('/api/v1/registrations', {
+      const r = await request('/api/v1/registrations/account', {
         method: 'POST',
         token: p.token,
         json: registration({ email: p.user.email }),
@@ -276,7 +277,7 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
       const p = users.signedUp(`extra${i}@example.org`);
       statuses.push(
         (
-          await request('/api/v1/registrations', {
+          await request('/api/v1/registrations/account', {
             method: 'POST',
             token: p.token,
             json: registration({ email: p.user.email }),
@@ -292,7 +293,7 @@ describe('me (ADR 0005)', () => {
   it('GET /me after registration: masked e-mail, verified, not anonymous, no review, no-store', async () => {
     const { request, users } = setup();
     const s = users.signedUp('maria.silva@example.org');
-    await request('/api/v1/registrations', {
+    await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: registration({ email: 'maria.silva@example.org' }),
@@ -347,7 +348,7 @@ describe('me (ADR 0005)', () => {
         })
       ).status,
     ).toBe(404);
-    await request('/api/v1/registrations', {
+    await request('/api/v1/registrations/account', {
       method: 'POST',
       token: s.token,
       json: registration({ email: s.user.email }),

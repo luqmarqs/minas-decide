@@ -66,6 +66,22 @@ export default function CriarAtividadePage() {
     );
   } else if (me.data?.account_state === 'suspended') {
     body = <Note tone="warning">Sua conta está suspensa e não pode propor atividades.</Note>;
+  } else if (me.data && me.data.selected_territory_id === null && me.data.phone_masked === null) {
+    // Signed in, but the organizer profile was never completed (D48: the volunteer sign-up does
+    // not create one).
+    body = (
+      <div className="flex flex-col gap-4">
+        <Note>
+          Falta completar sua conta de organizador (nome, WhatsApp e território) antes de propor
+          atividades.
+        </Note>
+        <div>
+          <ButtonLink to={`/criar-conta?next=${encodeURIComponent(NEXT)}`}>
+            Completar conta
+          </ButtonLink>
+        </div>
+      </div>
+    );
   } else {
     body = <ActivityEditor mode="create" draftOwner={me.data?.user_id} onSaved={setSaved} />;
   }

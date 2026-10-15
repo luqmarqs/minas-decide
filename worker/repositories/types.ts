@@ -139,6 +139,18 @@ export interface NewProfile {
   email_state: ProfileRow['email_verification_state'];
 }
 
+/** Volunteer sign-up without an account (D48, 0017). Values already validated/sanitized. */
+export interface NewVolunteerSignup {
+  display_name: string;
+  /** lower-cased */
+  email: string;
+  /** E.164, already normalized */
+  phone: string;
+  territory_id: string;
+  consent_version: string;
+  contact_opt_in: boolean;
+}
+
 export interface ProfilePatch {
   display_name?: string;
   selected_territory_id?: string;
@@ -298,16 +310,23 @@ export interface Repo {
   /** Aggregate-only metrics for the admin panel (0015, svc_admin_metrics). */
   adminMetrics(days: number): Promise<AdminInternalMetrics>;
   /**
-   * Registrations (PERSONAL DATA, admin only; 0016 svc_list_profiles). KEYSET pagination by
-   * (created_at desc, user_id desc): `after` = last row of the previous page. `limit` 1..1000.
-   * `q` = optional substring over name / e-mail / territory name.
+   * Volunteer sign-up without an account (D48; 0017 svc_create_volunteer_signup). INSERT ... ON
+   * CONFLICT (lower(email)) DO NOTHING: a repeated e-mail never overwrites the stored row;
+   * `created` is for internal use only (never returned to the public).
    */
-  listProfiles(opts: {
+  createVolunteerSignup(v: NewVolunteerSignup): Promise<{ created: boolean }>;
+  /**
+   * Registrations (PERSONAL DATA, admin only; 0017 svc_list_registrations): volunteers (D48) +
+   * account profiles. KEYSET pagination by (created_at desc, id desc): `after` = last row of the
+   * previous page (`id` = row id). `limit` 1..1000. `q` = optional substring over name / e-mail /
+   * territory name.
+   */
+  listRegistrations(opts: {
     after: Cursor | null;
     limit: number;
     q: string | null;
   }): Promise<AdminRegistration[]>;
-  countProfiles(q: string | null): Promise<number>;
+  countRegistrations(q: string | null): Promise<number>;
   // moderation
   listGroupProposals(
     status: string | null,

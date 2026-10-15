@@ -164,12 +164,16 @@ export type AdminMetricsQuery = z.infer<typeof AdminMetricsQuery>;
 const Count = z.number().int().nonnegative();
 const DayCount = z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), count: Count });
 
-/** Output of `public.svc_admin_metrics(p_days)` (migration 0015). */
+/**
+ * Output of `public.svc_admin_metrics(p_days)` (0015, replaced by 0017). `profiles` counts ALL
+ * registrations: volunteers without an account (D48) + account profiles; `by_source` splits them.
+ */
 export const AdminInternalMetrics = z.object({
   profiles: z.object({
     total: Count,
     last_7d: Count,
     last_30d: Count,
+    by_source: z.object({ volunteer: Count, account: Count }),
     by_day: z.array(DayCount),
   }),
   activities: z.object({
@@ -241,9 +245,20 @@ export type AdminRegistrationsQuery = z.infer<typeof AdminRegistrationsQuery>;
 /** GET /admin/registrations/export.csv (same filter, no cursor/limit). */
 export const AdminRegistrationsExportQuery = AdminRegistrationsQuery.pick({ q: true });
 
-/** One registration. PERSONAL DATA: admin only, every access audited, never in public routes. */
+export const RegistrationSource = z.enum(['volunteer', 'account']);
+export type RegistrationSource = z.infer<typeof RegistrationSource>;
+
+/**
+ * One registration. PERSONAL DATA: admin only, every access audited, never in public routes.
+ * `source`: 'volunteer' = public form without an account (D48, never verified); 'account' =
+ * organizer profile tied to a Clerk account (ADR 0005). `id` is the keyset/row key (volunteer
+ * uuid or the Clerk user id).
+ */
 export const AdminRegistration = z.object({
-  user_id: ClerkUserId,
+  id: z.string().min(1).max(80),
+  source: RegistrationSource,
+  /** Clerk user id; null for volunteers without an account */
+  user_id: ClerkUserId.nullable(),
   display_name: z.string(),
   email: z.string(),
   phone: z.string().nullable(),
@@ -253,7 +268,8 @@ export const AdminRegistration = z.object({
   contact_opt_in: z.boolean(),
   consent_version: z.string(),
   email_verification_state: z.enum(['unverified', 'pending', 'verified']),
-  account_state: z.enum(['active', 'suspended']),
+  /** null for volunteers (no account) */
+  account_state: z.enum(['active', 'suspended']).nullable(),
   created_at: z.string(),
 });
 export type AdminRegistration = z.infer<typeof AdminRegistration>;

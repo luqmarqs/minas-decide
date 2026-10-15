@@ -24,6 +24,7 @@ import type {
   NewGroupManager,
   NewGroupProposal,
   NewProfile,
+  NewVolunteerSignup,
   ProfilePatch,
   ProfileRow,
   PublicActivityQuery,
@@ -75,6 +76,17 @@ interface StoredProposal extends GroupProposalRow {
   fingerprint_hash: string | null;
 }
 
+export interface VolunteerRow {
+  id: string;
+  display_name: string;
+  email: string;
+  phone_e164: string;
+  territory_id: string | null;
+  consent_version: string;
+  contact_opt_in_at: string | null;
+  created_at: string;
+}
+
 export class FakeRepo implements Repo {
   territories: TerritoryRow[] = [
     territory('mg', 'state', 'Minas Gerais', null, null),
@@ -92,6 +104,8 @@ export class FakeRepo implements Repo {
   activities: (ActivityRow & { status_before_suspension?: ActivityRow['status'] | null })[] = [];
   rsvps: Rsvp[] = [];
   profiles = new Map<string, ProfileRow>();
+  /** app_private.volunteer_signups (D48, 0017) keyed by lower(email) */
+  volunteers = new Map<string, VolunteerRow>();
   admins = new Set<string>();
   adminMeta = new Map<string, { created_at: string; created_by: string | null }>();
   /** user ids passed to eraseUserData (webhook tests) */
@@ -403,41 +417,82 @@ export class FakeRepo implements Repo {
     this.adminMeta.delete(id);
     return this.admins.delete(id);
   }
-  /** listProfiles calls (route tests): limit and whether a cursor was sent. */
-  listProfilesCalls: { limit: number; after: Cursor | null; q: string | null }[] = [];
-  /** make the Nth (1-based) listProfiles call throw (stream failure tests) */
-  failListProfilesAt: number | null = null;
-  private matchProfile(p: ProfileRow, q: string | null): boolean {
+  /** Mirrors svc_create_volunteer_signup (0017): ON CONFLICT (lower(email)) DO NOTHING. */
+  async createVolunteerSignup(v: NewVolunteerSignup) {
+    const key = v.email.trim().toLowerCase();
+    if (this.volunteers.has(key)) return { created: false };
+    this.volunteers.set(key, {
+      id: this.uuid(),
+      display_name: v.display_name,
+      email: key,
+      phone_e164: v.phone,
+      territory_id: v.territory_id,
+      consent_version: v.consent_version,
+      contact_opt_in_at: v.contact_opt_in ? iso(this.clock()) : null,
+      created_at: iso(this.clock()),
+    });
+    return { created: true };
+  }
+  /** listRegistrations calls (route tests): limit and whether a cursor was sent. */
+  listRegistrationsCalls: { limit: number; after: Cursor | null; q: string | null }[] = [];
+  /** make the Nth (1-based) listRegistrations call throw (stream failure tests) */
+  failListRegistrationsAt: number | null = null;
+  private territoryName(id: string | null): string | null {
+    return this.territories.find((t) => t.id === id)?.name ?? null;
+  }
+  private matchRegistration(r: AdminRegistration, q: string | null): boolean {
     if (!q) return true;
     const needle = q.toLowerCase();
-    const terr = this.territories.find((t) => t.id === p.selected_territory_id)?.name ?? '';
-    return [p.display_name, p.email_contact, terr].some((v) => v.toLowerCase().includes(needle));
+    return [r.display_name, r.email, r.territory_name ?? ''].some((v) =>
+      v.toLowerCase().includes(needle),
+    );
   }
-  private registration(p: ProfileRow): AdminRegistration {
-    return {
+  /** volunteers (D48) + account profiles, as svc_list_registrations builds them (0017) */
+  private allRegistrations(): AdminRegistration[] {
+    const vols: AdminRegistration[] = [...this.volunteers.values()].map((v) => ({
+      id: v.id,
+      source: 'volunteer',
+      user_id: null,
+      display_name: v.display_name,
+      email: v.email,
+      phone: v.phone_e164,
+      territory_id: v.territory_id,
+      territory_name: this.territoryName(v.territory_id),
+      contact_opt_in: v.contact_opt_in_at !== null,
+      consent_version: v.consent_version,
+      email_verification_state: 'unverified',
+      account_state: null,
+      created_at: v.created_at,
+    }));
+    const accounts: AdminRegistration[] = [...this.profiles.values()].map((p) => ({
+      id: p.user_id,
+      source: 'account',
       user_id: p.user_id,
       display_name: p.display_name,
       email: p.email_contact,
       phone: p.phone_e164,
       territory_id: p.selected_territory_id,
-      territory_name: this.territories.find((t) => t.id === p.selected_territory_id)?.name ?? null,
+      territory_name: this.territoryName(p.selected_territory_id),
       contact_opt_in: p.contact_opt_in_at !== null,
       consent_version: p.consent_version,
       email_verification_state: p.email_verification_state,
       account_state: p.account_state,
       created_at: p.created_at,
-    };
+    }));
+    return [...vols, ...accounts];
   }
-  /** Mirrors svc_list_profiles (0016): keyset (created_at desc, user_id desc), limit 1..1000. */
-  async listProfiles(opts: { after: Cursor | null; limit: number; q: string | null }) {
-    this.listProfilesCalls.push({ limit: opts.limit, after: opts.after, q: opts.q });
-    if (this.failListProfilesAt === this.listProfilesCalls.length) throw new Error('db down');
+  /** Mirrors svc_list_registrations (0017): keyset (created_at desc, id desc), limit 1..1000. */
+  async listRegistrations(opts: { after: Cursor | null; limit: number; q: string | null }) {
+    this.listRegistrationsCalls.push({ limit: opts.limit, after: opts.after, q: opts.q });
+    if (this.failListRegistrationsAt === this.listRegistrationsCalls.length) {
+      throw new Error('db down');
+    }
     const limit = Math.min(Math.max(opts.limit, 1), 1000);
-    const rows = [...this.profiles.values()]
-      .filter((p) => this.matchProfile(p, opts.q))
+    const rows = this.allRegistrations()
+      .filter((r) => this.matchRegistration(r, opts.q))
       .sort((a, b) =>
         a.created_at === b.created_at
-          ? a.user_id < b.user_id
+          ? a.id < b.id
             ? 1
             : -1
           : a.created_at < b.created_at
@@ -445,15 +500,15 @@ export class FakeRepo implements Repo {
             : -1,
       )
       .filter(
-        (p) =>
+        (r) =>
           !opts.after ||
-          p.created_at < opts.after.at ||
-          (p.created_at === opts.after.at && p.user_id < opts.after.id),
+          r.created_at < opts.after.at ||
+          (r.created_at === opts.after.at && r.id < opts.after.id),
       );
-    return rows.slice(0, limit).map((p) => this.registration(p));
+    return rows.slice(0, limit);
   }
-  async countProfiles(q: string | null) {
-    return [...this.profiles.values()].filter((p) => this.matchProfile(p, q)).length;
+  async countRegistrations(q: string | null) {
+    return this.allRegistrations().filter((r) => this.matchRegistration(r, q)).length;
   }
   /** `days` values passed to adminMetrics (route tests). */
   metricsCalls: number[] = [];
@@ -461,7 +516,12 @@ export class FakeRepo implements Repo {
   async adminMetrics(days: number): Promise<AdminInternalMetrics> {
     this.metricsCalls.push(days);
     const now = this.clock();
-    const profiles = [...this.profiles.values()];
+    const accounts = [...this.profiles.values()];
+    const vols = [...this.volunteers.values()];
+    const profiles = [
+      ...accounts.map((p) => ({ created_at: p.created_at, territory: p.selected_territory_id })),
+      ...vols.map((v) => ({ created_at: v.created_at, territory: v.territory_id })),
+    ];
     const since = (d: number) =>
       profiles.filter((p) => Date.parse(p.created_at) >= now - d * 864e5);
     const by_day = Array.from({ length: days }, (_, i) => {
@@ -486,12 +546,7 @@ export class FakeRepo implements Repo {
     );
     const perTerritory = new Map<string, number>();
     for (const p of profiles) {
-      if (p.selected_territory_id) {
-        perTerritory.set(
-          p.selected_territory_id,
-          (perTerritory.get(p.selected_territory_id) ?? 0) + 1,
-        );
-      }
+      if (p.territory) perTerritory.set(p.territory, (perTerritory.get(p.territory) ?? 0) + 1);
     }
     const going = this.rsvps.filter((r) => r.status === 'going');
     return {
@@ -499,6 +554,7 @@ export class FakeRepo implements Repo {
         total: profiles.length,
         last_7d: since(7).length,
         last_30d: since(30).length,
+        by_source: { volunteer: vols.length, account: accounts.length },
         by_day,
       },
       activities: {

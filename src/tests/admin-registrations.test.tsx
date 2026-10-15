@@ -29,8 +29,12 @@ const me = {
 };
 
 function person(i: number) {
+  const volunteer = i === 3;
+  const userId = `user_2reg${String(i).padStart(8, '0')}`;
   return {
-    user_id: `user_2reg${String(i).padStart(8, '0')}`,
+    id: volunteer ? `00000000-0000-4000-8000-${String(i).padStart(12, '0')}` : userId,
+    source: volunteer ? 'volunteer' : 'account',
+    user_id: volunteer ? null : userId,
     display_name: `Pessoa ${i}`,
     email: `pessoa${i}@exemplo.com.br`,
     phone: '+5531999990000',
@@ -38,8 +42,8 @@ function person(i: number) {
     territory_name: 'Mariana',
     contact_opt_in: i % 2 === 0,
     consent_version: 'v1',
-    email_verification_state: i === 1 ? 'pending' : 'verified',
-    account_state: i === 2 ? 'suspended' : 'active',
+    email_verification_state: volunteer ? 'unverified' : i === 1 ? 'pending' : 'verified',
+    account_state: volunteer ? null : i === 2 ? 'suspended' : 'active',
     created_at: '2026-10-08T15:04:05Z',
   };
 }
@@ -109,7 +113,11 @@ describe('/admin — Cadastros', () => {
     expect(within(row).getByText('não')).toBeInTheDocument();
     expect(within(row).getByText('e-mail não verificado')).toBeInTheDocument();
     expect(within(row).getByText('Pessoa 1').closest('td')).toHaveAttribute('data-label', 'Nome');
-    expect(screen.getByText('suspensa')).toBeInTheDocument();
+    expect(screen.getByText('conta suspensa')).toBeInTheDocument();
+    // D48: volunteer without an account
+    const vol = screen.getByText('Pessoa 3').closest('tr')!;
+    expect(within(vol).getByText('voluntário, sem conta')).toBeInTheDocument();
+    expect(within(vol).queryByText('e-mail não verificado')).not.toBeInTheDocument();
     expect(
       screen.getByText(
         'Dados pessoais — uso restrito à campanha; acessos ficam registrados na auditoria.',

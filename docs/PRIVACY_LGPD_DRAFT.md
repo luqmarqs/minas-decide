@@ -3,14 +3,14 @@
 Este documento organiza os fatos técnicos verdadeiros do sistema para que a revisão jurídica produza a Política de Privacidade e os Termos. Os textos em `/privacidade` e `/termos` continuam marcados como rascunho até essa revisão. Pontos entre colchetes exigem decisão do controlador.
 
 ## 1. Agentes
-- **Controlador:** [organização responsável — a definir]. **Operador(es):** Supabase (banco, região São Paulo), **Clerk** (autenticação e envio de códigos de verificação por e-mail; EUA — avaliar transferência internacional), Cloudflare (hospedagem/CDN/Turnstile), **Umami self-hosted** (`analytics.luqmarqs.dev`, estatísticas de audiência sem cookies: URL, referrer, navegador/SO/dispositivo, país derivado do IP; o IP não é armazenado), [provedor SMTP para avisos — a definir], OpenFreeMap (tiles do mapa; recebe IP ao carregar o mapa).
+- **Controlador:** [organização responsável — a definir]. **Operador(es):** Supabase (banco, região São Paulo), **Clerk** (autenticação de organizadores e administradores e envio de códigos de verificação por e-mail; o cadastro de voluntário não passa pelo Clerk — D48; EUA — avaliar transferência internacional), Cloudflare (hospedagem/CDN/Turnstile), **Umami self-hosted** (`analytics.luqmarqs.dev`, estatísticas de audiência sem cookies: URL, referrer, navegador/SO/dispositivo, país derivado do IP; o IP não é armazenado), [provedor SMTP para avisos — a definir], OpenFreeMap (tiles do mapa; recebe IP ao carregar o mapa).
 - **Encarregado (DPO) e canal do titular:** [e-mail — a definir]; o rodapé e `/privacidade` apontam para ele.
 
 ## 2. Dados tratados, finalidade, base legal (proposta) e retenção
 
 | Dado | Quando | Finalidade | Base legal proposta | Retenção |
 |---|---|---|---|---|
-| Nome, e-mail, WhatsApp, município/bairro escolhido | cadastro | enviar o link do grupo territorial; autenticar; organizar atividades | consentimento (art. 7º, I) e/ou execução de serviço solicitado (art. 7º, V); **atenção: opinião política pode caracterizar dado sensível (art. 11) — avaliar consentimento específico e destacado** | enquanto a conta existir; exclusão a pedido |
+| Nome, e-mail, WhatsApp, município/bairro escolhido | cadastro de voluntário (sem conta, e-mail não verificado — D48) ou conta de organizador | enviar o link do grupo territorial; contato da campanha; autenticar e organizar atividades (só organizadores) | consentimento (art. 7º, I) e/ou execução de serviço solicitado (art. 7º, V); **atenção: opinião política pode caracterizar dado sensível (art. 11) — avaliar consentimento específico e destacado** | enquanto o cadastro/conta existir; exclusão a pedido |
 | Consentimento de comunicações (opt-in separado, não pré-marcado) | cadastro | comunicações da organização | consentimento | até revogação |
 | Nome, e-mail, WhatsApp do proponente de grupo | proposta de grupo | moderação e contato administrativo | consentimento / legítimo interesse de moderação | até decisão + [12 meses] |
 | Responsáveis por grupo (nome, contato) | admin | gestão de grupos | execução de serviço / legítimo interesse | enquanto o grupo existir |

@@ -4,9 +4,10 @@ import { useAfterIdle } from '@/lib/idle';
 import { JOIN_SECTION_ID, JOIN_TITLE_ID } from './join';
 import './home-join.css';
 
-// Zod, the Clerk sign-up flow and Turnstile only load after first paint (P-PERF-1).
-const ParticipationPanel = lazy(() =>
-  import('./ParticipationPanel').then((m) => ({ default: m.ParticipationPanel })),
+// Zod and Turnstile only load after first paint (P-PERF-1). The volunteer form has no account
+// (D48): it never loads Clerk.
+const RegistrationForm = lazy(() =>
+  import('./RegistrationForm').then((m) => ({ default: m.RegistrationForm })),
 );
 
 function FormPlaceholder() {
@@ -52,16 +53,16 @@ export function HomeJoinSection({ territoryId, start }: HomeJoinSectionProps) {
             Inscreva-se
           </h2>
           <p className="ed-measure max-w-md text-secondary sm:text-lg">
-            Junte-se a quem já está na rua pela virada. Cadastro rápido: nome, e-mail, WhatsApp e
-            onde você quer atuar. Em seguida mostramos o grupo da campanha na sua região.
+            Junte-se a quem já está na rua pela virada. Cadastro rápido, sem criar conta: nome,
+            e-mail, WhatsApp e onde você quer atuar. Em seguida mostramos o grupo da campanha na sua
+            região.
           </p>
         </div>
         <div className="min-w-0 rounded-card border border-border-strong bg-surface-raised p-4 sm:p-6">
           {ready ? (
             <Suspense fallback={<FormPlaceholder />}>
-              <ParticipationPanel
-                lazySession
-                territoryId={territoryId && territoryId !== 'mg' ? territoryId : null}
+              <RegistrationForm
+                initialTerritoryId={territoryId && territoryId !== 'mg' ? territoryId : null}
               />
             </Suspense>
           ) : (

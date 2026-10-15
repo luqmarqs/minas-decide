@@ -29,14 +29,32 @@ export type RegistrationInput = z.infer<typeof RegistrationInput>;
 /** Clerk user id (ADR 0005) */
 export const ClerkUserId = z.string().regex(/^user_[A-Za-z0-9]{1,64}$/, 'id de usuário inválido');
 
+/**
+ * POST /registrations — volunteer sign-up WITHOUT an account (D48). The answer is the same
+ * whether the e-mail was new or already registered (no enumeration): no ids, no PII.
+ */
 export const RegistrationResult = z.object({
+  territory_id: TerritoryId,
+  status: z.literal('received'),
+});
+export type RegistrationResult = z.infer<typeof RegistrationResult>;
+
+/** POST /registrations/account — same body as the volunteer form (organizer profile). */
+export const AccountProfileInput = RegistrationInput;
+export type AccountProfileInput = RegistrationInput;
+
+/**
+ * POST /registrations/account — organizer profile on top of a Clerk session (ADR 0005; the
+ * volunteer sign-up no longer needs an account since D48).
+ */
+export const AccountProfileResult = z.object({
   profile_id: ClerkUserId,
   territory_id: TerritoryId,
   /** Clerk verifies the e-mail before any session exists (ADR 0005) */
   email_verification_state: z.literal('verified'),
   session_state: z.literal('verified'),
 });
-export type RegistrationResult = z.infer<typeof RegistrationResult>;
+export type AccountProfileResult = z.infer<typeof AccountProfileResult>;
 
 export const MeResponse = z.object({
   user_id: ClerkUserId,

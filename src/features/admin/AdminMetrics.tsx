@@ -114,6 +114,10 @@ function Mobilization({ m, days }: { m: AdminInternalMetrics; days: Period }) {
         <Figure large value={formatInt(m.profiles.last_7d)} label="nos últimos 7 dias" />
         <Figure large value={formatInt(m.profiles.last_30d)} label="nos últimos 30 dias" />
       </div>
+      <p className="text-sm text-secondary tabular-nums">
+        {formatInt(m.profiles.by_source.volunteer)} voluntários sem conta ·{' '}
+        {formatInt(m.profiles.by_source.account)} com conta de organizador
+      </p>
       <div>
         <p className="mb-2 text-sm font-semibold">Cadastros por dia (últimos {days} dias)</p>
         <DayBars

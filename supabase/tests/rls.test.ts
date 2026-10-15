@@ -37,6 +37,7 @@ const PRIVATE_TABLES = [
   'audit_events',
   'abuse_events',
   'turnstile_tokens_used',
+  'volunteer_signups',
 ];
 const PUBLIC_RELATIONS = [
   'territories',
@@ -58,6 +59,7 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
   const noProfileId = uid('none');
   const admins = [uid('admina'), uid('adminb')];
   const people = [organizerId, otherOrganizerId, pendingProfileId, noProfileId, ...admins];
+  const volunteerEmail = `mm-rls-vol-${tag}@example.org`;
 
   let svc: SupabaseClient;
   let anon: SupabaseClient;
@@ -191,6 +193,10 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
 
   afterAll(async () => {
     if (!svc) return;
+    await svc.rpc('svc_erase_volunteer_signup', {
+      p_email: volunteerEmail,
+      p_request_id: 'rls-test-cleanup',
+    });
     // cascades: groups, proposals, managers, activities, rsvps
     await svc.from('territories').delete().eq('id', hood);
     await svc.from('territories').delete().eq('id', muni);
@@ -275,6 +281,22 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
         ['svc_consume_turnstile_token', { p_hash: 'b'.repeat(64) }],
         ['svc_email_in_use', { p_email: 'x@example.org', p_exclude: noProfileId }],
         ['activity_rsvp_count', { p_activity: ids.published }],
+        // 0017 (D48)
+        [
+          'svc_create_volunteer_signup',
+          {
+            p_display_name: 'Invasor',
+            p_email: `mm-rls-anon-${tag}@example.org`,
+            p_phone: '+5531999990000',
+            p_territory_id: hood,
+            p_consent_version: 'v1',
+            p_contact_opt_in: false,
+          },
+        ],
+        ['svc_list_registrations', { p_limit: 1 }],
+        ['svc_count_registrations', {}],
+        ['svc_erase_volunteer_signup', { p_email: volunteerEmail }],
+        ['svc_admin_metrics', { p_days: 7 }],
       ];
       for (const [fn, args] of calls) {
         const r = await anon.rpc(fn, args);
@@ -297,6 +319,117 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
       expect(r.error?.code).toBe('PGRST202'); // function not found in the schema cache
       const still = await svc.rpc('svc_get_profile', { p_user: organizerId });
       expect(still.data).not.toBeNull();
+    });
+  });
+
+  describe('volunteer sign-up without an account (0017, D48)', () => {
+    const create = (over: Record<string, unknown> = {}) =>
+      svc.rpc('svc_create_volunteer_signup', {
+        p_display_name: 'Voluntária RLS',
+        p_email: volunteerEmail,
+        p_phone: '+5531988887777',
+        p_territory_id: hood,
+        p_consent_version: 'v1',
+        p_contact_opt_in: true,
+        ...over,
+      });
+    type Reg = { id: string; source: string; user_id: string | null; display_name: string };
+
+    it('anon cannot insert into app_private.volunteer_signups (public path or Accept-Profile)', async () => {
+      const row = {
+        display_name: 'Invasor',
+        email: `mm-rls-anon2-${tag}@example.org`,
+        phone_e164: '+5531999990000',
+        consent_version: 'v1',
+      };
+      const viaPublic = await anon.from('volunteer_signups').insert(row);
+      expect(DENIED).toContain(viaPublic.status);
+      const viaProfile = await anon.schema('app_private').from('volunteer_signups').insert(row);
+      expect(DENIED).toContain(viaProfile.status);
+      const count = await svc.rpc('svc_count_registrations', { p_q: `mm-rls-anon` });
+      expect(count.data).toBe(0);
+    });
+
+    it('insert is unique by lower(email): a repeat (other case/data) never overwrites', async () => {
+      const first = await create();
+      expect(first.error).toBeNull();
+      expect(first.data).toEqual({ created: true });
+      const again = await create({
+        p_email: volunteerEmail.toUpperCase(),
+        p_display_name: 'Outra Pessoa',
+        p_phone: '+5531977776666',
+        p_contact_opt_in: false,
+      });
+      expect(again.error).toBeNull();
+      expect(again.data).toEqual({ created: false });
+      const list = await svc.rpc('svc_list_registrations', { p_q: volunteerEmail, p_limit: 10 });
+      const rows = list.data as (Reg & { phone: string; contact_opt_in: boolean })[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        source: 'volunteer',
+        user_id: null,
+        display_name: 'Voluntária RLS',
+        phone: '+5531988887777',
+        contact_opt_in: true,
+        email_verification_state: 'unverified',
+        account_state: null,
+      });
+    });
+
+    it('an invalid phone is refused by the column constraint (23514)', async () => {
+      const bad = await create({ p_email: `mm-rls-bad-${tag}@example.org`, p_phone: '123' });
+      expect(bad.error?.code).toBe('23514');
+    });
+
+    it('admin list = volunteers ∪ profiles, keyset (created_at desc, id desc) without gaps/dups', async () => {
+      const total = await svc.rpc('svc_count_registrations', { p_q: tag });
+      expect(total.error).toBeNull();
+      // organizer + other organizer + pending profile + 1 volunteer
+      expect(total.data).toBe(4);
+      const seen: Reg[] = [];
+      let after: { at: string; id: string } | null = null;
+      for (let i = 0; i < 10; i++) {
+        const page: { data: unknown; error: unknown } = await svc.rpc('svc_list_registrations', {
+          p_q: tag,
+          p_limit: 1,
+          p_after_created_at: after?.at ?? null,
+          p_after_id: after?.id ?? null,
+        });
+        expect(page.error).toBeNull();
+        const rows = page.data as (Reg & { created_at: string })[];
+        if (rows.length === 0) break;
+        seen.push(...rows);
+        after = { at: rows[0]!.created_at, id: rows[0]!.id };
+      }
+      expect(seen).toHaveLength(4);
+      expect(new Set(seen.map((r) => r.id)).size).toBe(4);
+      expect(seen.filter((r) => r.source === 'volunteer')).toHaveLength(1);
+      expect(
+        seen
+          .filter((r) => r.source === 'account')
+          .map((r) => r.user_id)
+          .sort(),
+      ).toEqual([organizerId, otherOrganizerId, pendingProfileId].sort());
+    });
+
+    it('metrics count both sources (by_source) and stay aggregate-only', async () => {
+      const m = await svc.rpc('svc_admin_metrics', { p_days: 7 });
+      expect(m.error).toBeNull();
+      const profiles = (
+        m.data as { profiles: { total: number; by_source: { volunteer: number; account: number } } }
+      ).profiles;
+      expect(profiles.by_source.volunteer).toBeGreaterThanOrEqual(1);
+      expect(profiles.by_source.account).toBeGreaterThanOrEqual(3);
+      expect(profiles.total).toBe(profiles.by_source.volunteer + profiles.by_source.account);
+      expect(JSON.stringify(m.data)).not.toContain(volunteerEmail);
+    });
+
+    it('svc_erase_volunteer_signup removes the row (LGPD) and is idempotent', async () => {
+      const tmp = `mm-rls-erase-${tag}@example.org`;
+      expect((await create({ p_email: tmp })).data).toEqual({ created: true });
+      expect((await svc.rpc('svc_erase_volunteer_signup', { p_email: tmp })).data).toBe(1);
+      expect((await svc.rpc('svc_erase_volunteer_signup', { p_email: tmp })).data).toBe(0);
+      expect((await svc.rpc('svc_count_registrations', { p_q: tmp })).data).toBe(0);
     });
   });
 

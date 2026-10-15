@@ -54,7 +54,7 @@ describe('profile data after a Clerk registration (phone editable, masked, audit
   async function registered() {
     const s = setup();
     const a = s.users.signedUp('vitima@example.org');
-    const reg = await s.request('/api/v1/registrations', {
+    const reg = await s.request('/api/v1/registrations/account', {
       method: 'POST',
       token: a.token,
       json: registration({ email: 'vitima@example.org' }),

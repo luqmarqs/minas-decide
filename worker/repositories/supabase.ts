@@ -28,6 +28,7 @@ import type {
   NewGroupManager,
   NewGroupProposal,
   NewProfile,
+  NewVolunteerSignup,
   ProfilePatch,
   ProfileRow,
   PublicActivityQuery,
@@ -415,26 +416,37 @@ export class SupabaseRepo implements Repo {
     return this.rpc('svc_remove_admin', { p_user: userId, p_actor: actor });
   }
 
-  async listProfiles(opts: {
+  async createVolunteerSignup(v: NewVolunteerSignup): Promise<{ created: boolean }> {
+    return this.rpc('svc_create_volunteer_signup', {
+      p_display_name: v.display_name,
+      p_email: v.email,
+      p_phone: v.phone,
+      p_territory_id: v.territory_id,
+      p_consent_version: v.consent_version,
+      p_contact_opt_in: v.contact_opt_in,
+    });
+  }
+
+  async listRegistrations(opts: {
     after: Cursor | null;
     limit: number;
     q: string | null;
   }): Promise<AdminRegistration[]> {
-    const data = await this.rpc('svc_list_profiles', {
+    const data = await this.rpc('svc_list_registrations', {
       p_after_created_at: opts.after?.at ?? null,
-      p_after_user_id: opts.after?.id ?? null,
+      p_after_id: opts.after?.id ?? null,
       p_limit: opts.limit,
       p_q: opts.q,
     });
     return z.array(AdminRegistration).parse(data ?? []);
   }
 
-  async countProfiles(q: string | null): Promise<number> {
+  async countRegistrations(q: string | null): Promise<number> {
     return z
       .number()
       .int()
       .nonnegative()
-      .parse(await this.rpc('svc_count_profiles', { p_q: q }));
+      .parse(await this.rpc('svc_count_registrations', { p_q: q }));
   }
 
   async adminMetrics(days: number): Promise<AdminInternalMetrics> {

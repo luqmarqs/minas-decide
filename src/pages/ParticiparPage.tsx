@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router';
 import { TerritoryId } from '@shared/contracts/territory.ts';
 import { PageShell } from '@/components/layouts/PageShell';
-import { ParticipationPanel } from '@/features/registration/ParticipationPanel';
+import { RegistrationForm } from '@/features/registration/RegistrationForm';
 
 export default function ParticiparPage() {
   const [sp] = useSearchParams();
@@ -11,9 +11,9 @@ export default function ParticiparPage() {
   return (
     <PageShell
       title="Participar da campanha"
-      lead="Faça parte da campanha de Lula em Minas Gerais. Cadastro rápido com nome, e-mail, WhatsApp e território; depois mostramos o grupo da campanha na sua região."
+      lead="Faça parte da campanha de Lula em Minas Gerais. Cadastro rápido, sem criar conta: nome, e-mail, WhatsApp e território; depois mostramos o grupo da campanha na sua região."
     >
-      <ParticipationPanel territoryId={territory} />
+      <RegistrationForm initialTerritoryId={territory} />
     </PageShell>
   );
 }

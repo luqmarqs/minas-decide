@@ -1,0 +1,41 @@
+/* Manifesto da home (D47): numerais vazados em ocre, grifo sol nos trechos-chave e faixa sol
+   de fechamento. Só tokens de marca; a faixa sol é uma "ilha" (igual em claro e escuro). */
+
+.manifesto-num {
+  color: var(--brand-ocre);
+}
+:root[data-theme='dark'] .manifesto-num {
+  color: var(--brand-sun);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .manifesto-num {
+    color: var(--brand-sun);
+  }
+}
+
+/* Grifo: sublinhado grosso sol sob o texto (decorativo; o texto mantém a cor e o contraste). */
+.manifesto-mark {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration-line: underline;
+  text-decoration-color: var(--brand-sun);
+  text-decoration-thickness: 0.32em;
+  text-underline-offset: -0.12em;
+  text-decoration-skip-ink: none;
+}
+
+.manifesto-sun {
+  --color-text-primary: var(--brand-ink);
+  --color-text-secondary: #3a2f1c; /* ≈ 7:1 sobre o sol */
+  --color-primary: var(--brand-ink);
+  --color-secondary: #3a2f1c;
+  --color-action-primary: var(--brand-ink);
+  --color-action-hover: #000;
+  --color-action-active: #000;
+  --color-action: var(--brand-ink);
+  --color-text-on-action: var(--brand-cream);
+  --color-on-action: var(--brand-cream);
+  --color-focus: var(--brand-ink);
+  background: var(--brand-sun);
+  color: var(--brand-ink);
+}

@@ -143,12 +143,12 @@ describe('QA-1 findings (it.fails = vulnerable today; it = fixed, kept as regres
     s.users.verified(undefined, 'existe@example.org'); // existing profile
     const a = s.users.signedUp('atacante-a@example.org');
     const b = s.users.signedUp('atacante-b@example.org');
-    const taken = await s.request('/api/v1/registrations', {
+    const taken = await s.request('/api/v1/registrations/account', {
       method: 'POST',
       token: a.token,
       json: registration({ email: 'existe@example.org' }),
     });
-    const free = await s.request('/api/v1/registrations', {
+    const free = await s.request('/api/v1/registrations/account', {
       method: 'POST',
       token: b.token,
       json: registration({ email: 'naoexiste@example.org' }),
