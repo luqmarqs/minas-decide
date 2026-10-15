@@ -102,17 +102,17 @@ describe('/criar-atividade guard', () => {
     );
   }
 
-  it('no session → "Entrar com código" (with next) and "Criar conta"; no API call', async () => {
+  it('no session → "Entrar com código" (with next) and "Fazer cadastro"; no API call', async () => {
     const fetchMock = stubFetch();
     renderCriar();
-    expect(await screen.findByText(/e-mail verificado por/)).toBeInTheDocument();
+    expect(await screen.findByText(/e-mail do seu cadastro/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Entrar com código' })).toHaveAttribute(
       'href',
       '/entrar?next=%2Fcriar-atividade',
     );
-    expect(screen.getByRole('link', { name: 'Criar conta' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Fazer cadastro' })).toHaveAttribute(
       'href',
-      '/criar-conta?next=%2Fcriar-atividade',
+      '/#participar',
     );
     expect(callsTo(fetchMock, '/api/v1/')).toHaveLength(0);
   });

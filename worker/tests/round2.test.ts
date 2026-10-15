@@ -53,13 +53,14 @@ const proposal = (over: Record<string, unknown> = {}) => ({
 describe('profile data after a Clerk registration (phone editable, masked, audited)', () => {
   async function registered() {
     const s = setup();
-    const a = s.users.signedUp('vitima@example.org');
-    const reg = await s.request('/api/v1/registrations/account', {
+    const reg = await s.request('/api/v1/registrations', {
       method: 'POST',
-      token: a.token,
       json: registration({ email: 'vitima@example.org' }),
     });
-    expect(reg.status).toBe(201);
+    expect(reg.status).toBe(200);
+    // D49: the login with the same verified e-mail is linked on GET /me
+    const a = s.users.signedUp('vitima@example.org');
+    await s.request('/api/v1/me', { token: a.token });
     return { s, a };
   }
 

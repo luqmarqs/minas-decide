@@ -18,6 +18,7 @@ import { useMe, useSession } from '@/lib/auth';
 import { ActivityEditor } from '@/features/activities/ActivityEditor';
 import { cancelActivity, myActivitiesKey, useMyActivities } from '@/features/activities/api';
 import { SignedOutPanel } from '@/features/auth/SignedOutPanel';
+import { RegistrationRequired } from '@/features/registration/RegistrationRequired';
 import { submitErrorMessage } from '@/features/registration/formErrors';
 
 const STATUS: Record<ActivityStatus, { label: string; variant: BadgeVariant }> = {
@@ -45,7 +46,7 @@ export default function MinhasAtividadesPage() {
   } else if (!active) {
     body = (
       <SignedOutPanel next="/minhas-atividades">
-        Entre com a sua conta para ver as atividades que você propôs.
+        Entre com o e-mail do seu cadastro para ver as atividades que você propôs.
       </SignedOutPanel>
     );
   } else if (me.error) {
@@ -56,6 +57,8 @@ export default function MinhasAtividadesPage() {
         retrying={me.isFetching}
       />
     );
+  } else if (me.data?.registration_required) {
+    body = <RegistrationRequired email={active.user.email} />;
   } else {
     body = <MyActivityList userId={active.user.id} />;
   }

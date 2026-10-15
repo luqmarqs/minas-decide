@@ -165,15 +165,15 @@ const Count = z.number().int().nonnegative();
 const DayCount = z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), count: Count });
 
 /**
- * Output of `public.svc_admin_metrics(p_days)` (0015, replaced by 0017). `profiles` counts ALL
- * registrations: volunteers without an account (D48) + account profiles; `by_source` splits them.
+ * Output of `public.svc_admin_metrics(p_days)` (0015, replaced by 0018). `profiles` counts the
+ * registrations (one per person, D49); `organizers` = those with a linked login.
  */
 export const AdminInternalMetrics = z.object({
   profiles: z.object({
     total: Count,
     last_7d: Count,
     last_30d: Count,
-    by_source: z.object({ volunteer: Count, account: Count }),
+    organizers: Count,
     by_day: z.array(DayCount),
   }),
   activities: z.object({
@@ -245,19 +245,15 @@ export type AdminRegistrationsQuery = z.infer<typeof AdminRegistrationsQuery>;
 /** GET /admin/registrations/export.csv (same filter, no cursor/limit). */
 export const AdminRegistrationsExportQuery = AdminRegistrationsQuery.pick({ q: true });
 
-export const RegistrationSource = z.enum(['volunteer', 'account']);
-export type RegistrationSource = z.infer<typeof RegistrationSource>;
-
 /**
- * One registration. PERSONAL DATA: admin only, every access audited, never in public routes.
- * `source`: 'volunteer' = public form without an account (D48, never verified); 'account' =
- * organizer profile tied to a Clerk account (ADR 0005). `id` is the keyset/row key (volunteer
- * uuid or the Clerk user id).
+ * One registration (D49: ONE row per person, from the home form). PERSONAL DATA: admin only,
+ * every access audited, never in public routes. `organizer` = a Clerk login is linked to it
+ * (name/phone/territory then come from the organizer profile). `id` is the keyset/row key.
  */
 export const AdminRegistration = z.object({
   id: z.string().min(1).max(80),
-  source: RegistrationSource,
-  /** Clerk user id; null for volunteers without an account */
+  organizer: z.boolean(),
+  /** Clerk user id of the linked login; null when not an organizer */
   user_id: ClerkUserId.nullable(),
   display_name: z.string(),
   email: z.string(),
@@ -267,8 +263,7 @@ export const AdminRegistration = z.object({
   /** agreed to receive campaign communications */
   contact_opt_in: z.boolean(),
   consent_version: z.string(),
-  email_verification_state: z.enum(['unverified', 'pending', 'verified']),
-  /** null for volunteers (no account) */
+  /** organizer profile state; null when not an organizer */
   account_state: z.enum(['active', 'suspended']).nullable(),
   created_at: z.string(),
 });

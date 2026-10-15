@@ -94,6 +94,7 @@ describe.skipIf(!configured)('Clerk live: registration -> /me -> activity -> RSV
     if (!svc) return;
     await svc.from('territories').delete().eq('id', muni); // activities/RSVPs cascade
     for (const id of created) await deleteClerkTestUser(clerk!, svc, id);
+    if (person) await svc.rpc('svc_erase_volunteer_signup', { p_email: person.email });
   });
 
   it('Clerk ids and tokens are real (user_…, RS256 JWT with sub = user id, no e-mail claims)', async () => {
@@ -134,7 +135,7 @@ describe.skipIf(!configured)('Clerk live: registration -> /me -> activity -> RSV
     console.log(`CLERK_LIVE_me_ms=${me.ms}`);
   });
 
-  it('registration with the verified Clerk e-mail -> 201 verified; re-send -> 200', async () => {
+  it('D49: public registration (no token) + login with the same verified e-mail -> organizer', async () => {
     const body = {
       display_name: 'Pessoa Clerk QA',
       email: person.email,
@@ -145,24 +146,16 @@ describe.skipIf(!configured)('Clerk live: registration -> /me -> activity -> RSV
       consent_version: '2026-10',
       turnstile_token: turnstile(),
     };
-    const reg = await api('/registrations/account', {
+    const reg = await api('/registrations', { method: 'POST', json: body });
+    expect(reg.res.status).toBe(200);
+    expect(reg.json.data).toEqual({ territory_id: muni, status: 'received' });
+    const again = await api('/registrations', {
       method: 'POST',
-      token: await person.token(),
-      json: body,
-    });
-    expect(reg.res.status).toBe(201);
-    expect(reg.json.data).toEqual({
-      profile_id: person.id,
-      territory_id: muni,
-      email_verification_state: 'verified',
-      session_state: 'verified',
-    });
-    const again = await api('/registrations/account', {
-      method: 'POST',
-      token: await person.token(),
       json: { ...body, turnstile_token: turnstile() },
     });
-    expect(again.res.status).toBe(200);
+    expect(again.json.data).toEqual(reg.json.data);
+    const linked = await api('/me', { token: await person.token() });
+    expect(linked.json.data?.registration_required).toBe(false);
     const profile = await svc.rpc('svc_get_profile', { p_user: person.id });
     expect((profile.data as { email_contact: string }).email_contact).toBe(person.email);
     expect((profile.data as { review_required_at: string | null }).review_required_at).toBeNull();

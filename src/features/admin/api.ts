@@ -21,6 +21,7 @@ import {
   type GroupManagerInput,
 } from '@shared/contracts/admin.ts';
 import { ApiError } from '@shared/contracts/api.ts';
+import { MyActivity, type AdminActivityInput } from '@shared/contracts/activities.ts';
 import { ApiClientError, buildApiUrl, GENERIC_ERROR_MESSAGES } from '@/lib/api';
 import { authedRequest, getSessionToken } from '@/lib/auth';
 
@@ -97,6 +98,11 @@ export const ACTIVITY_STATUS_LABEL: Record<string, string> = {
   archived: 'Arquivada',
   suspended: 'Suspensa',
 };
+
+/** D50: admin-created activity, published at once; idempotent by `idempotency_key`. */
+export function createAdminActivity(input: AdminActivityInput) {
+  return authedRequest('/admin/activities', MyActivity, { method: 'POST', body: input });
+}
 
 export function fetchGroupQueue(status: string, cursor: string | null, signal?: AbortSignal) {
   return authedRequest('/admin/queue', GroupQueue, {

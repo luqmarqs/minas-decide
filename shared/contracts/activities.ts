@@ -97,6 +97,16 @@ export const ActivityPatch = ActivityInput.omit({ public_contact_opt_in: true })
 });
 export type ActivityPatch = z.infer<typeof ActivityPatch>;
 
+/**
+ * POST /admin/activities (D50): an admin creates an activity that is published at once. Same
+ * fields/limits as the organizer form; the idempotency key is required (retries return the
+ * same activity). No Turnstile (fresh admin session).
+ */
+export const AdminActivityInput = ActivityInput.omit({ turnstile_token: true }).extend({
+  idempotency_key: z.string().min(8).max(128),
+});
+export type AdminActivityInput = z.infer<typeof AdminActivityInput>;
+
 export const MyActivity = PublicActivity.omit({ status: true }).extend({
   status: ActivityStatus,
   review_reason: z.string().nullable(),

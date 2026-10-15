@@ -139,26 +139,26 @@ describe.skipIf(!configured)('QA-2 live Worker + TARGET dev', () => {
 
   // ADR 0005: Q01/Q02 (magic-link promotion / GoTrue email_change pre-hijack) and Q03/Q04
   // (Supabase MFA) targeted Supabase Auth flows that no longer exist. Their Clerk equivalents:
-  it('Q01 (Clerk): an attacker cannot register a profile with someone else’s e-mail', async () => {
+  it('Q01 (Clerk, D49): a login is linked only to the registration of its OWN verified e-mail', async () => {
     const att = await clerkUser('att');
     const victimEmail = `mm-qa2-victim+${tag}@example.org`;
-    const reg = await api('/registrations/account', {
-      method: 'POST',
-      token: await att.token(),
-      json: registration(victimEmail),
-    });
-    expect(reg.res.status).toBe(400);
-    expect(reg.text).not.toContain(victimEmail);
-    const prof = await svc.rpc('svc_get_profile', { p_user: att.id });
-    expect(prof.data).toBeNull();
-    // with its own (Clerk-verified) e-mail the registration works and is verified at once
-    const ok = await api('/registrations/account', {
-      method: 'POST',
-      token: await att.token(),
-      json: registration(att.email),
-    });
-    expect(ok.res.status).toBe(201);
-    expect(ok.json.data?.session_state).toBe('verified');
+    try {
+      const reg = await api('/registrations', { method: 'POST', json: registration(victimEmail) });
+      expect(reg.res.status).toBe(200);
+      expect(reg.text).not.toContain(victimEmail);
+      const me = await api('/me', { token: await att.token() });
+      expect(me.json.data?.registration_required).toBe(true);
+      const prof = await svc.rpc('svc_get_profile', { p_user: att.id });
+      expect(prof.data).toBeNull();
+      // with its own (Clerk-verified) e-mail the login becomes organizer
+      await api('/registrations', { method: 'POST', json: registration(att.email) });
+      const me2 = await api('/me', { token: await att.token() });
+      expect(me2.json.data?.registration_required).toBe(false);
+    } finally {
+      for (const email of [victimEmail, att.email]) {
+        await svc.rpc('svc_erase_volunteer_signup', { p_email: email });
+      }
+    }
   });
 
   it('Q03 (Clerk): Supabase Auth is closed to clients (anonymous sign-in disabled)', async () => {

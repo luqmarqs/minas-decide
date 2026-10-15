@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { signOut, useMe, type AuthSession } from '@/lib/auth';
+import { joinHref, type JoinPrefillState } from '@/features/registration/join';
 
 /**
  * Account menu for a signed-in person (Clerk session = verified e-mail). Shows the name,
@@ -58,22 +59,41 @@ export function SessionMenuActive({ session }: { session: AuthSession }) {
           aria-label="Conta"
           className="absolute right-0 mt-2 w-56 rounded-card border border-border bg-surface-raised p-1 shadow-raised"
         >
-          <Link
-            role="menuitem"
-            to="/minhas-atividades"
-            className={item}
-            onClick={() => setOpen(false)}
-          >
-            Minhas atividades
-          </Link>
-          <Link
-            role="menuitem"
-            to="/criar-atividade"
-            className={item}
-            onClick={() => setOpen(false)}
-          >
-            Propor atividade
-          </Link>
+          {me.data?.registration_required ? (
+            // D49: logged in without a registration -> the only path is the home form.
+            <Link
+              role="menuitem"
+              to={joinHref()}
+              state={
+                session.user.email
+                  ? ({ prefillEmail: session.user.email } satisfies JoinPrefillState)
+                  : undefined
+              }
+              className={item}
+              onClick={() => setOpen(false)}
+            >
+              Faça seu cadastro primeiro
+            </Link>
+          ) : (
+            <>
+              <Link
+                role="menuitem"
+                to="/minhas-atividades"
+                className={item}
+                onClick={() => setOpen(false)}
+              >
+                Minhas atividades
+              </Link>
+              <Link
+                role="menuitem"
+                to="/criar-atividade"
+                className={item}
+                onClick={() => setOpen(false)}
+              >
+                Propor atividade
+              </Link>
+            </>
+          )}
           {me.data?.is_admin ? (
             <Link role="menuitem" to="/admin" className={item} onClick={() => setOpen(false)}>
               Moderação

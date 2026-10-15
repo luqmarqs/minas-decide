@@ -39,23 +39,6 @@ export const RegistrationResult = z.object({
 });
 export type RegistrationResult = z.infer<typeof RegistrationResult>;
 
-/** POST /registrations/account — same body as the volunteer form (organizer profile). */
-export const AccountProfileInput = RegistrationInput;
-export type AccountProfileInput = RegistrationInput;
-
-/**
- * POST /registrations/account — organizer profile on top of a Clerk session (ADR 0005; the
- * volunteer sign-up no longer needs an account since D48).
- */
-export const AccountProfileResult = z.object({
-  profile_id: ClerkUserId,
-  territory_id: TerritoryId,
-  /** Clerk verifies the e-mail before any session exists (ADR 0005) */
-  email_verification_state: z.literal('verified'),
-  session_state: z.literal('verified'),
-});
-export type AccountProfileResult = z.infer<typeof AccountProfileResult>;
-
 export const MeResponse = z.object({
   user_id: ClerkUserId,
   display_name: z.string().nullable(),
@@ -76,6 +59,11 @@ export const MeResponse = z.object({
    * `email_masked` shows the Clerk address. Absent otherwise.
    */
   email_sync_conflict: z.boolean().optional(),
+  /**
+   * D49: signed in, but there is no registration (home form) for the verified e-mail, so the
+   * account is not an organizer. The UI asks for the registration first.
+   */
+  registration_required: z.boolean().optional().default(false),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 

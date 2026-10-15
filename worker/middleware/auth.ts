@@ -168,14 +168,40 @@ export async function syncProfileEmail(
 }
 
 /**
- * Organizer = Clerk session with a verified primary e-mail + a profile created through the
- * guarded registration flow (Turnstile + consent), active and verified.
+ * D49: links the Clerk login to the registration (home form) with the same VERIFIED e-mail and
+ * creates the organizer profile from it (svc_link_organizer, transactional, idempotent). Never
+ * runs for an unverified e-mail. A registration already owned by another live organizer account
+ * is not taken over (logged without PII).
+ */
+export async function linkOrganizer(c: Context<AppBindings>, user: AuthUser): Promise<void> {
+  if (!user.email || !user.email_confirmed) return;
+  const link = await c.get('deps').repo.linkOrganizer(user.id, user.email);
+  if (link.conflict) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        event: 'organizer_link_conflict',
+        request_id: c.get('requestId'),
+      }),
+    );
+  }
+}
+
+/**
+ * Organizer = Clerk session with a verified primary e-mail + an organizer profile, active and
+ * verified. The profile comes from the registration with the same e-mail (D49): when it is
+ * missing, the link is attempted here; without a registration -> 403 "Faça seu cadastro".
  */
 export async function assertOrganizer(c: Context<AppBindings>, user: AuthUser): Promise<void> {
   if (!user.email_confirmed) throw fail('EMAIL_NOT_VERIFIED');
-  const profile = await c.get('deps').repo.getProfile(user.id);
-  // QA-1 F01: accounts that never went through POST /registrations cannot organize.
-  if (!profile) throw fail('FORBIDDEN');
+  const { repo } = c.get('deps');
+  let profile = await repo.getProfile(user.id);
+  if (!profile) {
+    await linkOrganizer(c, user);
+    profile = await repo.getProfile(user.id);
+  }
+  // QA-1 F01 / D49: logins without a registration cannot organize.
+  if (!profile) throw fail('FORBIDDEN', 'Faça seu cadastro primeiro, com o mesmo e-mail.');
   if (profile.account_state !== 'active') throw fail('FORBIDDEN');
   if (profile.email_verification_state !== 'verified') throw fail('EMAIL_NOT_VERIFIED');
   // Organizer actions keep refusing while the contact e-mail cannot be synced (unchanged

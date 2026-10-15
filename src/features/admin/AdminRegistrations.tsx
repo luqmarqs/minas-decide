@@ -33,18 +33,10 @@ function Row({ r }: { r: AdminRegistration }) {
       </td>
       <td data-label="Território">{r.territory_name ?? '—'}</td>
       <td data-label="Comunicações">{r.contact_opt_in ? 'sim' : 'não'}</td>
-      <td data-label="Situação">
+      <td data-label="Organizador">
         <span className="flex flex-wrap justify-end gap-1 md:justify-start">
-          {r.source === 'volunteer' ? (
-            <span>voluntário, sem conta</span>
-          ) : r.account_state === 'suspended' ? (
-            <Badge variant="warning">conta suspensa</Badge>
-          ) : (
-            <span>conta ativa</span>
-          )}
-          {r.source === 'account' && r.email_verification_state !== 'verified' ? (
-            <Badge variant="info">e-mail não verificado</Badge>
-          ) : null}
+          {r.organizer ? <Badge variant="info">organizador</Badge> : <span>—</span>}
+          {r.account_state === 'suspended' ? <Badge variant="warning">suspenso</Badge> : null}
         </span>
       </td>
       <td data-label="Cadastro" className="adm-reg-num">
@@ -180,7 +172,7 @@ export function AdminRegistrations() {
                 <th scope="col">WhatsApp</th>
                 <th scope="col">Território</th>
                 <th scope="col">Comunicações</th>
-                <th scope="col">Situação</th>
+                <th scope="col">Organizador</th>
                 <th scope="col">Cadastro</th>
               </tr>
             </thead>

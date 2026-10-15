@@ -44,12 +44,12 @@ export default function ObrigadoPage() {
         )}
         {fromForm ? (
           <p className="text-secondary">
-            Guardamos seu contato para a equipe da campanha falar com você; não foi criada nenhuma
-            conta. Para propor atividades no mapa, é preciso{' '}
-            <Link to="/criar-conta" className="underline">
-              criar uma conta de organizador
-            </Link>
-            .
+            Guardamos seu contato para a equipe da campanha falar com você. Para propor atividades
+            no mapa,{' '}
+            <Link to="/entrar?next=%2Fcriar-atividade" className="underline">
+              entre com o mesmo e-mail
+            </Link>{' '}
+            (enviamos um código; não há senha).
           </p>
         ) : null}
         <div className="flex flex-wrap gap-2">

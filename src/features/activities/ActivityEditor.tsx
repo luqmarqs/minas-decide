@@ -181,6 +181,13 @@ export interface ActivityEditorProps {
   draftOwner?: string;
   onSaved: (activity: MyActivity) => void;
   onCancel?: () => void;
+  /**
+   * Create mode only: replaces POST /activities (D50: the admin panel publishes directly via
+   * POST /admin/activities). Same fields and client validation.
+   */
+  submitCreate?: (input: ActivityInput) => Promise<MyActivity>;
+  /** Label of the create button (default "Enviar para análise"). */
+  createLabel?: string;
 }
 
 /** Criar/editar atividade (spec §3.6, §12.9). */
@@ -191,6 +198,8 @@ export function ActivityEditor({
   draftOwner,
   onSaved,
   onCancel,
+  submitCreate,
+  createLabel = 'Enviar para análise',
 }: ActivityEditorProps) {
   const [draft, setDraft] = useState<ActivityDraft>(() =>
     initial ? draftFrom(initial) : (loadDraft(draftOwner) ?? EMPTY_DRAFT),
@@ -320,7 +329,7 @@ export function ActivityEditor({
       const saved =
         mode === 'edit' && initial && body
           ? await patchActivity(initial.id, body)
-          : await createActivity(input);
+          : await (submitCreate ?? createActivity)(input);
       if (mode === 'create' && draftOwner) writeStoredDraft(draftOwner, null);
       onSaved(saved);
     } catch (err) {
@@ -634,7 +643,7 @@ export function ActivityEditor({
           loadingText="Enviando…"
           disabled={!!blockedReason}
         >
-          {mode === 'edit' ? 'Salvar alterações' : 'Enviar para análise'}
+          {mode === 'edit' ? 'Salvar alterações' : createLabel}
         </Button>
         {onCancel ? (
           <Button variant="ghost" onClick={onCancel}>

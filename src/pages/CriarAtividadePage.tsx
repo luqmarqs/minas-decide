@@ -9,6 +9,7 @@ import { formatActivityWhen } from '@/lib/format';
 import { useMe, useSession } from '@/lib/auth';
 import { ActivityEditor } from '@/features/activities/ActivityEditor';
 import { SignedOutPanel } from '@/features/auth/SignedOutPanel';
+import { RegistrationRequired } from '@/features/registration/RegistrationRequired';
 
 const NEXT = '/criar-atividade';
 
@@ -51,8 +52,8 @@ export default function CriarAtividadePage() {
   } else if (session.status === 'none') {
     body = (
       <SignedOutPanel next={NEXT}>
-        Para organizar uma atividade é preciso entrar com a sua conta (e-mail verificado por
-        código). Assim a equipe sabe com quem falar, e o mapa não recebe propostas anônimas.
+        Para organizar uma atividade, entre com o e-mail do seu cadastro (enviamos um código). Assim
+        a equipe sabe com quem falar, e o mapa não recebe propostas anônimas.
       </SignedOutPanel>
     );
   } else if (me.error) {
@@ -66,21 +67,12 @@ export default function CriarAtividadePage() {
     );
   } else if (me.data?.account_state === 'suspended') {
     body = <Note tone="warning">Sua conta está suspensa e não pode propor atividades.</Note>;
-  } else if (me.data && me.data.selected_territory_id === null && me.data.phone_masked === null) {
-    // Signed in, but the organizer profile was never completed (D48: the volunteer sign-up does
-    // not create one).
+  } else if (me.data?.registration_required) {
+    // D49: signed in, but no registration with this e-mail yet.
     body = (
-      <div className="flex flex-col gap-4">
-        <Note>
-          Falta completar sua conta de organizador (nome, WhatsApp e território) antes de propor
-          atividades.
-        </Note>
-        <div>
-          <ButtonLink to={`/criar-conta?next=${encodeURIComponent(NEXT)}`}>
-            Completar conta
-          </ButtonLink>
-        </div>
-      </div>
+      <RegistrationRequired
+        email={session.status === 'active' ? session.session.user.email : null}
+      />
     );
   } else {
     body = <ActivityEditor mode="create" draftOwner={me.data?.user_id} onSaved={setSaved} />;

@@ -1,167 +1,173 @@
 import { describe, expect, it } from 'vitest';
 import { body, setup } from './fakes.ts';
 
-const registration = (over: Record<string, unknown> = {}) => ({
-  display_name: 'Maria Voluntária',
-  email: `maria${Math.floor(Math.random() * 1e9)}@example.org`,
-  phone: '(31) 99999-8888',
-  territory_id: 'mg-3140001-centro',
-  terms_accepted: true,
-  contact_opt_in: true,
-  consent_version: 'v1',
-  turnstile_token: `tok-${Math.random()}`,
-  ...over,
-});
+type T = ReturnType<typeof setup>;
 
-describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
-  it('T03: invalid e-mail -> 400 with field error and nothing stored', async () => {
-    const { request, users, repo } = setup();
-    const s = users.signedUp();
-    const res = await request('/api/v1/registrations/account', {
+/** The home registration (D48/D49), stored as the public route would store it. */
+async function register(t: T, email: string, over: Record<string, unknown> = {}) {
+  await t.repo.createVolunteerSignup({
+    display_name: 'Maria Voluntária',
+    email,
+    phone: '+5531999998888',
+    territory_id: 'mg-3140001-centro',
+    consent_version: 'v1',
+    contact_opt_in: true,
+    ...over,
+  });
+}
+
+const ACTIVITY = {
+  title: 'Panfletagem no centro',
+  type: 'panfletagem',
+  description: 'Distribuição de material da campanha na praça.',
+  territory_id: 'mg-3140001',
+  public_address: 'Praça Gomes Freire, Mariana',
+  coordinates: [-43.416, -20.378],
+  location_confirmed: true,
+  starts_at: '2026-10-20T13:00:00.000Z',
+  ends_at: null,
+  timezone: 'America/Sao_Paulo',
+  public_contact_opt_in: false,
+};
+
+describe('D49: login linked to the registration by verified e-mail', () => {
+  it('login of an e-mail WITH a registration becomes organizer via GET /me (profile from the registration)', async () => {
+    const t = setup();
+    await register(t, 'maria.silva@example.org');
+    const s = t.users.signedUp('maria.silva@example.org');
+    const res = await t.request('/api/v1/me', { token: s.token });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    const me = (await body(res)).data;
+    expect(me).toMatchObject({
+      user_id: s.user.id,
+      display_name: 'Maria Voluntária',
+      email_verified: true,
+      registration_required: false,
+      selected_territory_id: 'mg-3140001-centro',
+    });
+    expect(me?.email_masked).toBe('ma***@example.org');
+    expect(JSON.stringify(me)).not.toContain('99999');
+    const profile = t.repo.profiles.get(s.user.id);
+    expect(profile).toMatchObject({
+      email_contact: 'maria.silva@example.org',
+      phone_e164: '+5531999998888',
+      email_verification_state: 'verified',
+      account_state: 'active',
+    });
+    expect(t.repo.volunteers.get('maria.silva@example.org')?.user_id).toBe(s.user.id);
+    expect(t.repo.audit.filter((a) => a.action === 'organizer.link')).toEqual([
+      { actor: s.user.id, action: 'organizer.link', entity_id: s.user.id, reason: null },
+    ]);
+    // and can organize right away
+    const act = await t.request('/api/v1/activities', {
       method: 'POST',
       token: s.token,
-      json: registration({ email: 'nope' }),
+      json: ACTIVITY,
     });
-    expect(res.status).toBe(400);
-    const json = await body(res);
-    expect(json.error?.code).toBe('VALIDATION_ERROR');
-    expect(json.error?.fields?.email).toBeDefined();
-    expect(repo.profiles.size).toBe(0);
+    expect(act.status).toBe(201);
   });
 
-  it('T04: missing or invalid Turnstile token is blocked server-side', async () => {
-    const { request, users, repo } = setup();
-    const s = users.signedUp();
-    const { turnstile_token: _omit, ...noToken } = registration({ email: s.user.email });
-    const missing = await request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: s.token,
-      json: noToken,
-    });
-    expect(missing.status).toBe(400);
-    expect((await body(missing)).error?.fields?.turnstile_token).toBeDefined();
-    const invalid = await request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: s.token,
-      json: registration({ email: s.user.email, turnstile_token: 'bad-1' }),
-    });
-    expect((await body(invalid)).error?.code).toBe('TURNSTILE_FAILED');
-    expect(repo.profiles.size).toBe(0);
+  it('link is idempotent: repeated /me and organizer calls keep ONE profile and ONE link', async () => {
+    const t = setup();
+    await register(t, 'idem@example.org');
+    const s = t.users.signedUp('idem@example.org');
+    for (let i = 0; i < 3; i++) await t.request('/api/v1/me', { token: s.token });
+    await t.request('/api/v1/my-activities', { token: s.token });
+    expect(t.repo.profiles.size).toBe(1);
+    expect([...t.repo.volunteers.values()].filter((v) => v.user_id === s.user.id)).toHaveLength(1);
+    expect(t.repo.audit.filter((a) => a.action === 'organizer.link')).toHaveLength(1);
   });
 
-  it('requires a Clerk session: 401 without token, malformed header or invalid token', async () => {
-    const { request, repo } = setup();
-    expect(
-      (await request('/api/v1/registrations/account', { method: 'POST', json: registration() }))
-        .status,
-    ).toBe(401);
-    const malformed = await request('/api/v1/registrations/account', {
-      method: 'POST',
-      headers: { Authorization: 'Basic abc' },
-      json: registration(),
-    });
-    expect(malformed.status).toBe(401);
-    const invalid = await request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: 'not-a-valid-clerk-session-token',
-      json: registration(),
-    });
-    expect(invalid.status).toBe(401);
-    expect((await body(invalid)).error?.code).toBe('UNAUTHENTICATED');
-    expect(repo.profiles.size).toBe(0);
-  });
-
-  it('e-mail not verified in Clerk -> 403 EMAIL_NOT_VERIFIED, no profile, Turnstile not spent', async () => {
-    const { request, users, repo, turnstile } = setup();
-    const s = users.unverified();
-    const res = await request('/api/v1/registrations/account', {
+  it('the first organizer action links too (no prior GET /me)', async () => {
+    const t = setup();
+    await register(t, 'direto@example.org');
+    const s = t.users.signedUp('direto@example.org');
+    const res = await t.request('/api/v1/activities', {
       method: 'POST',
       token: s.token,
-      json: registration({ email: s.user.email }),
-    });
-    expect(res.status).toBe(403);
-    expect((await body(res)).error?.code).toBe('EMAIL_NOT_VERIFIED');
-    expect(repo.profiles.size).toBe(0);
-    expect(turnstile.calls).toBe(0);
-  });
-
-  it('T05: valid registration -> 201, profile verified with the Clerk e-mail, audited, no-store', async () => {
-    const { request, users, repo } = setup();
-    const s = users.signedUp('maria.silva@example.org');
-    const input = registration({ email: 'Maria.Silva@Example.org' });
-    const res = await request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: s.token,
-      json: input,
+      json: ACTIVITY,
     });
     expect(res.status).toBe(201);
-    expect(res.headers.get('Cache-Control')).toBe('no-store');
-    expect((await body(res)).data).toEqual({
-      profile_id: s.user.id,
-      territory_id: 'mg-3140001-centro',
-      email_verification_state: 'verified',
-      session_state: 'verified',
-    });
-    const profile = repo.profiles.get(s.user.id);
-    expect(profile?.phone_e164).toBe('+5531999998888');
-    expect(profile?.email_contact).toBe('maria.silva@example.org');
-    expect(profile?.email_verification_state).toBe('verified');
-    expect(repo.audit.some((a) => a.action === 'profile.create' && a.actor === s.user.id)).toBe(
-      true,
-    );
-    // idempotent re-submit from the same account
-    const again = await request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: s.token,
-      json: { ...input, turnstile_token: 'tok-again' },
-    });
-    expect(again.status).toBe(200);
-    expect(repo.profiles.size).toBe(1);
+    expect(t.repo.profiles.has(s.user.id)).toBe(true);
   });
 
-  it('the form e-mail must be the verified Clerk e-mail (400, nothing stored)', async () => {
-    const { request, users, repo } = setup();
-    const s = users.signedUp('dona@example.org');
-    const res = await request('/api/v1/registrations/account', {
+  it('login WITHOUT a registration works but is not organizer: /me registration_required, 403 on organizer routes', async () => {
+    const t = setup();
+    const s = t.users.signedUp('semcadastro@example.org');
+    const me = (await body(await t.request('/api/v1/me', { token: s.token }))).data;
+    expect(me).toMatchObject({ registration_required: true, display_name: null });
+    const act = await t.request('/api/v1/activities', {
       method: 'POST',
       token: s.token,
-      json: registration({ email: 'outra@example.org' }),
+      json: ACTIVITY,
     });
-    expect(res.status).toBe(400);
-    expect((await body(res)).error?.fields?.email).toBeDefined();
-    expect(repo.profiles.size).toBe(0);
+    expect(act.status).toBe(403);
+    expect((await body(act)).error?.message).toMatch(/cadastro/);
+    expect((await t.request('/api/v1/my-activities', { token: s.token })).status).toBe(403);
+    expect(t.repo.profiles.size).toBe(0);
   });
 
-  it('contact e-mail already held by another profile -> 409 neutral message, no profile', async () => {
-    const { request, users, repo } = setup();
-    const owner = users.verified(undefined, 'dup@example.org');
-    const s = users.signedUp('dup@example.org');
-    const res = await request('/api/v1/registrations/account', {
+  it('an UNVERIFIED Clerk e-mail never links (not even with a matching registration)', async () => {
+    const t = setup();
+    await register(t, 'pendente@example.org');
+    const s = t.users.unverified('pendente@example.org');
+    const me = (await body(await t.request('/api/v1/me', { token: s.token }))).data;
+    expect(me).toMatchObject({ email_verified: false, registration_required: true });
+    const act = await t.request('/api/v1/activities', {
       method: 'POST',
       token: s.token,
-      json: registration({ email: owner.user.email }),
+      json: ACTIVITY,
     });
-    expect(res.status).toBe(409);
-    const msg = (await body(res)).error?.message ?? '';
-    expect(msg).not.toMatch(/existe|cadastrad[oa] por|outra conta/i);
-    expect(repo.profiles.has(s.user.id)).toBe(false);
+    expect(act.status).toBe(403);
+    expect((await body(act)).error?.code).toBe('EMAIL_NOT_VERIFIED');
+    expect(t.repo.linkCalls).toEqual([]);
+    expect(t.repo.profiles.size).toBe(0);
+    expect(t.repo.volunteers.get('pendente@example.org')?.user_id).toBeNull();
   });
 
-  it('Clerk Backend API outage while resolving the e-mail -> 503 generic, nothing stored (QA3-05)', async () => {
-    const { request, users, repo, auth } = setup();
-    const s = users.signedUp();
-    auth.outage = true;
-    const res = await request('/api/v1/registrations/account', {
+  it('a registration linked to ANOTHER live organizer is not taken over', async () => {
+    const t = setup();
+    await register(t, 'dono@example.org');
+    const owner = t.users.signedUp('dono@example.org');
+    await t.request('/api/v1/me', { token: owner.token });
+    const other = t.users.signedUp('dono@example.org');
+    const me = (await body(await t.request('/api/v1/me', { token: other.token }))).data;
+    expect(me?.registration_required).toBe(true);
+    expect(t.repo.volunteers.get('dono@example.org')?.user_id).toBe(owner.user.id);
+    expect(t.repo.profiles.has(other.user.id)).toBe(false);
+  });
+
+  it('the public registration route does not change because of a session (no PII, same answer)', async () => {
+    const t = setup();
+    const s = t.users.signedUp('qualquer@example.org');
+    const res = await t.request('/api/v1/registrations', {
       method: 'POST',
       token: s.token,
-      json: registration({ email: s.user.email }),
+      json: {
+        display_name: 'Pessoa',
+        email: 'qualquer@example.org',
+        phone: '(31) 99999-8888',
+        territory_id: 'mg-3140001',
+        terms_accepted: true,
+        contact_opt_in: false,
+        consent_version: 'v1',
+        turnstile_token: 'tok-public-1234567',
+      },
     });
-    expect(res.status).toBe(503);
-    expect(res.headers.get('Retry-After')).toBe('5');
-    expect(repo.profiles.size).toBe(0);
-    const text = await res.text();
-    expect(text).toContain('SERVICE_UNAVAILABLE');
-    expect(text).not.toMatch(/stack|Error:|clerk/i);
+    expect((await body(res)).data).toEqual({ territory_id: 'mg-3140001', status: 'received' });
+    expect(t.repo.profiles.size).toBe(0);
+  });
+
+  it('POST /registrations/account no longer exists (D49)', async () => {
+    const t = setup();
+    const s = t.users.signedUp();
+    const res = await t.request('/api/v1/registrations/account', {
+      method: 'POST',
+      token: s.token,
+      json: {},
+    });
+    expect(res.status).toBe(404);
   });
 
   it('session claims email/email_verified are used when present on cached routes (no Backend API call)', async () => {
@@ -175,37 +181,6 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
     expect(res.status).toBe(200);
     expect(auth.getUserCalls).toBe(0);
     expect((await body(res)).data?.email_verified).toBe(true);
-  });
-
-  it('registration ignores the claims shortcut and reads Clerk fresh (QA3-01/03)', async () => {
-    const { request, auth, repo } = setup();
-    auth.add(
-      'tok-claims-padding-padding-padding',
-      { id: 'user_claims000001', email: 'claims@example.org', email_confirmed: true },
-      { claims: { email: 'claims@example.org', email_verified: true } },
-    );
-    const ok = await request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: 'tok-claims-padding-padding-padding',
-      json: registration({ email: 'claims@example.org' }),
-    });
-    expect(ok.status).toBe(201);
-    expect(auth.getUserCalls).toBe(1);
-    expect(repo.profiles.get('user_claims000001')?.email_contact).toBe('claims@example.org');
-
-    // banned in Clerk while the token (with claims) is still valid -> refused on registration
-    auth.add(
-      'tok-claims-banned-padding-padding',
-      { id: 'user_claims000002', email: 'banned@example.org', email_confirmed: true },
-      { claims: { email: 'banned@example.org', email_verified: true }, banned: true },
-    );
-    const banned = await request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: 'tok-claims-banned-padding-padding',
-      json: registration({ email: 'banned@example.org' }),
-    });
-    expect(banned.status).toBe(401);
-    expect(repo.profiles.has('user_claims000002')).toBe(false);
   });
 
   it('the Clerk user is resolved once per request (verify + getUser memoised)', async () => {
@@ -245,59 +220,14 @@ describe('registrations with a Clerk session (ADR 0005; T03, T04, T05)', () => {
       expect([token, (await request('/api/v1/me', { token })).status]).toEqual([token, 401]);
     }
   });
-
-  it('registration rate limit (F05): per IP + subject, with a looser per-IP ceiling', async () => {
-    const { request, users } = setup();
-    // same account, invalid payload each time: 6th attempt in 10 min -> 429
-    const one = users.signedUp();
-    let status = 0;
-    for (let i = 0; i < 6; i++) {
-      status = (
-        await request('/api/v1/registrations/account', {
-          method: 'POST',
-          token: one.token,
-          json: registration({ email: one.user.email, turnstile_token: `bad-${i}` }),
-        })
-      ).status;
-    }
-    expect(status).toBe(429);
-    // many people behind the same IP (CGNAT) are not blocked by one another
-    for (let i = 0; i < 20; i++) {
-      const p = users.signedUp(`pessoa${i}@example.org`);
-      const r = await request('/api/v1/registrations/account', {
-        method: 'POST',
-        token: p.token,
-        json: registration({ email: p.user.email }),
-      });
-      expect(r.status).toBe(201);
-    }
-    // ...up to the per-IP ceiling (30/10 min)
-    const statuses: number[] = [];
-    for (let i = 0; i < 6; i++) {
-      const p = users.signedUp(`extra${i}@example.org`);
-      statuses.push(
-        (
-          await request('/api/v1/registrations/account', {
-            method: 'POST',
-            token: p.token,
-            json: registration({ email: p.user.email }),
-          })
-        ).status,
-      );
-    }
-    expect(statuses).toContain(429);
-  });
 });
 
 describe('me (ADR 0005)', () => {
-  it('GET /me after registration: masked e-mail, verified, not anonymous, no review, no-store', async () => {
-    const { request, users } = setup();
+  it('GET /me after registration + login: masked e-mail, verified, not anonymous, no review, no-store', async () => {
+    const t = setup();
+    const { request, users } = t;
+    await register(t, 'maria.silva@example.org');
     const s = users.signedUp('maria.silva@example.org');
-    await request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: s.token,
-      json: registration({ email: 'maria.silva@example.org' }),
-    });
     const res = await request('/api/v1/me', { token: s.token });
     expect(res.headers.get('Cache-Control')).toBe('no-store');
     const me = (await body(res)).data;
@@ -337,7 +267,8 @@ describe('me (ADR 0005)', () => {
   });
 
   it('PATCH /me only changes allowed fields; unknown territory rejected; no profile -> 404', async () => {
-    const { request, users } = setup();
+    const t = setup();
+    const { request, users } = t;
     const s = users.signedUp();
     expect(
       (
@@ -348,11 +279,8 @@ describe('me (ADR 0005)', () => {
         })
       ).status,
     ).toBe(404);
-    await request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: s.token,
-      json: registration({ email: s.user.email }),
-    });
+    await register(t, s.user.email!);
+    await request('/api/v1/me', { token: s.token }); // links the login (D49)
     const ok = await request('/api/v1/me', {
       method: 'PATCH',
       token: s.token,

@@ -11,7 +11,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { AdminInternalMetrics, AdminRegistration } from '../../shared/contracts/admin.ts';
 import type { ActivityStatus } from '../../shared/contracts/activities.ts';
-import type { Database } from '../../shared/types/database.ts';
+import type { Database, Json } from '../../shared/types/database.ts';
 import type { Env } from '../env.ts';
 import { type AppError, fail } from '../errors.ts';
 import type {
@@ -27,8 +27,8 @@ import type {
   GroupStatusRow,
   NewGroupManager,
   NewGroupProposal,
-  NewProfile,
   NewVolunteerSignup,
+  OrganizerLink,
   ProfilePatch,
   ProfileRow,
   PublicActivityQuery,
@@ -276,6 +276,20 @@ export class SupabaseRepo implements Repo {
     return check(res, 'createActivity') as ActivityRow;
   }
 
+  async adminCreateActivity(
+    adminId: string,
+    idempotencyHash: string,
+    a: ActivityWrite,
+    requestId: string,
+  ): Promise<{ created: boolean; activity: ActivityRow }> {
+    return this.rpc('svc_admin_create_activity', {
+      p_admin: safeUserId(adminId),
+      p_idempotency_hash: idempotencyHash,
+      p_activity: a as unknown as Json,
+      p_request_id: requestId,
+    });
+  }
+
   async updateActivity(
     id: string,
     expectedVersion: number,
@@ -360,17 +374,8 @@ export class SupabaseRepo implements Repo {
     return this.rpc<ProfileRow | null>('svc_get_profile', { p_user: userId });
   }
 
-  async createProfile(p: NewProfile): Promise<{ created: boolean; profile: ProfileRow }> {
-    return this.rpc('svc_create_profile', {
-      p_user_id: p.user_id,
-      p_display_name: p.display_name,
-      p_email: p.email,
-      p_phone: p.phone,
-      p_territory_id: p.territory_id,
-      p_consent_version: p.consent_version,
-      p_contact_opt_in: p.contact_opt_in,
-      p_email_state: p.email_state,
-    });
+  async linkOrganizer(userId: string, verifiedEmail: string): Promise<OrganizerLink> {
+    return this.rpc('svc_link_organizer', { p_user: safeUserId(userId), p_email: verifiedEmail });
   }
 
   async deleteProfile(userId: string): Promise<void> {

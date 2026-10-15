@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { ActivityStatus } from '../../shared/contracts/activities.ts';
+import { ActivityStatus, AdminActivityInput } from '../../shared/contracts/activities.ts';
 import {
   AdminGrantInput,
   AdminGroupPatch,
@@ -32,14 +32,15 @@ import {
 } from '../middleware/auth.ts';
 import { rateLimitPerUser } from '../middleware/rate-limit.ts';
 import { activityPaths, noStore, purgeGroups, purgePublic } from '../middleware/cache.ts';
-import { decodeCursor, encodeCursor } from '../services/crypto.ts';
+import { buildActivityWrite } from '../services/activities.ts';
+import { decodeCursor, encodeCursor, sha256Hex } from '../services/crypto.ts';
 import {
   brasiliaDate,
   EXPORT_BATCH_SIZE,
   registrationsCsvStream,
 } from '../services/registrations-csv.ts';
 import { getSiteMetrics } from '../services/umami.ts';
-import { toAdminActivity, toAdminProposal } from '../services/projections.ts';
+import { toAdminActivity, toAdminProposal, toMyActivity } from '../services/projections.ts';
 import type { Cursor, GroupPatch } from '../repositories/types.ts';
 
 export const admin = new Hono<AppBindings>();
@@ -120,6 +121,33 @@ admin.post('/admin/activities/:id/approve', async (c) => {
     .repo.approveActivity(id, c.get('user')!.id, reason ?? null, c.get('requestId'));
   await purgePublic(c, activityPaths(id));
   return ok(c, { id, status: 'published' as const, version });
+});
+
+/**
+ * D50: an admin creates an activity that is PUBLISHED at once (no review queue). Same
+ * validation/limits as the organizer form (buildActivityWrite), territory must exist, required
+ * idempotency key (retry -> 200 with the same activity), one transaction in SQL with the audit
+ * row `admin.activity.create` (no PII). Fresh admin check + admin_write bucket. Editing and
+ * cancelling use the existing PATCH /activities/:id and POST /activities/:id/cancel (admins may
+ * manage any activity).
+ */
+admin.post('/admin/activities', requireFreshAdmin, rateLimitPerUser('admin_write'), async (c) => {
+  const input = await parseBody(c, AdminActivityInput);
+  const { repo, now } = c.get('deps');
+  const write = buildActivityWrite(input, now());
+  const [territory] = await repo.getTerritories([write.territory_id]);
+  if (!territory)
+    throw fail('VALIDATION_ERROR', undefined, { territory_id: 'Território inexistente.' });
+  const user = c.get('user')!;
+  const hash = await sha256Hex(`admin-activity:${user.id}|${input.idempotency_key}`);
+  const { created, activity } = await repo.adminCreateActivity(
+    user.id,
+    hash,
+    write,
+    c.get('requestId'),
+  );
+  if (created) await purgePublic(c, activityPaths(activity.id));
+  return ok(c, toMyActivity(activity), created ? 201 : 200);
 });
 
 admin.post('/admin/activities/:id/reject', async (c) => {

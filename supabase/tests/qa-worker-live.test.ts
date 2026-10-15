@@ -285,12 +285,11 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
     expect(r2.res.headers.get('cache-control')).toBe('no-store');
   });
 
-  it('L11 registration: another account cannot take an e-mail (400, no enumeration oracle)', async () => {
+  it('L11 (D49): registration answers the same for any e-mail; only the owner login links', async () => {
     const email = fresh.email;
-    const reg = (tok: string) =>
-      api('/registrations/account', {
+    const reg = () =>
+      api('/registrations', {
         method: 'POST',
-        token: tok,
         json: {
           display_name: 'Pessoa QA',
           email,
@@ -302,16 +301,22 @@ describe.skipIf(!configured)('QA-1 live Worker + TARGET dev', () => {
           turnstile_token: turnstile(),
         },
       });
-    const a = await reg(await fresh.token());
-    expect([200, 201]).toContain(a.res.status);
-    expect(a.text).not.toContain(email);
-    // fresh2 tries fresh's e-mail: same answer as any address it does not own
-    const b = await reg(await fresh2.token());
-    expect(b.res.status).toBe(400);
-    const me = await api('/me', { token: await fresh.token() });
-    expect(me.res.status).toBe(200);
-    expect(me.text).not.toContain(email);
-    expect(me.text).not.toContain('98888');
+    try {
+      const a = await reg();
+      const b = await reg();
+      expect(a.res.status).toBe(200);
+      expect(b.json.data).toEqual(a.json.data);
+      expect(a.text).not.toContain(email);
+      const other = await api('/me', { token: await fresh2.token() });
+      expect(other.json.data?.registration_required).toBe(true);
+      const me = await api('/me', { token: await fresh.token() });
+      expect(me.res.status).toBe(200);
+      expect(me.json.data?.registration_required).toBe(false);
+      expect(me.text).not.toContain(email);
+      expect(me.text).not.toContain('98888');
+    } finally {
+      await svc.rpc('svc_erase_volunteer_signup', { p_email: email });
+    }
   });
 
   it('L12 send-link no longer exists (404, ADR 0005)', async () => {

@@ -97,7 +97,7 @@ describe('QA3-01: Clerk user cache (60 s, per isolate) + per-user limit on authe
     expect(s.auth.getUserCalls).toBe(2); // ...and invalidated it
   });
 
-  it('a ban in Clerk is seen immediately by registration and contact reveal (always fresh)', async () => {
+  it('a ban in Clerk is seen immediately by contact reveal (always fresh)', async () => {
     const s = setup();
     const admin = s.users.admin();
     const id = '00000000-0000-4000-8000-000000000001';
@@ -119,16 +119,6 @@ describe('QA3-01: Clerk user cache (60 s, per isolate) + per-user limit on authe
       token: admin.token,
     });
     expect(r2.status).toBe(401);
-
-    const signed = s.users.signedUp();
-    await s.request('/api/v1/me', { token: signed.token }); // warms the cache
-    s.auth.people.get(signed.user.id)!.banned = true;
-    const reg = await s.request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: signed.token,
-      json: { email: signed.user.email },
-    });
-    expect(reg.status).toBe(401);
   });
 
   it('banned user with e-mail claims is refused on reveal-contact (QA3-03)', async () => {

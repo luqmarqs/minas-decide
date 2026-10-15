@@ -139,6 +139,16 @@ export interface NewProfile {
   email_state: ProfileRow['email_verification_state'];
 }
 
+export interface OrganizerLink {
+  /** the user has an organizer profile now */
+  organizer: boolean;
+  /** the registration is linked to this user */
+  linked: boolean;
+  profile_created: boolean;
+  /** the registration is linked to ANOTHER live organizer account */
+  conflict?: boolean;
+}
+
 /** Volunteer sign-up without an account (D48, 0017). Values already validated/sanitized. */
 export interface NewVolunteerSignup {
   display_name: string;
@@ -269,6 +279,17 @@ export interface Repo {
   getPublicActivity(id: string): Promise<PublicActivityRow | null>;
   getActivity(id: string): Promise<ActivityRow | null>;
   createActivity(creatorId: string, a: ActivityWrite): Promise<ActivityRow>;
+  /**
+   * D50 (0018 svc_admin_create_activity): admin-created activity, PUBLISHED in the same
+   * transaction (creator = reviewer = admin), audited `admin.activity.create`. The same
+   * idempotency hash returns the activity created first (`created: false`).
+   */
+  adminCreateActivity(
+    adminId: string,
+    idempotencyHash: string,
+    a: ActivityWrite,
+    requestId: string,
+  ): Promise<{ created: boolean; activity: ActivityRow }>;
   /** Conditional update on (id, version). Returns null when the version no longer matches. */
   updateActivity(
     id: string,
@@ -290,8 +311,13 @@ export interface Repo {
   ): Promise<{ going: boolean; rsvp_count: number }>;
   // profiles / identity
   getProfile(userId: string): Promise<ProfileRow | null>;
-  createProfile(p: NewProfile): Promise<{ created: boolean; profile: ProfileRow }>;
   deleteProfile(userId: string): Promise<void>;
+  /**
+   * D49 (0018 svc_link_organizer): links a Clerk login to the registration with the same
+   * e-mail and creates the organizer profile from it, in one transaction. MUST be called only
+   * with the VERIFIED primary e-mail of the session. Idempotent.
+   */
+  linkOrganizer(userId: string, verifiedEmail: string): Promise<OrganizerLink>;
   /**
    * LGPD erasure of one person (svc_erase_user_data): RSVPs, activities created by them,
    * profile and admin row; audited in SQL without PII. Idempotent.

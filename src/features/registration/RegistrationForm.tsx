@@ -48,18 +48,20 @@ const idOf = (k: string) => IDS[k] ?? k;
 
 export interface RegistrationFormProps {
   initialTerritoryId: string | null;
+  /** D49: e-mail of a signed-in person without a registration (router state, never the URL). */
+  initialEmail?: string;
 }
 
 /**
- * Volunteer sign-up (spec §3.3; D48: NO account, NO e-mail code). One step: fields + terms +
+ * THE registration (spec §3.3; D48/D49: NO account, NO e-mail code). One step: fields + terms +
  * opt-in + Turnstile → public POST /registrations → /obrigado with the territory. This module
  * never touches Clerk (the home must not load clerk-js because of the form). Success is only
  * shown after the Worker answers.
  */
-export function RegistrationForm({ initialTerritoryId }: RegistrationFormProps) {
+export function RegistrationForm({ initialTerritoryId, initialEmail }: RegistrationFormProps) {
   const navigate = useNavigate();
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail ?? '');
   const [phone, setPhone] = useState('');
   const [territoryId, setTerritoryId] = useState<string | null>(initialTerritoryId);
   // Home (D28): follow the territory selected on the map until the person picks one here.

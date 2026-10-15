@@ -33,7 +33,8 @@ export const routes: RouteObject[] = [
       { path: 'criar-atividade', ...page(() => import('@/pages/CriarAtividadePage')) },
       { path: 'minhas-atividades', ...page(() => import('@/pages/MinhasAtividadesPage')) },
       { path: 'entrar', ...page(() => import('@/pages/EntrarPage')) },
-      { path: 'criar-conta', ...page(() => import('@/pages/CriarContaPage')) },
+      // D49: one registration only (home form); the old organizer sign-up page goes there.
+      { path: 'criar-conta', loader: () => redirect('/#participar') },
       // ADR 0005: magic-link return and TOTP pages no longer exist (old e-mails/bookmarks).
       { path: 'autenticacao/retorno', loader: () => redirect('/entrar') },
       { path: 'conta/seguranca', loader: () => redirect('/') },

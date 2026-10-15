@@ -3,6 +3,16 @@ import { prefersReducedMotion } from '@/lib/media';
 export const JOIN_SECTION_ID = 'participar';
 export const JOIN_TITLE_ID = 'participar-titulo';
 
+/** Router state handed to the home form so it can pre-fill the e-mail (never in the URL, D49). */
+export interface JoinPrefillState {
+  prefillEmail?: string;
+}
+
+/** The single registration (home form, D49). */
+export function joinHref(): string {
+  return `/#${JOIN_SECTION_ID}`;
+}
+
 /**
  * Smoothly scrolls to the home sign-up section and moves focus to its heading (so keyboard
  * and screen-reader users land there too). Content above it (map, narrative, agenda) loads

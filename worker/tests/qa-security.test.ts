@@ -136,25 +136,24 @@ describe('QA-1 findings (it.fails = vulnerable today; it = fixed, kept as regres
     expect(res.status).toBe(400);
   });
 
-  // ADR 0005: the form e-mail must be the caller's VERIFIED Clerk e-mail, so probing someone
-  // else's address answers exactly like probing a free one (400 on the e-mail field).
+  // D48/D49: the public registration answers the same for a taken and a free e-mail.
   it('F06: registration must not reveal whether an e-mail already has an account', async () => {
     const s = setup();
-    s.users.verified(undefined, 'existe@example.org'); // existing profile
-    const a = s.users.signedUp('atacante-a@example.org');
-    const b = s.users.signedUp('atacante-b@example.org');
-    const taken = await s.request('/api/v1/registrations/account', {
+    s.users.verified(undefined, 'existe@example.org'); // existing organizer
+    await s.request('/api/v1/registrations', {
       method: 'POST',
-      token: a.token,
       json: registration({ email: 'existe@example.org' }),
     });
-    const free = await s.request('/api/v1/registrations/account', {
+    const taken = await s.request('/api/v1/registrations', {
       method: 'POST',
-      token: b.token,
-      json: registration({ email: 'naoexiste@example.org' }),
+      json: registration({ email: 'existe@example.org', display_name: 'Outra Pessoa' }),
+    });
+    const free = await s.request('/api/v1/registrations', {
+      method: 'POST',
+      json: registration({ email: 'naoexiste@example.org', display_name: 'Outra Pessoa' }),
     });
     expect(taken.status).toBe(free.status);
-    expect(taken.status).toBe(400);
+    expect((await body(taken)).data).toEqual((await body(free)).data);
   });
 
   it('F07: starts_at absurdly far in the future must be rejected', async () => {

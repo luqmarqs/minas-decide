@@ -316,7 +316,6 @@ describe('writes suspended', () => {
     const mutations: [string, string][] = [
       ['POST', '/api/v1/groups/proposals'],
       ['POST', '/api/v1/registrations'],
-      ['POST', '/api/v1/registrations/account'],
       ['POST', `/api/v1/activities/${a.id}/rsvp`],
       ['DELETE', `/api/v1/activities/${a.id}/rsvp`],
       ['POST', '/api/v1/activities'],

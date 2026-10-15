@@ -44,7 +44,7 @@ function metrics(n: number, site: 'ok' | 'unconfigured' | 'unavailable' = 'ok') 
         total: 1234,
         last_7d: 21,
         last_30d: 88,
-        by_source: { volunteer: 1200, account: 34 },
+        organizers: 34,
         by_day: days(n, 'count'),
       },
       activities: {

@@ -7,6 +7,7 @@ import { ActivitiesQueue, GroupsQueue, SecurityEvents } from '@/features/admin/A
 import { AdminManagement } from '@/features/admin/AdminManagement';
 import { AdminRegistrations } from '@/features/admin/AdminRegistrations';
 import { AdminMetrics } from '@/features/admin/AdminMetrics';
+import { AdminNewActivity } from '@/features/admin/AdminNewActivity';
 import { adminErrorMessage, ADMIN_FORBIDDEN_MESSAGE } from '@/features/admin/errors';
 import { SignedOutPanel } from '@/features/auth/SignedOutPanel';
 
@@ -54,6 +55,7 @@ export default function AdminPage() {
           <TabsList aria-label="Filas de moderação">
             <TabsTrigger value="groups">Grupos</TabsTrigger>
             <TabsTrigger value="activities">Atividades</TabsTrigger>
+            <TabsTrigger value="new-activity">Nova atividade</TabsTrigger>
             <TabsTrigger value="registrations">Cadastros</TabsTrigger>
             <TabsTrigger value="metrics">Métricas</TabsTrigger>
             <TabsTrigger value="admins">Administradores</TabsTrigger>
@@ -64,6 +66,9 @@ export default function AdminPage() {
           </TabsContent>
           <TabsContent value="activities" className="mt-4">
             <ActivitiesQueue />
+          </TabsContent>
+          <TabsContent value="new-activity" className="mt-4">
+            <AdminNewActivity adminId={active.user.id} />
           </TabsContent>
           <TabsContent value="registrations" className="mt-4">
             <AdminRegistrations />

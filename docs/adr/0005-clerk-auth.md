@@ -2,7 +2,7 @@
 
 **Status:** aceito — 2026-10-09 (decisão do proprietário: "vamos trocar o auth"; app Clerk `minas-decide`, id `app_3KTDdv0NZbv3wTVloogIbNwLqt9`)
 
-> **Nota 2026-10-14 (D48):** o cadastro de **voluntário** (`/participar`, `#participar` da home) saiu do Clerk: não cria conta nem pede código; vai para o `POST /api/v1/registrations` público (`app_private.volunteer_signups`). O item 2 abaixo vale agora só para a **conta de organizador**, em `/criar-conta` → `POST /api/v1/registrations/account`. Login, organizadores, admin e sessão continuam como descritos aqui. Ver `docs/DECISIONS.md` D48.
+> **Nota 2026-10-14 (D48 → D49):** há **um cadastro só**, sem conta: o formulário da home (`POST /api/v1/registrations`, `app_private.volunteer_signups`). O Clerk ficou só para **Entrar** (código por e-mail; e-mail desconhecido vira sign-up transparente). O Worker vincula o login ao cadastro pelo e-mail **verificado** (`svc_link_organizer`) e cria o perfil de organizador a partir dele. O item 2 abaixo (cadastro com `signUp` + `POST /registrations` autenticado) não vale mais; `/criar-conta` e `POST /registrations/account` foram removidos. Ver `docs/DECISIONS.md` D48/D49.
 
 ## Contexto
 O fluxo Supabase Auth (sessão anônima → vínculo de e-mail → magic link → promoção → revisão de perfil) era frágil: cota de SMTP do Supabase esgotava com poucos cadastros; a promoção abria janela de pré-sequestro (QA2-01); MFA foi dispensado (D35). Clerk entrega e-mail de verificação por código no cadastro, login por código/link, componentes prontos e sessão com JWT verificável na borda.

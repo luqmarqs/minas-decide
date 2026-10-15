@@ -54,28 +54,26 @@ const proposal = (over: Record<string, unknown> = {}) => ({
 // the revocation of other sessions. With Clerk the e-mail is verified BEFORE any session exists,
 // so the pre-hijack path is closed at the source; these controls keep it that way.
 describe('QA-2 P-SEC-1 (Clerk): no profile can be created for an e-mail the caller does not own', () => {
-  it('control: attacker registering with the victim e-mail -> 400, no profile', async () => {
+  // D49: the login is linked to a registration ONLY by the caller's VERIFIED Clerk e-mail.
+  it('control: attacker signed in with another e-mail never takes the victim registration', async () => {
     const s = setup();
+    await s.request('/api/v1/registrations', { method: 'POST', json: registration() });
     const attacker = s.users.signedUp('atacante@example.org');
-    const reg = await s.request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: attacker.token,
-      json: registration(),
-    });
-    expect(reg.status).toBe(400);
+    const me = (await body(await s.request('/api/v1/me', { token: attacker.token }))).data;
+    expect(me?.registration_required).toBe(true);
     expect(s.repo.profiles.size).toBe(0);
+    expect(s.repo.volunteers.get('vitima@example.org')?.user_id).toBeNull();
   });
 
-  it('control: attacker whose Clerk e-mail is not verified -> 403, no profile', async () => {
+  it('control: attacker whose Clerk e-mail is not verified -> no link, 403 on organizer routes', async () => {
     const s = setup();
+    await s.request('/api/v1/registrations', { method: 'POST', json: registration() });
     const attacker = s.users.unverified('vitima@example.org');
-    const reg = await s.request('/api/v1/registrations/account', {
-      method: 'POST',
-      token: attacker.token,
-      json: registration(),
-    });
-    expect(reg.status).toBe(403);
+    await s.request('/api/v1/me', { token: attacker.token });
+    const r = await s.request('/api/v1/my-activities', { token: attacker.token });
+    expect(r.status).toBe(403);
     expect(s.repo.profiles.size).toBe(0);
+    expect(s.repo.volunteers.get('vitima@example.org')?.user_id).toBeNull();
   });
 
   it('control: PATCH /me only edits the caller (attacker without profile -> 404)', async () => {

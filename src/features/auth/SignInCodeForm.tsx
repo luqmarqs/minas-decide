@@ -1,10 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router';
 import { z } from 'zod';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
-import { clerkErrorCode, clerkErrorMessage } from '@/lib/clerk';
+import { clerkErrorMessage } from '@/lib/clerk';
 import { CodeActions, CodeStep } from './CodeStep';
 import { CODE_RE, useEmailCodeSignIn } from './emailCode';
 
@@ -17,8 +16,9 @@ export interface SignInCodeFormProps {
 }
 
 /**
- * "Entrar com código" (ADR 0005): e-mail → 6-digit code by e-mail → session. Same look as
- * the sign-up form; no password. Clerk's own bot protection applies to these calls.
+ * "Entrar" (ADR 0005, D49): e-mail → 6-digit code by e-mail → session, for any e-mail (an
+ * unknown one is signed up transparently in Clerk). No password. Clerk's own bot protection
+ * applies to these calls.
  */
 export function SignInCodeForm({ onSignedIn, idPrefix = 'entrar' }: SignInCodeFormProps) {
   const flow = useEmailCodeSignIn();
@@ -28,14 +28,12 @@ export function SignInCodeForm({ onSignedIn, idPrefix = 'entrar' }: SignInCodeFo
   const [emailError, setEmailError] = useState<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
   const [busy, setBusy] = useState(false);
   const emailId = `${idPrefix}-email`;
   const codeId = `${idPrefix}-code`;
 
   async function sendCode() {
     setFormError(null);
-    setNotFound(false);
     const parsed = Email.safeParse(email);
     if (!parsed.success) {
       setEmailError('Informe um e-mail válido.');
@@ -50,7 +48,6 @@ export function SignInCodeForm({ onSignedIn, idPrefix = 'entrar' }: SignInCodeFo
       setCodeError(null);
       setSentTo(parsed.data);
     } catch (err) {
-      setNotFound(clerkErrorCode(err) === 'form_identifier_not_found');
       setFormError(clerkErrorMessage(err));
     } finally {
       setBusy(false);
@@ -115,7 +112,7 @@ export function SignInCodeForm({ onSignedIn, idPrefix = 'entrar' }: SignInCodeFo
             required
             id={emailId}
             error={emailError ?? undefined}
-            hint="O e-mail do seu cadastro. Enviamos um código de 6 números; não há senha."
+            hint="Use o e-mail do seu cadastro. Enviamos um código de 6 números; não há senha."
           >
             {(p) => (
               <Input
@@ -132,14 +129,6 @@ export function SignInCodeForm({ onSignedIn, idPrefix = 'entrar' }: SignInCodeFo
           {formError ? (
             <div role="alert" className="rounded-md border border-error/40 bg-error-soft p-3">
               <p className="text-sm text-primary">{formError}</p>
-              {notFound ? (
-                <Link
-                  to="/criar-conta"
-                  className="mt-1 inline-flex min-h-6 items-center text-sm underline"
-                >
-                  Criar conta de organizador
-                </Link>
-              ) : null}
             </div>
           ) : null}
           <div>

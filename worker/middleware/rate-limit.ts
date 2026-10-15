@@ -62,10 +62,6 @@ export const RATE_LIMITS = {
    * unique e-mail are the real guards.
    */
   volunteer_ip: { limit: 60, windowMs: TEN_MIN },
-  /** per IP — organizer profile; runs before the session is resolved (token spraying) */
-  registrations_ip: { limit: 30, windowMs: TEN_MIN },
-  /** per IP + Clerk user id */
-  registrations: { limit: 5, windowMs: TEN_MIN },
   proposals: { limit: 5, windowMs: TEN_MIN },
   /** per IP — ceiling for every RSVP from one network */
   rsvp_ip: { limit: 120, windowMs: TEN_MIN },

@@ -38,6 +38,7 @@ const PRIVATE_TABLES = [
   'abuse_events',
   'turnstile_tokens_used',
   'volunteer_signups',
+  'admin_activity_requests',
 ];
 const PUBLIC_RELATIONS = [
   'territories',
@@ -58,8 +59,25 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
   const pendingProfileId = uid('pending');
   const noProfileId = uid('none');
   const admins = [uid('admina'), uid('adminb')];
-  const people = [organizerId, otherOrganizerId, pendingProfileId, noProfileId, ...admins];
+  const linkUser = uid('link');
+  const linkOther = uid('linkb');
+  const noRegUser = uid('noreg');
+  const raceUser = uid('race');
+  const people = [
+    organizerId,
+    otherOrganizerId,
+    pendingProfileId,
+    noProfileId,
+    ...admins,
+    linkUser,
+    linkOther,
+    noRegUser,
+    raceUser,
+  ];
   const volunteerEmail = `mm-rls-vol-${tag}@example.org`;
+  const listEmails = [`mm-rls-l1-${tag}@example.org`, `mm-rls-l2-${tag}@example.org`];
+  const raceEmail = `mm-rls-race-${tag}@example.org`;
+  const organizerEmail = `mm-rls-${organizerId.toLowerCase()}@example.org`;
 
   let svc: SupabaseClient;
   let anon: SupabaseClient;
@@ -193,10 +211,12 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
 
   afterAll(async () => {
     if (!svc) return;
-    await svc.rpc('svc_erase_volunteer_signup', {
-      p_email: volunteerEmail,
-      p_request_id: 'rls-test-cleanup',
-    });
+    for (const email of [volunteerEmail, ...listEmails, raceEmail, organizerEmail]) {
+      await svc.rpc('svc_erase_volunteer_signup', {
+        p_email: email,
+        p_request_id: 'rls-test-cleanup',
+      });
+    }
     // cascades: groups, proposals, managers, activities, rsvps
     await svc.from('territories').delete().eq('id', hood);
     await svc.from('territories').delete().eq('id', muni);
@@ -297,6 +317,12 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
         ['svc_count_registrations', {}],
         ['svc_erase_volunteer_signup', { p_email: volunteerEmail }],
         ['svc_admin_metrics', { p_days: 7 }],
+        // 0018 (D49/D50)
+        ['svc_link_organizer', { p_user: noProfileId, p_email: volunteerEmail }],
+        [
+          'svc_admin_create_activity',
+          { p_admin: admins[0], p_idempotency_hash: 'c'.repeat(64), p_activity: {} },
+        ],
       ];
       for (const [fn, args] of calls) {
         const r = await anon.rpc(fn, args);
@@ -381,12 +407,13 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
       expect(bad.error?.code).toBe('23514');
     });
 
-    it('admin list = volunteers ∪ profiles, keyset (created_at desc, id desc) without gaps/dups', async () => {
+    it('D49: admin list = ONE row per registration, keyset (created_at desc, id desc) without gaps/dups', async () => {
+      for (const email of listEmails) expect((await create({ p_email: email })).error).toBeNull();
       const total = await svc.rpc('svc_count_registrations', { p_q: tag });
       expect(total.error).toBeNull();
-      // organizer + other organizer + pending profile + 1 volunteer
-      expect(total.data).toBe(4);
-      const seen: Reg[] = [];
+      // profiles of this run have no registration: only the 3 registrations count
+      expect(total.data).toBe(3);
+      const seen: (Reg & { organizer: boolean })[] = [];
       let after: { at: string; id: string } | null = null;
       for (let i = 0; i < 10; i++) {
         const page: { data: unknown; error: unknown } = await svc.rpc('svc_list_registrations', {
@@ -396,31 +423,102 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
           p_after_id: after?.id ?? null,
         });
         expect(page.error).toBeNull();
-        const rows = page.data as (Reg & { created_at: string })[];
+        const rows = page.data as (Reg & { organizer: boolean; created_at: string })[];
         if (rows.length === 0) break;
         seen.push(...rows);
         after = { at: rows[0]!.created_at, id: rows[0]!.id };
       }
-      expect(seen).toHaveLength(4);
-      expect(new Set(seen.map((r) => r.id)).size).toBe(4);
-      expect(seen.filter((r) => r.source === 'volunteer')).toHaveLength(1);
-      expect(
-        seen
-          .filter((r) => r.source === 'account')
-          .map((r) => r.user_id)
-          .sort(),
-      ).toEqual([organizerId, otherOrganizerId, pendingProfileId].sort());
+      expect(seen).toHaveLength(3);
+      expect(new Set(seen.map((r) => r.id)).size).toBe(3);
+      expect(seen.every((r) => r.organizer === false)).toBe(true);
     });
 
-    it('metrics count both sources (by_source) and stay aggregate-only', async () => {
+    it('D49: svc_link_organizer links by e-mail and creates the profile once (idempotent)', async () => {
+      const first = await svc.rpc('svc_link_organizer', {
+        p_user: linkUser,
+        p_email: listEmails[0]!,
+      });
+      expect(first.error).toBeNull();
+      expect(first.data).toEqual({ organizer: true, linked: true, profile_created: true });
+      const again = await svc.rpc('svc_link_organizer', {
+        p_user: linkUser,
+        p_email: listEmails[0]!.toUpperCase(),
+      });
+      expect(again.data).toEqual({ organizer: true, linked: true, profile_created: false });
+      const prof = await svc.rpc('svc_get_profile', { p_user: linkUser });
+      expect(prof.data).toMatchObject({
+        display_name: 'Voluntária RLS',
+        email_contact: listEmails[0],
+        phone_e164: '+5531988887777',
+        selected_territory_id: hood,
+        email_verification_state: 'verified',
+        account_state: 'active',
+      });
+      const rows = (await svc.rpc('svc_list_registrations', { p_q: listEmails[0], p_limit: 5 }))
+        .data as (Reg & { organizer: boolean })[];
+      expect(rows[0]).toMatchObject({ organizer: true, user_id: linkUser });
+      expect((await svc.rpc('svc_count_registrations', { p_q: tag })).data).toBe(3);
+    });
+
+    it('D49: a registration owned by another live organizer is not taken over; no registration -> not organizer', async () => {
+      const other = await svc.rpc('svc_link_organizer', {
+        p_user: linkOther,
+        p_email: listEmails[0]!,
+      });
+      expect(other.data).toMatchObject({ organizer: false, linked: false, conflict: true });
+      expect((await svc.rpc('svc_get_profile', { p_user: linkOther })).data).toBeNull();
+      const none = await svc.rpc('svc_link_organizer', {
+        p_user: noRegUser,
+        p_email: `mm-rls-none-${tag}@example.org`,
+      });
+      expect(none.data).toEqual({ organizer: false, linked: false, profile_created: false });
+      expect((await svc.rpc('svc_get_profile', { p_user: noRegUser })).data).toBeNull();
+      const bad = await svc.rpc('svc_link_organizer', { p_user: 'nope', p_email: volunteerEmail });
+      expect(bad.error?.code).toBe('PT400');
+    });
+
+    it('D49: a legacy organizer profile without registration gets one on link (no duplicate)', async () => {
+      const r = await svc.rpc('svc_link_organizer', {
+        p_user: organizerId,
+        p_email: organizerEmail,
+      });
+      expect(r.data).toMatchObject({ organizer: true, linked: true, profile_created: false });
+      await svc.rpc('svc_link_organizer', { p_user: organizerId, p_email: organizerEmail });
+      const rows = (await svc.rpc('svc_list_registrations', { p_q: organizerEmail, p_limit: 5 }))
+        .data as (Reg & { organizer: boolean })[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ organizer: true, user_id: organizerId });
+    });
+
+    it('D49: concurrent links for the same login create exactly one profile', async () => {
+      expect((await create({ p_email: raceEmail })).error).toBeNull();
+      const results = await Promise.all(
+        Array.from({ length: 6 }, () =>
+          svc.rpc('svc_link_organizer', { p_user: raceUser, p_email: raceEmail }),
+        ),
+      );
+      expect(results.every((r) => r.error === null)).toBe(true);
+      const created = results.filter(
+        (r) => (r.data as { profile_created: boolean }).profile_created,
+      );
+      expect(created).toHaveLength(1);
+    });
+
+    it('D49: svc_erase_user_data unlinks the registration but keeps it', async () => {
+      const r = await svc.rpc('svc_erase_user_data', { p_user: raceUser, p_request_id: 'rls-d49' });
+      expect(r.error).toBeNull();
+      const rows = (await svc.rpc('svc_list_registrations', { p_q: raceEmail, p_limit: 5 }))
+        .data as (Reg & { organizer: boolean })[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ organizer: false, user_id: null });
+    });
+
+    it('metrics: registrations + organizers, aggregate-only', async () => {
       const m = await svc.rpc('svc_admin_metrics', { p_days: 7 });
       expect(m.error).toBeNull();
-      const profiles = (
-        m.data as { profiles: { total: number; by_source: { volunteer: number; account: number } } }
-      ).profiles;
-      expect(profiles.by_source.volunteer).toBeGreaterThanOrEqual(1);
-      expect(profiles.by_source.account).toBeGreaterThanOrEqual(3);
-      expect(profiles.total).toBe(profiles.by_source.volunteer + profiles.by_source.account);
+      const profiles = (m.data as { profiles: { total: number; organizers: number } }).profiles;
+      expect(profiles.organizers).toBeGreaterThanOrEqual(2);
+      expect(profiles.total).toBeGreaterThanOrEqual(profiles.organizers);
       expect(JSON.stringify(m.data)).not.toContain(volunteerEmail);
     });
 
@@ -522,6 +620,64 @@ describe.skipIf(!configured)('RLS & grants on TARGET dev (Clerk ids, no browser 
       const other = await svc.rpc('svc_email_in_use', { p_email: email, p_exclude: noProfileId });
       const self = await svc.rpc('svc_email_in_use', { p_email: email, p_exclude: organizerId });
       expect([other.data, self.data]).toEqual([true, false]);
+    });
+  });
+
+  describe('D50: svc_admin_create_activity (published at once, idempotent)', () => {
+    const activity = {
+      territory_id: '',
+      title: 'RLS admin publicada',
+      type: 'encontro',
+      description: 'Atividade criada pelo admin no teste de RLS.',
+      description_sanitized: 'Atividade criada pelo admin no teste de RLS.',
+      starts_at: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+      ends_at: null,
+      public_address: 'Rua de Teste RLS, 2',
+      location_lon: -43.9,
+      location_lat: -19.9,
+      public_contact_opt_in: false,
+      public_contact_type: null,
+      public_contact_value: null,
+    };
+    const hash = `rls-admin-${tag}-0000000000`;
+
+    it('non-admin is refused inside the function (PT403)', async () => {
+      const r = await svc.rpc('svc_admin_create_activity', {
+        p_admin: organizerId,
+        p_idempotency_hash: `${hash}-x`,
+        p_activity: { ...activity, territory_id: hood },
+      });
+      expect(r.error?.code).toBe('PT403');
+    });
+
+    it('admin: published with creator = reviewer = admin; same hash returns the same activity', async () => {
+      const first = await svc.rpc('svc_admin_create_activity', {
+        p_admin: admins[0]!,
+        p_idempotency_hash: hash,
+        p_activity: { ...activity, territory_id: hood },
+        p_request_id: 'rls-d50',
+      });
+      expect(first.error).toBeNull();
+      const a1 = first.data as {
+        created: boolean;
+        activity: { id: string; status: string; creator_user_id: string; reviewed_by: string };
+      };
+      expect(a1.created).toBe(true);
+      expect(a1.activity).toMatchObject({
+        status: 'published',
+        creator_user_id: admins[0],
+        reviewed_by: admins[0],
+      });
+      const again = await svc.rpc('svc_admin_create_activity', {
+        p_admin: admins[0]!,
+        p_idempotency_hash: hash,
+        p_activity: { ...activity, territory_id: hood },
+      });
+      const a2 = again.data as { created: boolean; activity: { id: string } };
+      expect(a2.created).toBe(false);
+      expect(a2.activity.id).toBe(a1.activity.id);
+      const pub = await svc.from('activities_public').select('id').eq('id', a1.activity.id);
+      expect(pub.data).toHaveLength(1);
     });
   });
 

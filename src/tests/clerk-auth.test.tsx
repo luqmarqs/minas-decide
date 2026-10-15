@@ -62,17 +62,49 @@ describe('/entrar — sign-in by e-mail code', () => {
     expect(clerk.fns.setActive).toHaveBeenCalledWith({ session: 'sess_test_2' });
   });
 
-  it('unknown e-mail: PT-BR message with a link to sign up', async () => {
+  it('D49: unknown e-mail → transparent sign-up: same code screen, no extra field, session', async () => {
     stubFetch();
     const user = userEvent.setup();
     renderEntrar();
     await user.type(await screen.findByLabelText(/^E-mail/), 'nova@exemplo.com.br');
     await user.click(screen.getByRole('button', { name: 'Receber código' }));
-    expect(await screen.findByText(/Não encontramos conta com este e-mail/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Criar conta de organizador' })).toHaveAttribute(
-      'href',
-      '/criar-conta',
-    );
+    const code = await screen.findByLabelText(/^Código de verificação/);
+    expect(clerk.fns.signInCreate).toHaveBeenCalledWith({ identifier: 'nova@exemplo.com.br' });
+    expect(clerk.fns.signUpCreate).toHaveBeenCalledWith({ emailAddress: 'nova@exemplo.com.br' });
+    expect(clerk.fns.prepareEmailAddressVerification).toHaveBeenCalledWith({
+      strategy: 'email_code',
+    });
+    expect(screen.queryByText(/Não encontramos/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Nome/)).not.toBeInTheDocument();
+    await user.type(code, '424242');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
+    expect(await screen.findByTestId('location')).toHaveTextContent('/criar-atividade');
+    expect(clerk.fns.attemptEmailAddressVerification).toHaveBeenCalledWith({ code: '424242' });
+    expect(clerk.fns.setActive).toHaveBeenCalledWith({ session: 'sess_test_1' });
+  });
+
+  it('D49: "Reenviar código" in the sign-up path re-sends the sign-up code', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      stubFetch();
+      const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
+      renderEntrar('/entrar');
+      await user.type(await screen.findByLabelText(/^E-mail/), 'nova2@exemplo.com.br');
+      await user.click(screen.getByRole('button', { name: 'Receber código' }));
+      await screen.findByLabelText(/^Código de verificação/);
+      expect(clerk.fns.prepareEmailAddressVerification).toHaveBeenCalledTimes(1);
+      for (let s = 0; s < 31; s++) {
+        await act(async () => {
+          vi.advanceTimersByTime(1000);
+        });
+      }
+      await user.click(screen.getByRole('button', { name: 'Reenviar código' }));
+      expect(await screen.findByText(/Enviamos um novo código/)).toBeInTheDocument();
+      expect(clerk.fns.prepareEmailAddressVerification).toHaveBeenCalledTimes(2);
+      expect(clerk.fns.prepareFirstFactor).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('wrong code keeps the step with an error; resend calls prepareFirstFactor again', async () => {

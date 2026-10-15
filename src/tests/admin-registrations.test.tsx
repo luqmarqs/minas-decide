@@ -29,12 +29,11 @@ const me = {
 };
 
 function person(i: number) {
-  const volunteer = i === 3;
-  const userId = `user_2reg${String(i).padStart(8, '0')}`;
+  const organizer = i === 1 || i === 2;
   return {
-    id: volunteer ? `00000000-0000-4000-8000-${String(i).padStart(12, '0')}` : userId,
-    source: volunteer ? 'volunteer' : 'account',
-    user_id: volunteer ? null : userId,
+    id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    organizer,
+    user_id: organizer ? `user_2reg${String(i).padStart(8, '0')}` : null,
     display_name: `Pessoa ${i}`,
     email: `pessoa${i}@exemplo.com.br`,
     phone: '+5531999990000',
@@ -42,8 +41,7 @@ function person(i: number) {
     territory_name: 'Mariana',
     contact_opt_in: i % 2 === 0,
     consent_version: 'v1',
-    email_verification_state: volunteer ? 'unverified' : i === 1 ? 'pending' : 'verified',
-    account_state: volunteer ? null : i === 2 ? 'suspended' : 'active',
+    account_state: !organizer ? null : i === 2 ? 'suspended' : 'active',
     created_at: '2026-10-08T15:04:05Z',
   };
 }
@@ -102,7 +100,7 @@ describe('/admin — Cadastros', () => {
       'WhatsApp',
       'Território',
       'Comunicações',
-      'Situação',
+      'Organizador',
       'Cadastro',
     ]);
     heads.forEach((h) => expect(h).toHaveAttribute('scope', 'col'));
@@ -111,13 +109,13 @@ describe('/admin — Cadastros', () => {
     expect(within(row).getByText('(31) 99999-0000')).toBeInTheDocument();
     expect(within(row).getByText('Mariana')).toBeInTheDocument();
     expect(within(row).getByText('não')).toBeInTheDocument();
-    expect(within(row).getByText('e-mail não verificado')).toBeInTheDocument();
+    expect(within(row).getByText('organizador')).toBeInTheDocument();
     expect(within(row).getByText('Pessoa 1').closest('td')).toHaveAttribute('data-label', 'Nome');
-    expect(screen.getByText('conta suspensa')).toBeInTheDocument();
-    // D48: volunteer without an account
+    expect(screen.getByText('suspenso')).toBeInTheDocument();
+    // D49: one row per registration; not an organizer -> no mark
     const vol = screen.getByText('Pessoa 3').closest('tr')!;
-    expect(within(vol).getByText('voluntário, sem conta')).toBeInTheDocument();
-    expect(within(vol).queryByText('e-mail não verificado')).not.toBeInTheDocument();
+    expect(within(vol).queryByText('organizador')).not.toBeInTheDocument();
+    expect(within(vol).getByText('Pessoa 3').closest('td')).toHaveAttribute('data-label', 'Nome');
     expect(
       screen.getByText(
         'Dados pessoais — uso restrito à campanha; acessos ficam registrados na auditoria.',

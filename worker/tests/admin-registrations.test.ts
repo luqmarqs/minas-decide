@@ -1,38 +1,34 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RATE_LIMITS } from '../middleware/rate-limit.ts';
 import { csvCell, formatBrasilia, formatPhoneBr } from '../services/registrations-csv.ts';
-import type { ProfileRow } from '../repositories/types.ts';
-import { body, setup } from './fakes.ts';
+import { body, setup, type VolunteerRow } from './fakes.ts';
 
 const LIST = '/api/v1/admin/registrations';
 const EXPORT = '/api/v1/admin/registrations/export.csv';
 
 type T = ReturnType<typeof setup>;
 
-function profile(i: number, over: Partial<ProfileRow> = {}): ProfileRow {
-  // two rows per timestamp: the user_id tie-break must keep pagination exact
+function reg(i: number, over: Partial<VolunteerRow> = {}): VolunteerRow {
+  // two rows per timestamp: the id tie-break must keep pagination exact
   const at = new Date(Date.parse('2026-09-01T12:00:00Z') + Math.floor(i / 2) * 60_000);
   return {
-    user_id: `user_seed${String(i).padStart(6, '0')}`,
+    id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
     display_name: `Pessoa ${i}`,
-    email_contact: `pessoa${i}@example.org`,
-    email_verification_state: 'verified',
+    email: `pessoa${i}@example.org`,
     phone_e164: '+5531999990000',
-    selected_territory_id: i % 2 === 0 ? 'mg-3140001' : 'mg-3106200',
+    territory_id: i % 2 === 0 ? 'mg-3140001' : 'mg-3106200',
     consent_version: 'v1',
     contact_opt_in_at: i % 3 === 0 ? at.toISOString() : null,
-    account_state: 'active',
-    review_required_at: null,
     created_at: at.toISOString(),
-    updated_at: at.toISOString(),
+    user_id: null,
     ...over,
   };
 }
 
 function seed(t: T, n: number) {
   for (let i = 0; i < n; i++) {
-    const p = profile(i);
-    t.repo.profiles.set(p.user_id, p);
+    const r = reg(i);
+    t.repo.volunteers.set(r.email, r);
   }
 }
 
@@ -59,21 +55,21 @@ describe('GET /admin/registrations', () => {
       expect(res.status).toBe(200);
       expect(res.headers.get('Cache-Control')).toContain('no-store');
       const data = (await body(res)).data as {
-        items: { user_id: string; email: string; phone: string }[];
+        items: { id: string; email: string; phone: string }[];
         next_cursor: string | null;
         total: number;
       };
       expect(data.total).toBe(120);
       expect(data.items.length).toBeLessThanOrEqual(50);
       if (data.next_cursor) expect(data.items).toHaveLength(50);
-      seen.push(...data.items.map((i) => i.user_id));
+      seen.push(...data.items.map((i) => i.id));
       cursor = data.next_cursor;
       pages++;
     } while (cursor);
     expect(pages).toBe(3);
     expect(new Set(seen).size).toBe(120);
     // newest first
-    expect(seen[0]).toBe('user_seed000119');
+    expect(seen[0]).toBe(reg(119).id);
   });
 
   it('returns the contract fields (PII, admin only)', async () => {
@@ -86,73 +82,43 @@ describe('GET /admin/registrations', () => {
         unknown
       >[]
     )[0]!;
-    expect(item).toMatchObject({
-      id: 'user_seed000000',
-      source: 'account',
-      user_id: 'user_seed000000',
+    expect(item).toEqual({
+      id: reg(0).id,
+      organizer: false,
+      user_id: null,
       display_name: 'Pessoa 0',
       email: 'pessoa0@example.org',
       phone: '+5531999990000',
       territory_id: 'mg-3140001',
       territory_name: 'Mariana',
       contact_opt_in: true,
-      email_verification_state: 'verified',
-      account_state: 'active',
+      consent_version: 'v1',
+      account_state: null,
+      created_at: reg(0).created_at,
     });
   });
 
-  it('D48: lists volunteers without an account next to account profiles (keyset over both)', async () => {
+  it('D49: ONE row per person; a linked login only marks it "organizador" (no duplicates)', async () => {
     const t = setup();
     const a = t.users.admin();
     seed(t, 3);
-    for (let i = 0; i < 4; i++) {
-      t.advance(1000);
-      await t.repo.createVolunteerSignup({
-        display_name: `Voluntária ${i}`,
-        email: `vol${i}@example.org`,
-        phone: '+5531988887777',
-        territory_id: 'mg-3106200',
-        consent_version: 'v1',
-        contact_opt_in: i === 0,
-      });
-    }
-    const seen: { id: string; source: string }[] = [];
-    let cursor: string | null = null;
-    do {
-      const res: Response = await t.request(`${LIST}?limit=2${cursor ? `&cursor=${cursor}` : ''}`, {
-        token: a.token,
-      });
-      const data = (await body(res)).data as {
-        items: { id: string; source: string }[];
-        next_cursor: string | null;
-        total: number;
-      };
-      expect(data.total).toBe(7);
-      seen.push(...data.items);
-      cursor = data.next_cursor;
-    } while (cursor);
-    expect(new Set(seen.map((r) => r.id)).size).toBe(7);
-    expect(seen.filter((r) => r.source === 'volunteer')).toHaveLength(4);
-    const vol = (
-      (await body(await t.request(`${LIST}?q=vol0@`, { token: a.token }))).data!.items as Record<
-        string,
-        unknown
-      >[]
-    )[0]!;
-    expect(vol).toMatchObject({
-      source: 'volunteer',
-      user_id: null,
-      display_name: 'Voluntária 0',
-      email: 'vol0@example.org',
-      phone: '+5531988887777',
-      territory_name: 'Belo Horizonte',
-      contact_opt_in: true,
-      email_verification_state: 'unverified',
-      account_state: null,
-    });
-    const csv = parseCsv(await (await t.request(`${EXPORT}?q=vol0@`, { token: a.token })).text());
+    const org = t.users.signedUp('pessoa1@example.org');
+    await t.request('/api/v1/me', { token: org.token }); // links the login
+    const data = (await body(await t.request(LIST, { token: a.token }))).data as {
+      items: { id: string; organizer: boolean; user_id: string | null; email: string }[];
+      total: number;
+    };
+    expect(data.total).toBe(3);
+    expect(data.items).toHaveLength(3);
+    expect(data.items.filter((r) => r.organizer)).toEqual([
+      expect.objectContaining({ email: 'pessoa1@example.org', user_id: org.user.id }),
+    ]);
+    const csv = parseCsv(
+      await (await t.request(`${EXPORT}?q=pessoa1@`, { token: a.token })).text(),
+    );
+    expect(csv).toHaveLength(2);
     expect(csv[1]).toContain(
-      'Voluntária 0;voluntário (sem conta);vol0@example.org;(31) 98888-7777',
+      'Pessoa 1;pessoa1@example.org;(31) 99999-0000;Belo Horizonte;não;sim;ativa;',
     );
   });
 
@@ -229,15 +195,15 @@ describe('GET /admin/registrations/export.csv', () => {
     expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]); // UTF-8 BOM
     const lines = parseCsv(new TextDecoder().decode(bytes));
     expect(lines[0]).toBe(
-      'Nome;Origem;E-mail;WhatsApp;Território;Aceita comunicações;E-mail verificado;Situação da conta;Versão do termo;Cadastrado em (Brasília)',
+      'Nome;E-mail;WhatsApp;Território;Aceita comunicações;Organizador;Situação do organizador;Versão do termo;Cadastrado em (Brasília)',
     );
     expect(lines).toHaveLength(2501);
-    expect(new Set(lines.slice(1).map((l) => l.split(';')[2])).size).toBe(2500);
+    expect(new Set(lines.slice(1).map((l) => l.split(';')[1])).size).toBe(2500);
     // limits: 1000/1000/1000 (the last one returns 500 rows, ending the walk) — never offset
     expect(t.repo.listRegistrationsCalls.map((c) => c.limit)).toEqual([1000, 1000, 1000]);
     expect(t.repo.listRegistrationsCalls.map((c) => c.after !== null)).toEqual([false, true, true]);
     expect(lines[1]).toBe(
-      `Pessoa 2499;conta;pessoa2499@example.org;(31) 99999-0000;Belo Horizonte;sim;verificado;ativa;v1;${formatBrasilia(profile(2499).created_at)}`,
+      `Pessoa 2499;pessoa2499@example.org;(31) 99999-0000;Belo Horizonte;sim;não;;v1;${formatBrasilia(reg(2499).created_at)}`,
     );
     // audited with the row count, no PII
     const audit = t.repo.audit.filter((e) => e.action === 'admin.registrations.export');
@@ -284,8 +250,8 @@ describe('GET /admin/registrations/export.csv', () => {
       'Ana; "A" \n Silva',
     ];
     evil.forEach((name, i) => {
-      const p = profile(i, { display_name: name });
-      t.repo.profiles.set(p.user_id, p);
+      const r = reg(i, { display_name: name });
+      t.repo.volunteers.set(r.email, r);
     });
     const text = new TextDecoder().decode(
       await (await t.request(EXPORT, { token: a.token })).arrayBuffer(),
@@ -330,7 +296,7 @@ describe('GET /admin/registrations/export.csv', () => {
     const logged = err.mock.calls.map((c) => String(c[0])).join('\n');
     expect(logged).toContain('admin.registrations.export');
     expect(logged).toContain('"rows_sent":1000');
-    expect(logged).not.toMatch(/Pessoa|@example|user_seed|db down/);
+    expect(logged).not.toMatch(/Pessoa|@example|pessoa|db down/);
   });
 
   it('is rate limited by the admin_write bucket (30 per 10 min)', async () => {

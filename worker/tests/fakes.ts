@@ -80,11 +80,13 @@ export interface VolunteerRow {
   id: string;
   display_name: string;
   email: string;
-  phone_e164: string;
+  phone_e164: string | null;
   territory_id: string | null;
   consent_version: string;
   contact_opt_in_at: string | null;
   created_at: string;
+  /** D49: linked organizer login (Clerk id) */
+  user_id: string | null;
 }
 
 export class FakeRepo implements Repo {
@@ -286,6 +288,27 @@ export class FakeRepo implements Repo {
     this.activities.push(row);
     return row;
   }
+  /** admin idempotency hash -> activity id (0018 admin_activity_requests) */
+  adminActivityRequests = new Map<string, string>();
+  /** Mirrors svc_admin_create_activity (0018): admin check, idempotent, published, audited. */
+  async adminCreateActivity(adminId: string, hash: string, w: ActivityWrite, requestId: string) {
+    if (!this.admins.has(adminId)) throw fail('FORBIDDEN');
+    const prev = this.adminActivityRequests.get(hash);
+    const existing = prev ? this.activities.find((a) => a.id === prev) : undefined;
+    if (existing) return { created: false, activity: existing };
+    const row = await this.createActivity(adminId, w);
+    row.status = 'published';
+    row.reviewed_at = row.created_at;
+    this.adminActivityRequests.set(hash, row.id);
+    this.audit.push({
+      actor: adminId,
+      action: 'admin.activity.create',
+      entity_id: row.id,
+      reason: null,
+    });
+    void requestId;
+    return { created: true, activity: row };
+  }
   async updateActivity(id: string, expectedVersion: number, patch: ActivityUpdate) {
     const a = this.activities.find((x) => x.id === id && x.version === expectedVersion);
     if (!a) return null;
@@ -356,6 +379,61 @@ export class FakeRepo implements Repo {
   async deleteProfile(id: string) {
     this.profiles.delete(id);
   }
+  /** linkOrganizer calls: [userId, email] (tests assert verified e-mails only) */
+  linkCalls: [string, string][] = [];
+  /** Mirrors svc_link_organizer (0018). */
+  async linkOrganizer(userId: string, email: string) {
+    this.linkCalls.push([userId, email]);
+    const key = email.trim().toLowerCase();
+    const sig = this.volunteers.get(key);
+    const prof = this.profiles.get(userId);
+    if (!sig) {
+      if (prof) {
+        if (![...this.volunteers.values()].some((v) => v.user_id === userId)) {
+          this.volunteers.set(key, {
+            id: this.uuid(),
+            display_name: prof.display_name,
+            email: key,
+            phone_e164: prof.phone_e164,
+            territory_id: prof.selected_territory_id,
+            consent_version: prof.consent_version,
+            contact_opt_in_at: prof.contact_opt_in_at,
+            created_at: prof.created_at,
+            user_id: userId,
+          });
+        }
+        return { organizer: true, linked: true, profile_created: false };
+      }
+      return { organizer: false, linked: false, profile_created: false };
+    }
+    if (sig.user_id && sig.user_id !== userId && this.profiles.has(sig.user_id)) {
+      return { organizer: !!prof, linked: false, profile_created: false, conflict: true };
+    }
+    for (const v of this.volunteers.values())
+      if (v.user_id === userId && v !== sig) v.user_id = null;
+    sig.user_id = userId;
+    let created = false;
+    if (!prof) {
+      const now = iso(this.clock());
+      this.profiles.set(userId, {
+        user_id: userId,
+        display_name: sig.display_name,
+        email_contact: key,
+        email_verification_state: 'verified',
+        phone_e164: sig.phone_e164,
+        selected_territory_id: sig.territory_id,
+        consent_version: sig.consent_version,
+        contact_opt_in_at: sig.contact_opt_in_at,
+        account_state: 'active',
+        review_required_at: null,
+        created_at: now,
+        updated_at: now,
+      });
+      this.audit.push({ actor: userId, action: 'organizer.link', entity_id: userId, reason: null });
+      created = true;
+    }
+    return { organizer: true, linked: true, profile_created: created };
+  }
   /** Mirrors svc_erase_user_data (0012). */
   async eraseUserData(id: string, _requestId: string) {
     if (!/^user_[A-Za-z0-9]{1,64}$/.test(id)) throw fail('VALIDATION_ERROR');
@@ -366,6 +444,7 @@ export class FakeRepo implements Repo {
     this.activities = this.activities.filter((a) => a.creator_user_id !== id);
     const profiles = this.profiles.delete(id) ? 1 : 0;
     const admins = this.admins.delete(id) ? 1 : 0;
+    for (const v of this.volunteers.values()) if (v.user_id === id) v.user_id = null;
     this.verified.delete(id);
     this.erased.push(id);
     return {
@@ -430,6 +509,7 @@ export class FakeRepo implements Repo {
       consent_version: v.consent_version,
       contact_opt_in_at: v.contact_opt_in ? iso(this.clock()) : null,
       created_at: iso(this.clock()),
+      user_id: null,
     });
     return { created: true };
   }
@@ -447,41 +527,28 @@ export class FakeRepo implements Repo {
       v.toLowerCase().includes(needle),
     );
   }
-  /** volunteers (D48) + account profiles, as svc_list_registrations builds them (0017) */
+  /** one row per registration (D49), organizer rows use the profile values (0018) */
   private allRegistrations(): AdminRegistration[] {
-    const vols: AdminRegistration[] = [...this.volunteers.values()].map((v) => ({
-      id: v.id,
-      source: 'volunteer',
-      user_id: null,
-      display_name: v.display_name,
-      email: v.email,
-      phone: v.phone_e164,
-      territory_id: v.territory_id,
-      territory_name: this.territoryName(v.territory_id),
-      contact_opt_in: v.contact_opt_in_at !== null,
-      consent_version: v.consent_version,
-      email_verification_state: 'unverified',
-      account_state: null,
-      created_at: v.created_at,
-    }));
-    const accounts: AdminRegistration[] = [...this.profiles.values()].map((p) => ({
-      id: p.user_id,
-      source: 'account',
-      user_id: p.user_id,
-      display_name: p.display_name,
-      email: p.email_contact,
-      phone: p.phone_e164,
-      territory_id: p.selected_territory_id,
-      territory_name: this.territoryName(p.selected_territory_id),
-      contact_opt_in: p.contact_opt_in_at !== null,
-      consent_version: p.consent_version,
-      email_verification_state: p.email_verification_state,
-      account_state: p.account_state,
-      created_at: p.created_at,
-    }));
-    return [...vols, ...accounts];
+    return [...this.volunteers.values()].map((v) => {
+      const p = v.user_id ? this.profiles.get(v.user_id) : undefined;
+      const territory = p?.selected_territory_id ?? v.territory_id;
+      return {
+        id: v.id,
+        organizer: v.user_id !== null,
+        user_id: v.user_id,
+        display_name: p?.display_name ?? v.display_name,
+        email: v.email,
+        phone: p?.phone_e164 ?? v.phone_e164,
+        territory_id: territory,
+        territory_name: this.territoryName(territory),
+        contact_opt_in: (p?.contact_opt_in_at ?? v.contact_opt_in_at) !== null,
+        consent_version: v.consent_version,
+        account_state: p?.account_state ?? null,
+        created_at: v.created_at,
+      };
+    });
   }
-  /** Mirrors svc_list_registrations (0017): keyset (created_at desc, id desc), limit 1..1000. */
+  /** Mirrors svc_list_registrations (0018): keyset (created_at desc, id desc), limit 1..1000. */
   async listRegistrations(opts: { after: Cursor | null; limit: number; q: string | null }) {
     this.listRegistrationsCalls.push({ limit: opts.limit, after: opts.after, q: opts.q });
     if (this.failListRegistrationsAt === this.listRegistrationsCalls.length) {
@@ -516,12 +583,11 @@ export class FakeRepo implements Repo {
   async adminMetrics(days: number): Promise<AdminInternalMetrics> {
     this.metricsCalls.push(days);
     const now = this.clock();
-    const accounts = [...this.profiles.values()];
-    const vols = [...this.volunteers.values()];
-    const profiles = [
-      ...accounts.map((p) => ({ created_at: p.created_at, territory: p.selected_territory_id })),
-      ...vols.map((v) => ({ created_at: v.created_at, territory: v.territory_id })),
-    ];
+    const profiles = this.allRegistrations().map((r) => ({
+      created_at: r.created_at,
+      territory: r.territory_id,
+      organizer: r.organizer,
+    }));
     const since = (d: number) =>
       profiles.filter((p) => Date.parse(p.created_at) >= now - d * 864e5);
     const by_day = Array.from({ length: days }, (_, i) => {
@@ -554,7 +620,7 @@ export class FakeRepo implements Repo {
         total: profiles.length,
         last_7d: since(7).length,
         last_30d: since(30).length,
-        by_source: { volunteer: vols.length, account: accounts.length },
+        organizers: profiles.filter((p) => p.organizer).length,
         by_day,
       },
       activities: {

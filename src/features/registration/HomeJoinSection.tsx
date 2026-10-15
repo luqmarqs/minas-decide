@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react';
+import { useLocation } from 'react-router';
 import { LoadingBlock } from '@/components/ui/Skeleton';
 import { useAfterIdle } from '@/lib/idle';
-import { JOIN_SECTION_ID, JOIN_TITLE_ID } from './join';
+import { JOIN_SECTION_ID, JOIN_TITLE_ID, type JoinPrefillState } from './join';
 import './home-join.css';
 
 // Zod and Turnstile only load after first paint (P-PERF-1). The volunteer form has no account
@@ -32,6 +33,7 @@ export interface HomeJoinSectionProps {
  */
 export function HomeJoinSection({ territoryId, start }: HomeJoinSectionProps) {
   const ready = useAfterIdle(start);
+  const prefill = (useLocation().state as JoinPrefillState | null)?.prefillEmail;
   return (
     <section
       id={JOIN_SECTION_ID}
@@ -62,6 +64,7 @@ export function HomeJoinSection({ territoryId, start }: HomeJoinSectionProps) {
           {ready ? (
             <Suspense fallback={<FormPlaceholder />}>
               <RegistrationForm
+                initialEmail={typeof prefill === 'string' ? prefill : undefined}
                 initialTerritoryId={territoryId && territoryId !== 'mg' ? territoryId : null}
               />
             </Suspense>

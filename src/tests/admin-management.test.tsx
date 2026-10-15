@@ -130,7 +130,7 @@ describe('/admin — Administradores', () => {
     expect(screen.getByLabelText(/E-mail da pessoa/)).toHaveAttribute('autocomplete', 'email');
     await user.click(screen.getByRole('button', { name: 'Adicionar administrador' }));
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent(/já ter conta criada em \/criar-conta/);
+    expect(dialog).toHaveTextContent(/já ter entrado no site com código por e-mail/);
     expect(dialog).toHaveTextContent(/acesso total à moderação e aos contatos/);
     // nothing sent yet, no success message yet
     expect(

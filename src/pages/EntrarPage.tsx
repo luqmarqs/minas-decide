@@ -38,28 +38,18 @@ export default function EntrarPage() {
       <div className="flex flex-col gap-6">
         <SignInCodeForm onSignedIn={() => navigate(next, { replace: true })} />
         <p className="text-sm text-secondary">
-          Ainda não tem conta de organizador?{' '}
-          <Link
-            to={next === '/' ? '/criar-conta' : `/criar-conta?next=${encodeURIComponent(next)}`}
-            className="underline"
-          >
-            Criar conta
+          Ainda não tem cadastro?{' '}
+          <Link to="/#participar" className="underline">
+            Cadastre-se
           </Link>
-          . Para ser voluntário não é preciso conta:{' '}
-          <Link to="/participar" className="underline">
-            cadastre-se aqui
-          </Link>
-          .
+          ; depois entre com o mesmo e-mail para propor atividades.
         </p>
       </div>
     );
   }
 
   return (
-    <PageShell
-      title="Entrar"
-      lead="Para organizadores com conta: entre com um código enviado ao seu e-mail. Não há senha."
-    >
+    <PageShell title="Entrar" lead="Entre com um código enviado ao seu e-mail. Não há senha.">
       {body}
     </PageShell>
   );

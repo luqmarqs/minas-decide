@@ -1,6 +1,6 @@
 /**
- * Smoke of the volunteer sign-up WITHOUT an account (D48) and of the organizer account + Clerk
- * sign-in (ADR 0005). The volunteer submit is answered by a MOCKED API route (page.route): the
+ * Smoke of the single registration WITHOUT an account (D48/D49) and of the Clerk "Entrar"
+ * (ADR 0005; unknown e-mails are signed up transparently, D49). The volunteer submit is answered by a MOCKED API route (page.route): the
  * local Worker talks to the TARGET, which also serves production (D40), so no real row is
  * written from e2e. No real Clerk code is ever sent: the code-step test uses a Clerk *test
  * e-mail* (`+clerk_test`) and stops at the code screen.
@@ -72,7 +72,7 @@ test('participar (D48): one public POST without Authorization, no code step → 
   await page.getByRole('button', { name: 'Cadastrar' }).click();
   await expect(page).toHaveURL(/\/obrigado\?territorio=mg-3140001-centro$/, { timeout: 20_000 });
   await expect(page.getByRole('heading', { level: 1, name: 'Cadastro recebido' })).toBeVisible();
-  await expect(page.getByText(/não foi criada nenhuma conta/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'entre com o mesmo e-mail' })).toBeVisible();
   await expect(page.getByLabel(/^Código de verificação/)).toHaveCount(0);
   expect(sent).toHaveLength(1);
   expect(sent[0]!.auth).toBeNull();
@@ -83,7 +83,7 @@ test('participar (D48): one public POST without Authorization, no code step → 
   });
 });
 
-test('criar-conta (organizer): valid form reaches the Clerk code step (test e-mail, no code sent)', async ({
+test('entrar (D49): an e-mail unknown to Clerk reaches the same code step (transparent sign-up)', async ({
   page,
 }) => {
   // Clerk bot protection (Smart CAPTCHA) rejects automated browsers. Clerk's official way
@@ -114,26 +114,23 @@ test('criar-conta (organizer): valid form reaches the Clerk code step (test e-ma
   page.on('console', (m) => {
     if (/Content Security Policy/i.test(m.text())) csp.push(m.text());
   });
-  await page.goto('/criar-conta?territorio=mg-3140001-centro');
-  await page.getByLabel(/^Nome/).fill('Teste E2E');
+  await page.goto('/entrar');
   await page.getByLabel(/^E-mail/).fill(`e2e-${Date.now()}+clerk_test@example.com`);
-  await page.getByLabel(/^WhatsApp/).fill('(31) 99999-8888');
-  await page.getByRole('checkbox', { name: /Li e aceito/ }).click();
-  // Local/dev Turnstile uses Cloudflare's always-pass test key.
-  await page.waitForTimeout(1500);
-  await page.getByRole('button', { name: 'Criar conta' }).click();
+  await page.getByRole('button', { name: 'Receber código' }).click();
 
   const code = page.getByLabel(/^Código de verificação/);
   await expect(code).toBeVisible({ timeout: 20_000 });
   await expect(code).toBeFocused();
   await expect(code).toHaveAttribute('autocomplete', 'one-time-code');
-  await expect(page.getByRole('heading', { name: 'Confirme seu e-mail' })).toBeVisible();
+  await expect(page.getByText(/Não encontramos/)).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Trocar e-mail' })).toBeVisible();
   expect(posts).toHaveLength(0);
   expect(csp).toEqual([]);
 });
 
-test('entrar: e-mail step is accessible and links to the organizer account', async ({ page }) => {
+test('entrar: e-mail step is accessible and links to the (single) registration', async ({
+  page,
+}) => {
   await page.goto('/entrar?next=/criar-atividade');
   await expect(page.getByRole('heading', { level: 1, name: 'Entrar' })).toBeVisible();
   const email = page.getByLabel(/^E-mail/);
@@ -141,17 +138,14 @@ test('entrar: e-mail step is accessible and links to the organizer account', asy
   await page.getByRole('button', { name: 'Receber código' }).click();
   await expect(page.getByText('Informe um e-mail válido.')).toBeVisible();
   await expect(email).toBeFocused();
-  await expect(page.getByRole('link', { name: 'Criar conta', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Cadastre-se' })).toHaveAttribute(
     'href',
-    '/criar-conta?next=%2Fcriar-atividade',
+    '/#participar',
   );
-  await expect(page.getByRole('link', { name: 'cadastre-se aqui' })).toHaveAttribute(
-    'href',
-    '/participar',
-  );
+  await expect(page.getByRole('link', { name: /Criar conta/ })).toHaveCount(0);
 });
 
-test('criar-atividade without session offers "Entrar com código" and "Criar conta"', async ({
+test('criar-atividade without session offers "Entrar com código" and "Fazer cadastro"', async ({
   page,
 }) => {
   await page.goto('/criar-atividade');
@@ -160,10 +154,18 @@ test('criar-atividade without session offers "Entrar com código" and "Criar con
     '/entrar?next=%2Fcriar-atividade',
     { timeout: 15_000 },
   );
-  await expect(page.getByRole('link', { name: 'Criar conta' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Fazer cadastro' })).toHaveAttribute(
     'href',
-    '/criar-conta?next=%2Fcriar-atividade',
+    '/#participar',
   );
+});
+
+test('D49: the old /criar-conta goes to the single registration on the home', async ({ page }) => {
+  await page.goto('/criar-conta');
+  await expect(page).toHaveURL(/\/#participar$/);
+  await expect(page.getByTestId('home-participar').getByLabel(/^Nome/)).toBeVisible({
+    timeout: 20_000,
+  });
 });
 
 test('legacy /autenticacao/retorno redirects to /entrar and never out', async ({ page }) => {

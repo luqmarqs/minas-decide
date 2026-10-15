@@ -1,13 +1,18 @@
 /**
- * Clerk sign-in by e-mail code (ADR 0005): `signIn.create({ identifier })` →
- * `prepareFirstFactor({ strategy: 'email_code' })` → `attemptFirstFactor` → `setActive`.
- * Shared by `/entrar` and by the sign-up form ("este e-mail já tem cadastro").
+ * "Entrar" by e-mail code (ADR 0005, D49). Works for ANY e-mail with the same screen and the
+ * same 6-digit code:
+ *  - Clerk knows the e-mail: `signIn.create({ identifier })` → `prepareFirstFactor` →
+ *    `attemptFirstFactor` → `setActive`;
+ *  - Clerk does not (`form_identifier_not_found`): transparent sign-up — `signUp.create
+ *    ({ emailAddress })` → `prepareEmailAddressVerification` → `attemptEmailAddressVerification`
+ *    → `setActive`. Nothing else is asked; the Worker links the login to the registration with
+ *    the same e-mail (D49).
  *
  * FE-12: Clerk lives in a lazy chunk; the resources come from the session store and every
  * step waits for Clerk to be loaded (rejects with `not_loaded` after a timeout).
  */
 import { useCallback, useRef } from 'react';
-import { AuthFlowError } from '@/lib/clerk';
+import { AuthFlowError, clerkErrorCode } from '@/lib/clerk';
 import { useClerkSnapshot, whenClerkReady, type ClerkSnapshot } from '@/lib/session';
 
 export const CODE_RE = /^\d{6}$/;
@@ -29,9 +34,17 @@ export async function readyClerk(): Promise<ClerkSnapshot> {
 export function useEmailCodeSignIn({ lazy = false }: { lazy?: boolean } = {}) {
   const ready = !!useClerkSnapshot({ lazy });
   const emailAddressId = useRef<string | null>(null);
+  /** which Clerk flow carries the code: existing user (sign-in) or new one (sign-up) */
+  const mode = useRef<'signin' | 'signup'>('signin');
 
+  /** Sends (or re-sends) the code of the current flow. */
   const prepare = useCallback(async () => {
-    const { signIn } = await readyClerk();
+    const { signIn, signUp } = await readyClerk();
+    if (mode.current === 'signup') {
+      if (!signUp) throw new AuthFlowError('not_loaded');
+      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+      return;
+    }
     if (!signIn || !emailAddressId.current) throw new AuthFlowError('not_loaded');
     await signIn.prepareFirstFactor({
       strategy: 'email_code',
@@ -39,15 +52,24 @@ export function useEmailCodeSignIn({ lazy = false }: { lazy?: boolean } = {}) {
     });
   }, []);
 
-  /** Starts a sign-in and sends the code. */
+  /** Starts a sign-in (or, for an unknown e-mail, a sign-up) and sends the code. */
   const start = useCallback(
     async (email: string) => {
-      const { signIn } = await readyClerk();
-      if (!signIn) throw new AuthFlowError('not_loaded');
-      const res = await signIn.create({ identifier: email });
-      const factor = res.supportedFirstFactors?.find((f) => f.strategy === 'email_code');
-      if (!factor || !('emailAddressId' in factor)) throw new AuthFlowError('strategy_unavailable');
-      emailAddressId.current = factor.emailAddressId;
+      const { signIn, signUp } = await readyClerk();
+      if (!signIn || !signUp) throw new AuthFlowError('not_loaded');
+      try {
+        const res = await signIn.create({ identifier: email });
+        const factor = res.supportedFirstFactors?.find((f) => f.strategy === 'email_code');
+        if (!factor || !('emailAddressId' in factor)) {
+          throw new AuthFlowError('strategy_unavailable');
+        }
+        emailAddressId.current = factor.emailAddressId;
+        mode.current = 'signin';
+      } catch (err) {
+        if (clerkErrorCode(err) !== 'form_identifier_not_found') throw err;
+        await signUp.create({ emailAddress: email });
+        mode.current = 'signup';
+      }
       await prepare();
     },
     [prepare],
@@ -55,13 +77,22 @@ export function useEmailCodeSignIn({ lazy = false }: { lazy?: boolean } = {}) {
 
   /** Checks the code and activates the session. */
   const verify = useCallback(async (code: string) => {
-    const { signIn, setActive } = await readyClerk();
-    if (!signIn || !setActive) throw new AuthFlowError('not_loaded');
-    const res = await signIn.attemptFirstFactor({ strategy: 'email_code', code });
-    if (res.status !== 'complete' || !res.createdSessionId) {
-      throw new AuthFlowError('flow_incomplete');
+    const { signIn, signUp, setActive } = await readyClerk();
+    if (!setActive) throw new AuthFlowError('not_loaded');
+    let sessionId: string | null | undefined;
+    if (mode.current === 'signup') {
+      if (!signUp) throw new AuthFlowError('not_loaded');
+      const res = await signUp.attemptEmailAddressVerification({ code });
+      if (res.status !== 'complete') throw new AuthFlowError('flow_incomplete');
+      sessionId = res.createdSessionId;
+    } else {
+      if (!signIn) throw new AuthFlowError('not_loaded');
+      const res = await signIn.attemptFirstFactor({ strategy: 'email_code', code });
+      if (res.status !== 'complete') throw new AuthFlowError('flow_incomplete');
+      sessionId = res.createdSessionId;
     }
-    await setActive({ session: res.createdSessionId });
+    if (!sessionId) throw new AuthFlowError('flow_incomplete');
+    await setActive({ session: sessionId });
   }, []);
 
   return { ready, start, resend: prepare, verify };

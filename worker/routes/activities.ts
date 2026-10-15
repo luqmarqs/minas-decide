@@ -157,11 +157,13 @@ async function loadManageable(
 ): Promise<{ row: ActivityRow; asAdmin: boolean }> {
   const { repo } = c.get('deps');
   const row = await repo.getActivity(id);
+  // Admins manage any activity, including the ones they created in the panel (D50: an admin
+  // does not need an organizer profile).
+  if (row && (await isAdminWithMfa(c, user))) return { row, asAdmin: true };
   if (row && row.creator_user_id === user.id) {
     await assertOrganizer(c, user);
     return { row, asAdmin: false };
   }
-  if (row && (await isAdminWithMfa(c, user))) return { row, asAdmin: true };
   // Non-owners get 404 (no existence oracle for pending activities).
   throw fail('NOT_FOUND');
 }

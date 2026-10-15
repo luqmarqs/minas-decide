@@ -71,6 +71,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      admin_activity_requests: {
+        Row: {
+          activity_id: string;
+          admin_user_id: string;
+          created_at: string;
+          idempotency_hash: string;
+        };
+        Insert: {
+          activity_id: string;
+          admin_user_id: string;
+          created_at?: string;
+          idempotency_hash: string;
+        };
+        Update: {
+          activity_id?: string;
+          admin_user_id?: string;
+          created_at?: string;
+          idempotency_hash?: string;
+        };
+        Relationships: [];
+      };
       admins: {
         Row: {
           created_at: string;
@@ -307,8 +328,9 @@ export type Database = {
           display_name: string;
           email: string;
           id: string;
-          phone_e164: string;
+          phone_e164: string | null;
           territory_id: string | null;
+          user_id: string | null;
         };
         Insert: {
           consent_version: string;
@@ -317,8 +339,9 @@ export type Database = {
           display_name: string;
           email: string;
           id?: string;
-          phone_e164: string;
+          phone_e164?: string | null;
           territory_id?: string | null;
+          user_id?: string | null;
         };
         Update: {
           consent_version?: string;
@@ -327,8 +350,9 @@ export type Database = {
           display_name?: string;
           email?: string;
           id?: string;
-          phone_e164?: string;
+          phone_e164?: string | null;
           territory_id?: string | null;
+          user_id?: string | null;
         };
         Relationships: [];
       };
@@ -761,6 +785,15 @@ export type Database = {
         };
         Returns: string;
       };
+      svc_admin_create_activity: {
+        Args: {
+          p_activity: Json;
+          p_admin: string;
+          p_idempotency_hash: string;
+          p_request_id?: string;
+        };
+        Returns: Json;
+      };
       svc_admin_metrics: { Args: { p_days?: number }; Returns: Json };
       svc_approve_activity: {
         Args: {
@@ -850,6 +883,10 @@ export type Database = {
       };
       svc_is_admin: { Args: { p_user: string }; Returns: boolean };
       svc_is_email_verified: { Args: { p_user: string }; Returns: boolean };
+      svc_link_organizer: {
+        Args: { p_email: string; p_user: string };
+        Returns: Json;
+      };
       svc_list_admins: { Args: never; Returns: Json };
       svc_list_group_proposals: {
         Args: {

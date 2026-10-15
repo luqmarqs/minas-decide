@@ -5,7 +5,12 @@ import { sanitizePlainText } from '../../shared/schemas/sanitize.ts';
 import type { AppBindings, AuthUser } from '../env.ts';
 import { fail } from '../errors.ts';
 import { ok, parseBody } from '../http.ts';
-import { invalidateUserCache, requireSession, syncProfileEmail } from '../middleware/auth.ts';
+import {
+  invalidateUserCache,
+  linkOrganizer,
+  requireSession,
+  syncProfileEmail,
+} from '../middleware/auth.ts';
 import { noStore } from '../middleware/cache.ts';
 import { rateLimit, rateLimitPerUser } from '../middleware/rate-limit.ts';
 import type { ProfilePatch, ProfileRow } from '../repositories/types.ts';
@@ -44,13 +49,19 @@ export async function buildMe(
     account_state: profile?.account_state ?? 'active',
     phone_masked: profile?.phone_e164 ? maskPhone(profile.phone_e164) : null,
     profile_review_required: false,
+    registration_required: !profile,
     ...(emailSyncConflict ? { email_sync_conflict: true } : {}),
   };
 }
 
-/** QA3-01: rate limited per IP + user; QA3-02: an e-mail sync conflict never fails GET /me. */
+/**
+ * QA3-01: rate limited per IP + user; QA3-02: an e-mail sync conflict never fails GET /me.
+ * D49: every GET /me with a verified e-mail (re)links the login to the registration with the
+ * same e-mail (idempotent); `registration_required` = still no organizer profile.
+ */
 me.get('/me', noStore, requireSession, rateLimitPerUser('account_read'), async (c) => {
   const user = c.get('user')!;
+  await linkOrganizer(c, user);
   const profile = await c.get('deps').repo.getProfile(user.id);
   if (!profile) return ok(c, await buildMe(c, user, null));
   const synced = await syncProfileEmail(c, user, profile);
