@@ -273,6 +273,10 @@
   background: var(--brand-olive-deep);
   color: var(--color-text-primary);
 }
+.brand-hero__headline {
+  /* Sol sobre a ilha oliva (≈ 9:1): o chamado principal do hero. */
+  color: var(--brand-sun);
+}
 .brand-hero__art {
   position: relative;
   overflow: hidden;

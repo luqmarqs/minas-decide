@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { z } from 'zod';
+import type { GeocodePlace } from '@shared/contracts/geocode.ts';
 import {
   ACTIVITY_TYPE_LABEL_PT,
   ActivityInput,
@@ -33,6 +34,9 @@ import {
   type FieldErrors,
 } from '@/features/registration/formErrors';
 import { TerritoryField } from '@/features/registration/TerritoryField';
+import { useTerritoryIndex } from '@/features/electoral-map/hooks';
+import { AddressSearch } from './AddressSearch';
+import { matchTerritory } from './geocodeTerritory';
 import { readDraft as readStoredDraft, writeDraft as writeStoredDraft } from './draftStore';
 import { useTerritoryName } from '@/features/registration/useTerritoryName';
 import {
@@ -208,7 +212,12 @@ export function ActivityEditor({
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [coordsOpen, setCoordsOpen] = useState(false);
+  const [focusKey, setFocusKey] = useState(0);
+  const [pendingPlace, setPendingPlace] = useState<GeocodePlace | null>(null);
+  const [territoryNote, setTerritoryNote] = useState<string | null>(null);
   const { entry: territoryEntry } = useTerritoryName(draft.territoryId);
+  const { index: territoryIndex } = useTerritoryIndex();
 
   // Draft survives the e-mail verification detour (any tab, 7 days) — create mode only.
   useEffect(() => {
@@ -220,10 +229,45 @@ export function ActivityEditor({
   const setPoint = (lon: string, lat: string) =>
     setDraft((d) => ({ ...d, lon, lat, confirmed: false }));
 
+  /** A search result / pasted link: point + pin zoom + territory (city, then neighborhood). */
+  function applyPlace(place: GeocodePlace) {
+    const [lo, la] = place.coordinates;
+    setDraft((d) => ({
+      ...d,
+      lon: String(Math.round(lo * 1e6) / 1e6),
+      lat: String(Math.round(la * 1e6) / 1e6),
+      confirmed: false,
+    }));
+    setShowMap(true);
+    setFocusKey((k) => k + 1);
+    if (!place.city) return;
+    if (territoryIndex) applyTerritory(place, territoryIndex);
+    else setPendingPlace(place); // the index is still loading: applied as soon as it arrives
+  }
+
+  function applyTerritory(place: GeocodePlace, index: NonNullable<typeof territoryIndex>) {
+    const entry = matchTerritory(index, place.city, place.neighborhood);
+    if (entry) {
+      set('territoryId', entry.id);
+      setTerritoryNote(null);
+    } else {
+      setTerritoryNote(
+        `Não encontramos “${place.city}” na lista de territórios. Escolha a cidade ou o bairro abaixo.`,
+      );
+    }
+  }
+
+  // Adjust state during render (React docs): a place picked before the index finished loading.
+  if (pendingPlace && territoryIndex) {
+    setPendingPlace(null);
+    applyTerritory(pendingPlace, territoryIndex);
+  }
+
   const startIso =
     draft.date && draft.startTime ? saoPauloLocalToUtcIso(draft.date, draft.startTime) : null;
   const endIso =
     draft.date && draft.endTime ? saoPauloLocalToUtcIso(draft.date, draft.endTime) : null;
+  const coordsVisible = coordsOpen || !!errors.coordinates;
   const lon = parseCoord(draft.lon);
   const lat = parseCoord(draft.lat);
   const point: [number, number] | null = lon !== null && lat !== null ? [lon, lat] : null;
@@ -312,6 +356,7 @@ export function ActivityEditor({
     const { input, errors: errs } = buildInput();
     if (!input) {
       setErrors(errs);
+      if (errs.coordinates) setCoordsOpen(true);
       focusFirstError(ORDER, errs, idOf);
       return;
     }
@@ -407,36 +452,32 @@ export function ActivityEditor({
           />
         )}
       </Field>
+      <AddressSearch
+        id={IDS.public_address!}
+        value={draft.address}
+        onChange={(text) => set('address', text)}
+        onPlace={applyPlace}
+        error={errors.public_address}
+        hint="Aparece para todos. Prefira locais públicos (praça, esquina); evite endereço residencial."
+      />
       <TerritoryField
         id={IDS.territory_id!}
         label="Cidade ou bairro"
         value={draft.territoryId}
-        onChange={(entry) => set('territoryId', entry.id)}
+        onChange={(entry) => {
+          set('territoryId', entry.id);
+          setTerritoryNote(null);
+        }}
         error={errors.territory_id}
       />
-      <Field
-        label="Endereço ou ponto de encontro público"
-        required
-        id={IDS.public_address}
-        error={errors.public_address}
-        hint="Aparece para todos. Prefira locais públicos (praça, esquina); evite endereço residencial."
-      >
-        {(p) => (
-          <Input
-            {...p}
-            autoComplete="off"
-            value={draft.address}
-            maxLength={240}
-            onChange={(e) => set('address', e.target.value)}
-          />
-        )}
-      </Field>
+      {territoryNote ? <Note tone="warning">{territoryNote}</Note> : null}
 
       <fieldset className="flex flex-col gap-3">
         <legend className="text-sm font-semibold text-primary">Ponto no mapa *</legend>
         <p className="text-sm text-muted">
-          Clique no mapa para marcar o local, ou digite as coordenadas. Não buscamos endereço
-          automaticamente: confira o ponto antes de confirmar.
+          Escolha uma sugestão ao digitar o endereço, ou cole um link do Google Maps no campo acima:
+          o ponto aparece no mapa. Você também pode clicar no mapa ou arrastar o pino. O ponto
+          confirmado por você é o que vale: confira antes de confirmar.
         </p>
         <div>
           <Button
@@ -453,37 +494,51 @@ export function ActivityEditor({
             <ActivityEditorMap
               center={mapCenter}
               value={point}
+              focusKey={focusKey}
               onPick={([lo, la]) => setPoint(String(lo), String(la))}
             />
           </Suspense>
         ) : null}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field
-            label="Latitude"
-            id={IDS.coordinates}
-            error={errors.coordinates}
-            hint="Ex.: -19.9191"
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCoordsOpen((v) => !v)}
+            aria-expanded={coordsVisible}
+            aria-controls="act-coords"
           >
-            {(p) => (
-              <Input
-                {...p}
-                inputMode="decimal"
-                value={draft.lat}
-                onChange={(e) => setPoint(draft.lon, e.target.value)}
-              />
-            )}
-          </Field>
-          <Field label="Longitude" id="act-lon" hint="Ex.: -43.9386">
-            {(p) => (
-              <Input
-                {...p}
-                inputMode="decimal"
-                value={draft.lon}
-                onChange={(e) => setPoint(e.target.value, draft.lat)}
-              />
-            )}
-          </Field>
+            Ajustar coordenadas manualmente
+          </Button>
         </div>
+        {coordsVisible ? (
+          <div id="act-coords" className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label="Latitude"
+              id={IDS.coordinates}
+              error={errors.coordinates}
+              hint="Ex.: -19.9191"
+            >
+              {(p) => (
+                <Input
+                  {...p}
+                  inputMode="decimal"
+                  value={draft.lat}
+                  onChange={(e) => setPoint(draft.lon, e.target.value)}
+                />
+              )}
+            </Field>
+            <Field label="Longitude" id="act-lon" hint="Ex.: -43.9386">
+              {(p) => (
+                <Input
+                  {...p}
+                  inputMode="decimal"
+                  value={draft.lon}
+                  onChange={(e) => setPoint(e.target.value, draft.lat)}
+                />
+              )}
+            </Field>
+          </div>
+        ) : null}
         {point && !insideMg(point[0], point[1]) ? (
           <Note tone="warning">Este ponto parece estar fora de Minas Gerais. Confira.</Note>
         ) : null}

@@ -21,3 +21,7 @@ CLERK_PUBLISHABLE_KEY=<clerk-publishable-key>
 # UMAMI_WEBSITE_ID=<website-uuid>
 # UMAMI_USERNAME=<read-only-user>
 # UMAMI_PASSWORD=<read-only-password>
+# Optional (D53): Google Maps Platform key (Places API (New) + Geocoding API) for address search in
+# the activity editor. Worker secret only (wrangler secret put GOOGLE_MAPS_API_KEY); restrict it
+# by API in Google Cloud. Without it the Worker uses Photon (OSM, no key).
+# GOOGLE_MAPS_API_KEY=<google-maps-api-key>

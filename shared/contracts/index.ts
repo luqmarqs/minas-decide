@@ -6,3 +6,4 @@ export * from './activities.ts';
 export * from './registration.ts';
 export * from './admin.ts';
 export * from './snapshot.ts';
+export * from './geocode.ts';

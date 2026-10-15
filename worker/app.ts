@@ -11,6 +11,7 @@ import { ClerkAuthGateway } from './repositories/clerk.ts';
 import { SupabaseRepo } from './repositories/supabase.ts';
 import { activities } from './routes/activities.ts';
 import { admin } from './routes/admin.ts';
+import { geocode } from './routes/geocode.ts';
 import { groups } from './routes/groups.ts';
 import { health } from './routes/health.ts';
 import { me } from './routes/me.ts';
@@ -65,6 +66,7 @@ export function createApp(opts: CreateAppOptions = {}) {
   const v1 = new Hono<AppBindings>();
   v1.route('/', health);
   v1.route('/', territories);
+  v1.route('/', geocode);
   v1.route('/', groups);
   v1.route('/', rsvp);
   v1.route('/', activities);

@@ -141,7 +141,13 @@ export type AdminListResponse = z.infer<typeof AdminListResponse>;
 export const AdminGrantResponse = z.object({
   user_id: ClerkUserId,
   email_masked: z.string(),
+  /** true = admin row inserted now; false = was already admin */
   created: z.boolean(),
+  /**
+   * D52: true = there was no login for this e-mail and one was created now (the person enters
+   * through "Entrar" with the code sent to the e-mail); false = the login already existed.
+   */
+  account_created: z.boolean().optional().default(false),
 });
 export type AdminGrantResponse = z.infer<typeof AdminGrantResponse>;
 

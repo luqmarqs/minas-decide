@@ -117,7 +117,15 @@ describe('/admin — Administradores', () => {
       if (url === '/api/v1/admin/admins' && init?.method === 'POST') {
         granted = true;
         return Promise.resolve(
-          ok({ user_id: NEW_ID, email_masked: 'no***@exemplo.com.br', created: true }, 201),
+          ok(
+            {
+              user_id: NEW_ID,
+              email_masked: 'no***@exemplo.com.br',
+              created: true,
+              account_created: true,
+            },
+            201,
+          ),
         );
       }
       if (url === '/api/v1/admin/admins') return Promise.resolve(ok(list));
@@ -130,7 +138,12 @@ describe('/admin — Administradores', () => {
     expect(screen.getByLabelText(/E-mail da pessoa/)).toHaveAttribute('autocomplete', 'email');
     await user.click(screen.getByRole('button', { name: 'Adicionar administrador' }));
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent(/já ter entrado no site com código por e-mail/);
+    // D52: no previous login needed
+    expect(
+      screen.getByText(/Informe o e-mail\. A pessoa entra em “Entrar” com o código/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/já ter entrado/)).not.toBeInTheDocument();
+    expect(dialog).toHaveTextContent(/entra em “Entrar” com o código enviado para esse e-mail/);
     expect(dialog).toHaveTextContent(/acesso total à moderação e aos contatos/);
     // nothing sent yet, no success message yet
     expect(
@@ -140,7 +153,7 @@ describe('/admin — Administradores', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Conceder e registrar' }));
     expect(
       await screen.findByText(/no\*\*\*@exemplo\.com\.br agora é administrador/),
-    ).toBeInTheDocument();
+    ).toHaveTextContent(/Ainda não tinha login: a pessoa entra pela primeira vez em “Entrar”/);
     expect(granted).toBe(true);
     const post = callsTo(fetchMock, '/api/v1/admin/admins').find(([, i]) => i.method === 'POST')!;
     expect(JSON.parse(String(post[1].body))).toEqual({ email: 'nova@exemplo.com.br' });
@@ -167,7 +180,38 @@ describe('/admin — Administradores', () => {
     ).toHaveLength(0);
   });
 
-  it('neutral 404: explains that the person needs an account and shows no success', async () => {
+  it('D52: existing login -> success says it already had a login', async () => {
+    stubFetch((url, init) => {
+      if (url === '/api/v1/me') return Promise.resolve(ok(me));
+      if (url.startsWith('/api/v1/admin/queue'))
+        return Promise.resolve(ok({ kind: 'groups', items: [], next_cursor: null }));
+      if (url === '/api/v1/admin/admins' && init?.method === 'POST')
+        return Promise.resolve(
+          ok(
+            {
+              user_id: NEW_ID,
+              email_masked: 'ja***@exemplo.com.br',
+              created: true,
+              account_created: false,
+            },
+            201,
+          ),
+        );
+      if (url === '/api/v1/admin/admins') return Promise.resolve(ok(list));
+      return undefined;
+    });
+    const user = userEvent.setup();
+    renderAdmin();
+    await openAdminsTab(user);
+    await user.type(screen.getByLabelText(/E-mail da pessoa/), 'ja@exemplo.com.br');
+    await user.click(screen.getByRole('button', { name: 'Adicionar administrador' }));
+    await user.click(await screen.findByRole('button', { name: 'Conceder e registrar' }));
+    expect(
+      await screen.findByText(/ja\*\*\*@exemplo\.com\.br agora é administrador e já tinha login/),
+    ).toBeInTheDocument();
+  });
+
+  it('neutral 404 (blocked login): generic message, no old "/participar" text, no success', async () => {
     stubFetch((url, init) => {
       if (url === '/api/v1/me') return Promise.resolve(ok(me));
       if (url.startsWith('/api/v1/admin/queue'))
@@ -183,9 +227,9 @@ describe('/admin — Administradores', () => {
     await user.type(screen.getByLabelText(/E-mail da pessoa/), 'ninguem@exemplo.com.br');
     await user.click(screen.getByRole('button', { name: 'Adicionar administrador' }));
     await user.click(await screen.findByRole('button', { name: 'Conceder e registrar' }));
-    expect(
-      await screen.findByText(/Não encontramos uma conta com este e-mail/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/não pode receber acesso de administrador/)).toBeInTheDocument();
+    expect(screen.queryByText(/Não encontramos uma conta/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/participar/)).not.toBeInTheDocument();
     expect(screen.queryByText(/agora é administrador/)).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });

@@ -49,13 +49,23 @@ describe('admin management (/admin/admins)', () => {
     const text = JSON.stringify(await res.clone().json());
     expect(text).not.toContain('nova.pessoa@');
     const data = (await body(res)).data!;
-    expect(data).toMatchObject({ user_id: target.user.id, created: true });
+    expect(data).toMatchObject({
+      user_id: target.user.id,
+      created: true,
+      account_created: false,
+    });
     expect(data.email_masked).toBe('no***@example.org');
     expect(t.repo.admins.has(target.user.id)).toBe(true);
     expect(t.repo.adminMeta.get(target.user.id)?.created_by).toBe(a.user.id);
     expect(t.repo.audit.filter((e) => e.action === 'admin.grant')).toEqual([
-      { actor: a.user.id, action: 'admin.grant', entity_id: target.user.id, reason: null },
+      {
+        actor: a.user.id,
+        action: 'admin.grant',
+        entity_id: target.user.id,
+        reason: 'login=existing',
+      },
     ]);
+    expect(t.auth.createdUsers).toEqual([]);
     // idempotent: second call 200, no second audit row
     const again = await t.request(BASE, {
       method: 'POST',
@@ -67,21 +77,65 @@ describe('admin management (/admin/admins)', () => {
     expect(t.repo.audit.filter((e) => e.action === 'admin.grant')).toHaveLength(1);
   });
 
-  it('unknown e-mail -> neutral 404 and nothing stored', async () => {
+  it('D52: e-mail without login -> creates the Clerk user (fake) + admin; idempotent', async () => {
     const t = setup();
     const a = t.users.admin();
     const res = await t.request(BASE, {
       method: 'POST',
       token: a.token,
-      json: { email: 'ninguem@example.org' },
+      json: { email: 'Nova.Adm@Example.org' },
     });
-    expect(res.status).toBe(404);
-    expect((await body(res)).error?.code).toBe('NOT_FOUND');
-    expect(t.repo.admins.size).toBe(1);
-    expect(t.repo.audit.some((e) => e.action === 'admin.grant')).toBe(false);
+    expect(res.status).toBe(201);
+    const data = (await body(res)).data!;
+    expect(data).toMatchObject({
+      created: true,
+      account_created: true,
+      email_masked: 'no***@example.org',
+    });
+    expect(t.auth.createdUsers).toEqual(['nova.adm@example.org']);
+    const id = String(data.user_id);
+    expect(t.repo.admins.has(id)).toBe(true);
+    const audit = t.repo.audit.filter((e) => e.action === 'admin.grant');
+    expect(audit).toEqual([
+      { actor: a.user.id, action: 'admin.grant', entity_id: id, reason: 'login=created' },
+    ]);
+    expect(JSON.stringify(t.repo.audit)).not.toContain('nova.adm');
+    // repeated: no second Clerk user, no second admin row
+    const again = await t.request(BASE, {
+      method: 'POST',
+      token: a.token,
+      json: { email: 'nova.adm@example.org' },
+    });
+    expect(again.status).toBe(200);
+    expect((await body(again)).data).toMatchObject({
+      user_id: id,
+      created: false,
+      account_created: false,
+    });
+    expect(t.auth.createdUsers).toHaveLength(1);
+    expect(t.repo.admins.size).toBe(2);
   });
 
-  it('unverified primary e-mail -> 400 VALIDATION_ERROR with field, nothing stored', async () => {
+  it('D52: the created admin uses the panel after signing in, with no registration/profile', async () => {
+    const t = setup();
+    const a = t.users.admin();
+    const res = await t.request(BASE, {
+      method: 'POST',
+      token: a.token,
+      json: { email: 'primeira.vez@example.org' },
+    });
+    const id = String((await body(res)).data!.user_id);
+    // first sign-in with the e-mail code -> a Clerk session for that user
+    const token = 'tok-new-admin-padding-padding-pad';
+    t.auth.add(token, { id, email: 'primeira.vez@example.org', email_confirmed: true });
+    expect(t.repo.profiles.has(id)).toBe(false);
+    expect((await t.request('/api/v1/admin/queue', { token })).status).toBe(200);
+    expect((await t.request('/api/v1/admin/registrations', { token })).status).toBe(200);
+    const me = (await body(await t.request('/api/v1/me', { token }))).data;
+    expect(me).toMatchObject({ is_admin: true, registration_required: true });
+  });
+
+  it('existing login with an unverified primary e-mail: granted, but no admin power until verified', async () => {
     const t = setup();
     const a = t.users.admin();
     const target = withTarget(t, { verified: false });
@@ -90,11 +144,42 @@ describe('admin management (/admin/admins)', () => {
       token: a.token,
       json: { email: 'nova.pessoa@example.org' },
     });
-    expect(res.status).toBe(400);
-    const json = await body(res);
-    expect(json.error?.code).toBe('VALIDATION_ERROR');
-    expect(json.error?.fields?.email).toBeDefined();
+    expect(res.status).toBe(201);
+    expect(t.auth.createdUsers).toEqual([]);
+    const unverified = 'tok-unverified-admin-padding-pad';
+    t.auth.add(unverified, {
+      id: target.user.id,
+      email: 'nova.pessoa@example.org',
+      email_confirmed: false,
+    });
+    expect((await t.request('/api/v1/admin/queue', { token: unverified })).status).toBe(403);
+  });
+
+  it('banned login -> neutral 404, nothing stored', async () => {
+    const t = setup();
+    const a = t.users.admin();
+    const target = withTarget(t);
+    t.auth.people.get(target.user.id)!.banned = true;
+    const res = await t.request(BASE, {
+      method: 'POST',
+      token: a.token,
+      json: { email: 'nova.pessoa@example.org' },
+    });
+    expect(res.status).toBe(404);
     expect(t.repo.admins.has(target.user.id)).toBe(false);
+  });
+
+  it('invalid e-mail -> 400 and no Clerk user is created', async () => {
+    const t = setup();
+    const a = t.users.admin();
+    const res = await t.request(BASE, {
+      method: 'POST',
+      token: a.token,
+      json: { email: 'não-é-email' },
+    });
+    expect(res.status).toBe(400);
+    expect((await body(res)).error?.fields?.email).toBeDefined();
+    expect(t.auth.createdUsers).toEqual([]);
   });
 
   it('invalid body -> 400', async () => {
@@ -169,6 +254,7 @@ describe('admin management (/admin/admins)', () => {
     }
     expect((await t.request(BASE)).status).toBe(401);
     expect(t.repo.admins.size).toBe(2);
+    expect(t.auth.createdUsers).toEqual([]); // D52: no Clerk user created by a non-admin
   });
 
   it('re-checks Clerk on every call (fresh): a banned admin is refused immediately', async () => {

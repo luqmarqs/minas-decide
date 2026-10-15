@@ -77,6 +77,10 @@ export const RATE_LIMITS = {
   account_read: { limit: 120, windowMs: 60 * 1000 },
   /** per IP + Clerk user id: admin grant/revoke (sensitive writes) */
   admin_write: { limit: 30, windowMs: TEN_MIN },
+  /** per IP — address search proxy (protects Google quota and cost) */
+  geocode_ip: { limit: 60, windowMs: 60 * 1000 },
+  /** per IP — pasted Google Maps link resolver (follows redirects) */
+  geocode_resolve_ip: { limit: 20, windowMs: 60 * 1000 },
   /** per IP — Clerk webhook deliveries (Svix); signature is checked after this */
   webhook_ip: { limit: 300, windowMs: TEN_MIN },
 } as const;

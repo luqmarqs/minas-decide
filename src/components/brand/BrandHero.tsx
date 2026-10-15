@@ -41,10 +41,10 @@ export function BrandHero({ titleId, notice, search, actions }: BrandHeroProps) 
         </div>
         <div className="relative z-[3] -mt-8 px-(--gutter) pb-6 sm:-mt-10 lg:px-6 xl:mt-0 xl:flex xl:min-w-0 xl:flex-1 xl:flex-col xl:justify-center xl:py-8 xl:pr-10">
           <h1 id={titleId} className="leading-[1.02] uppercase">
-            <span className="brand-display block text-[2.4rem] sm:text-5xl xl:text-[3.6rem]">
+            <span className="brand-outline block text-[1.5rem] leading-[1.15] sm:text-[2rem] xl:text-[2.2rem]">
               Minas decide:
             </span>{' '}
-            <span className="brand-outline mt-1 block text-[1.6rem] leading-[1.15] sm:text-[2.3rem] xl:text-[2.6rem]">
+            <span className="brand-hero__headline brand-display mt-1 block text-[3.1rem] leading-[0.98] sm:text-[4.4rem] xl:text-[5rem]">
               é hora da virada!
             </span>
           </h1>

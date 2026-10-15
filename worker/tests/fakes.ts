@@ -902,6 +902,25 @@ export class FakeAuth implements AuthGateway {
   async findUserByEmail(email: string) {
     return [...this.people.values()].find((p) => p.email === email.toLowerCase()) ?? null;
   }
+  /** users created by ensureUserByEmail (D52) */
+  createdUsers: string[] = [];
+  private createdSeq = 0;
+  async ensureUserByEmail(email: string) {
+    if (this.outage) throw fail('SERVICE_UNAVAILABLE');
+    const existing = await this.findUserByEmail(email);
+    if (existing) return { user: existing, created: false };
+    const id = `user_created${String(++this.createdSeq).padStart(6, '0')}`;
+    // Clerk marks a Backend-API-created e-mail as verified (sign-in still needs the code)
+    const user: ClerkUserInfo = {
+      id,
+      email: email.toLowerCase(),
+      email_verified: true,
+      banned: false,
+    };
+    this.people.set(id, user);
+    this.createdUsers.push(email.toLowerCase());
+    return { user, created: true };
+  }
 }
 
 /** Fake Siteverify: tokens starting with "bad" fail; "wronghost" returns another hostname;

@@ -50,6 +50,8 @@ export interface Env {
   UMAMI_WEBSITE_ID?: string;
   UMAMI_USERNAME?: string;
   UMAMI_PASSWORD?: string;
+  /** Google Maps Platform key (D53): Places (New) + Geocoding. Worker secret only, never VITE_*. Without it the search falls back to Photon (OSM). */
+  GOOGLE_MAPS_API_KEY?: string;
 }
 
 /** Subset of the Workers Cache API used for public GETs (QA-1 F16). */

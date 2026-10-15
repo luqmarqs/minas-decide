@@ -456,4 +456,10 @@ export interface AuthGateway {
   getUser(userId: string): Promise<ClerkUserInfo | null>;
   /** Backend API lookup by e-mail (scripts / admin bootstrap). */
   findUserByEmail(email: string): Promise<ClerkUserInfo | null>;
+  /**
+   * D52: returns the Clerk user of this e-mail, creating it when there is none (e-mail only,
+   * no password; the instance signs in by e-mail code only). Idempotent: a concurrent creation
+   * that loses the race returns the existing user with `created: false`.
+   */
+  ensureUserByEmail(email: string): Promise<{ user: ClerkUserInfo; created: boolean }>;
 }

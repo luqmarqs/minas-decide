@@ -21,7 +21,7 @@ export function adminAccessErrorMessage(err: unknown, action: 'grant' | 'revoke'
     switch (err.code) {
       case 'NOT_FOUND':
         return action === 'grant'
-          ? 'Não encontramos uma conta com este e-mail. A pessoa precisa criar a conta em /participar e confirmar o e-mail antes.'
+          ? 'Este e-mail não pode receber acesso de administrador (login bloqueado).'
           : 'Este administrador não está mais na lista. Atualize a lista.';
       case 'VALIDATION_ERROR':
         return action === 'grant'

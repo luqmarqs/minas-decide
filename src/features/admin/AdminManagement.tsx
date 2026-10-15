@@ -211,9 +211,11 @@ function AddAdminForm({ onDone }: { onDone: (text: string) => void }) {
       setEmail('');
       setFieldError(undefined);
       onDone(
-        r.created
-          ? `${r.email_masked} agora é administrador. A concessão foi registrada na auditoria.`
-          : `${r.email_masked} já era administrador. Nada foi alterado.`,
+        !r.created
+          ? `${r.email_masked} já era administrador. Nada foi alterado.`
+          : r.account_created
+            ? `${r.email_masked} agora é administrador. Ainda não tinha login: a pessoa entra pela primeira vez em “Entrar” com o código enviado para esse e-mail. A concessão foi registrada na auditoria.`
+            : `${r.email_masked} agora é administrador e já tinha login. A concessão foi registrada na auditoria.`,
       );
     } catch (err) {
       setConfirming(false);
@@ -236,8 +238,8 @@ function AddAdminForm({ onDone }: { onDone: (text: string) => void }) {
           Adicionar administrador
         </h2>
         <p className="text-sm text-secondary">
-          A pessoa precisa já ter entrado no site (Entrar, com código por e-mail). Administradores
-          têm acesso total à moderação e aos contatos.
+          Informe o e-mail. A pessoa entra em “Entrar” com o código enviado para esse e-mail.
+          Administradores têm acesso total à moderação e aos contatos.
         </p>
         <Field label="E-mail da pessoa" required id="admin-add-email" error={fieldError}>
           {(p) => (
@@ -264,7 +266,7 @@ function AddAdminForm({ onDone }: { onDone: (text: string) => void }) {
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent
           title="Conceder acesso de administrador?"
-          description="Esta pessoa receberá acesso total à moderação e aos contatos dos proponentes. Ela precisa já ter entrado no site com código por e-mail. A concessão fica registrada na auditoria com seu usuário e horário."
+          description="Esta pessoa receberá acesso total à moderação e aos contatos dos proponentes. Ela entra em “Entrar” com o código enviado para esse e-mail. A concessão fica registrada na auditoria com seu usuário e horário."
         >
           <div className="flex flex-wrap gap-2">
             <Button loading={busy} loadingText="Concedendo…" onClick={() => void confirm()}>

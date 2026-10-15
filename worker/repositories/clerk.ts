@@ -16,6 +16,9 @@
  *   404 -> null; 429, 5xx or no response -> SERVICE_UNAVAILABLE (503); anything else (e.g. a
  *   rejected secret key) -> INTERNAL_ERROR.
  * - `findUserByEmail`: Backend API `users.getUserList({ emailAddress })` (scripts).
+ * - `ensureUserByEmail` (D52, admin grant): find, else `users.createUser({ emailAddress,
+ *   skipPasswordRequirement })`. A user created through the Backend API has its e-mail marked
+ *   verified by Clerk, but signing in still requires the code sent to that inbox.
  * Nothing from Clerk is forwarded to the client and tokens are never logged.
  */
 import { createClerkClient, verifyToken } from '@clerk/backend';
@@ -164,6 +167,29 @@ export class ClerkAuthGateway implements AuthGateway {
       if (s === 404) return null;
       logClerk('clerk.getUser', s ?? 'network');
       // QA3-01/05: throttling (429), Clerk outage (5xx) or no response -> 503, never 500.
+      if (s === null || s === 429 || s >= 500) throw fail('SERVICE_UNAVAILABLE');
+      throw fail('INTERNAL_ERROR');
+    }
+  }
+
+  async ensureUserByEmail(email: string): Promise<{ user: ClerkUserInfo; created: boolean }> {
+    const addr = email.trim().toLowerCase();
+    const existing = await this.findUserByEmail(addr);
+    if (existing) return { user: existing, created: false };
+    try {
+      const u = await this.client().users.createUser({
+        emailAddress: [addr],
+        skipPasswordRequirement: true,
+      });
+      return { user: toUserInfo(u), created: true };
+    } catch (e) {
+      const s = status(e);
+      // 422 = the identifier was taken meanwhile (concurrent grant): use that user.
+      if (s === 422) {
+        const again = await this.findUserByEmail(addr);
+        if (again) return { user: again, created: false };
+      }
+      logClerk('clerk.createUser', s ?? 'network');
       if (s === null || s === 429 || s >= 500) throw fail('SERVICE_UNAVAILABLE');
       throw fail('INTERNAL_ERROR');
     }

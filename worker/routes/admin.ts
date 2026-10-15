@@ -360,13 +360,16 @@ admin.post('/admin/admins', requireFreshAdmin, rateLimitPerUser('admin_write'), 
   const actor = c.get('user')!.id;
   const { email } = await parseBody(c, AdminGrantInput);
   const { repo, auth } = c.get('deps');
-  const target = await auth.findUserByEmail(email);
-  // Neutral 404: does not reveal whether the address exists with another state (banned etc.).
-  if (!target || target.banned) throw fail('NOT_FOUND');
-  // Only a VERIFIED PRIMARY address qualifies (an admin is a verified Clerk account).
-  if (!target.email_verified || target.email !== email) {
+  // D52: the person does not need to have signed in before. When Clerk has no user for this
+  // e-mail one is created (e-mail only, no password); the person enters through "Entrar" with
+  // the code sent to that inbox, so nobody else can use the grant.
+  const { user: target, created: accountCreated } = await auth.ensureUserByEmail(email);
+  // Neutral 404 for a banned/locked login.
+  if (target.banned) throw fail('NOT_FOUND');
+  // The e-mail must be the PRIMARY address of that login (it is, for a login created here).
+  if (target.email !== email) {
     throw fail('VALIDATION_ERROR', undefined, {
-      email: 'O e-mail principal desta conta ainda não foi verificado.',
+      email: 'Este e-mail não é o principal da conta da pessoa.',
     });
   }
   const created = await repo.addAdmin(target.id, actor);
@@ -377,6 +380,7 @@ admin.post('/admin/admins', requireFreshAdmin, rateLimitPerUser('admin_write'), 
       entity_type: 'admin',
       entity_id: target.id,
       request_id: c.get('requestId'),
+      reason: accountCreated ? 'login=created' : 'login=existing',
     });
   }
   invalidateUserCache(c, target.id);
@@ -384,6 +388,7 @@ admin.post('/admin/admins', requireFreshAdmin, rateLimitPerUser('admin_write'), 
     user_id: target.id,
     email_masked: maskEmail(email),
     created,
+    account_created: accountCreated,
   };
   return ok(c, body, created ? 201 : 200);
 });
