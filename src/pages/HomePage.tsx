@@ -71,8 +71,8 @@ function realignMap(section: HTMLElement | null) {
 
 /**
  * Home simplificada (pedido do cliente, 2026-10-14; D47): hero "é hora da virada" →
- * 1. texto da campanha → 2. inscrição (#participar) → 3. calendário (#agenda) →
- * 4. mapa "Entenda a votação em Minas" (#mapa, com busca). Every "participar" CTA scrolls
+ * 1. texto da campanha → 2. mapa "Entenda a votação em Minas" (#mapa, com busca) →
+ * 3. inscrição (#participar) → 4. calendário (#agenda). Every "participar" CTA scrolls
  * to the sign-up section.
  */
 export default function HomePage() {
@@ -147,48 +147,7 @@ export default function HomePage() {
       {/* Parte 1 — texto da campanha. */}
       <Manifesto />
 
-      {/* Parte 2 — inscrição. */}
-      <HomeJoinSection
-        territoryId={state.territoryId}
-        start={interacted || location.hash === '#participar'}
-      />
-
-      {/* Parte 3 — calendário. */}
-      <section
-        id="agenda"
-        aria-labelledby="agenda-title"
-        className="ed-section scroll-mt-(--header-height)"
-      >
-        <div className="mx-auto grid max-w-(--content-max) grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-x-10">
-          <PlateHeading
-            kicker="Agenda"
-            title="Calendário"
-            id="agenda-title"
-            className="lg:col-span-4 lg:self-start"
-            lead="Panfletagens, conversas, caminhadas e mutirões pela virada em Minas, publicados depois de revisão. Horários de Brasília."
-          />
-          <div className="min-w-0 lg:col-span-8">
-            {agendaReady ? (
-              <Suspense fallback={<AgendaPlaceholder />}>
-                <ActivityAgenda variant="row" />
-              </Suspense>
-            ) : (
-              <AgendaPlaceholder />
-            )}
-            <p className="mt-5 text-secondary">
-              Não encontrou uma atividade perto de você?{' '}
-              <Link
-                to="/criar-atividade"
-                className="inline-flex min-h-11 items-center font-semibold text-primary underline decoration-2 underline-offset-4"
-              >
-                Proponha uma atividade
-              </Link>
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Parte 4 — entenda a votação em Minas. A busca por cidade/bairro fica junto do mapa:
+      {/* Parte 2 — entenda a votação em Minas. A busca por cidade/bairro fica junto do mapa:
           ao lado do título no desktop, a toda a largura abaixo dele no celular. */}
       <div className="px-(--gutter) pt-10 pb-5 sm:pt-14 lg:px-6 lg:pt-16 lg:pb-6">
         <div className="mx-auto flex max-w-(--content-max) flex-col gap-5 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
@@ -241,6 +200,47 @@ export default function HomePage() {
             </Suspense>
           }
         />
+      </section>
+
+      {/* Parte 3 — inscrição. */}
+      <HomeJoinSection
+        territoryId={state.territoryId}
+        start={interacted || location.hash === '#participar'}
+      />
+
+      {/* Parte 4 — calendário. */}
+      <section
+        id="agenda"
+        aria-labelledby="agenda-title"
+        className="ed-section scroll-mt-(--header-height)"
+      >
+        <div className="mx-auto grid max-w-(--content-max) grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-x-10">
+          <PlateHeading
+            kicker="Agenda"
+            title="Calendário"
+            id="agenda-title"
+            className="lg:col-span-4 lg:self-start"
+            lead="Panfletagens, conversas, caminhadas e mutirões pela virada em Minas, publicados depois de revisão. Horários de Brasília."
+          />
+          <div className="min-w-0 lg:col-span-8">
+            {agendaReady ? (
+              <Suspense fallback={<AgendaPlaceholder />}>
+                <ActivityAgenda variant="row" />
+              </Suspense>
+            ) : (
+              <AgendaPlaceholder />
+            )}
+            <p className="mt-5 text-secondary">
+              Não encontrou uma atividade perto de você?{' '}
+              <Link
+                to="/criar-atividade"
+                className="inline-flex min-h-11 items-center font-semibold text-primary underline decoration-2 underline-offset-4"
+              >
+                Proponha uma atividade
+              </Link>
+            </p>
+          </div>
+        </div>
       </section>
     </>
   );

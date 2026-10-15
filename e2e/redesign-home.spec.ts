@@ -1,5 +1,5 @@
 /**
- * Home simplificada (D47, 2026-10-14): hero → texto → inscrição → calendário → mapa;
+ * Home simplificada (D47, 2026-10-14): hero → texto → mapa → inscrição → calendário;
  * convites de participação sem redundância (D6), agenda em linhas editoriais (D12),
  * cadastro como faixa escura e sem overflow horizontal.
  * O hero é coberto por e2e/hero-freeze.spec.ts. Strings de expressão em `evaluate`: os e2e são
@@ -7,7 +7,7 @@
  */
 import { expect, test } from '@playwright/test';
 
-test('home simplificada: hero → texto → inscrição → calendário → mapa', async ({ page }) => {
+test('home simplificada: hero → texto → mapa → inscrição → calendário', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   const seq = await page.evaluate<boolean>(`(() => {
@@ -18,7 +18,7 @@ test('home simplificada: hero → texto → inscrição → calendário → mapa
     const map = document.getElementById('mapa-title');
     const mapa = document.getElementById('mapa');
     const f = (a, b) => !!(a && b) && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-    return f(hero, text) && f(text, join) && f(join, agenda) && f(agenda, map) && f(map, mapa) && !mapa.contains(map);
+    return f(hero, text) && f(text, map) && f(map, mapa) && f(mapa, join) && f(join, agenda) && !mapa.contains(map);
   })()`);
   expect(seq).toBe(true);
   await expect(page.getByTestId('story-intro')).toHaveCount(0);
@@ -99,3 +99,12 @@ for (const width of [390, 320]) {
     }
   });
 }
+
+test('CTA "Inscreva-se" do hero leva ao cadastro, passando por cima do mapa', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('section.brand-hero').getByRole('link', { name: 'Inscreva-se' }).click();
+  await expect(page).toHaveURL(/#participar$/);
+  const title = page.getByRole('heading', { name: 'Inscreva-se', level: 2 });
+  await expect(title).toBeInViewport({ timeout: 10_000 });
+  await expect(title).toBeFocused();
+});

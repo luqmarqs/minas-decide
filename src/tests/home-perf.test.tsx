@@ -41,7 +41,7 @@ describe('home first paint (P-PERF-1)', () => {
     await vi.waitFor(() => expect(snapshotCalls(fetchMock).length).toBeGreaterThan(0));
   });
 
-  it('simplified sequence: hero → text → sign-up → calendar → map (one search, by the map)', () => {
+  it('simplified sequence: hero → text → map → sign-up → calendar (one search, by the map)', () => {
     stubFetch();
     renderWithApp(<HomePage />);
     const text = screen.getByRole('heading', { level: 2, name: 'É hora de disputar voto a voto!' });
@@ -51,10 +51,10 @@ describe('home first paint (P-PERF-1)', () => {
     const mapSection = document.getElementById('mapa')!;
     const follows = (a: Node, b: Node) =>
       Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(follows(text, join)).toBe(true);
-    expect(follows(join, agenda)).toBe(true);
-    expect(follows(agenda, map)).toBe(true);
+    expect(follows(text, map)).toBe(true);
     expect(follows(map, mapSection)).toBe(true);
+    expect(follows(mapSection, join)).toBe(true);
+    expect(follows(join, agenda)).toBe(true);
     expect(screen.getByText('Emicida')).toBeInTheDocument();
     // The narrative and "Por que Minas decide" plates are gone.
     expect(screen.queryByTestId('story-intro')).not.toBeInTheDocument();
