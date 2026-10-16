@@ -207,9 +207,16 @@ function googlePlace(
   return { label, street, number, neighborhood, city, coordinates: [lon, lat] };
 }
 
+/**
+ * The owner's key is restricted by HTTP referrer (shared with other sites) and lists the site
+ * origin: Places API (New) honours the Referer header, so the Worker identifies itself as the
+ * public origin. The Geocoding API rejects referrer-restricted keys outright (REQUEST_DENIED);
+ * the reverse lookup then falls back to Photon.
+ */
 function googleHeaders(env: Env, fieldMask?: string): Record<string, string> {
   return {
     'X-Goog-Api-Key': env.GOOGLE_MAPS_API_KEY ?? '',
+    Referer: `${env.PUBLIC_ORIGIN.replace(/\/+$/, '')}/`,
     ...(fieldMask ? { 'X-Goog-FieldMask': fieldMask } : {}),
   };
 }

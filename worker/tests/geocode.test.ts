@@ -161,6 +161,8 @@ describe('GET /geocode (Google Places New, key set)', () => {
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(String(url)).toBe('https://places.googleapis.com/v1/places:autocomplete');
     expect((init!.headers as Record<string, string>)['X-Goog-Api-Key']).toBe(KEY);
+    // Referrer-restricted key: the Worker identifies itself as the public origin.
+    expect((init!.headers as Record<string, string>).Referer).toBe('http://127.0.0.1:8787/');
     const sent = JSON.parse(String(init!.body)) as Record<string, unknown>;
     expect(sent).toMatchObject({
       input: 'praca liberdade',
