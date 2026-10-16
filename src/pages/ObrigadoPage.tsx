@@ -1,11 +1,8 @@
-import { Link, useLocation, useSearchParams } from 'react-router';
-import { TerritoryId } from '@shared/contracts/territory.ts';
+import { Link, useLocation } from 'react-router';
 import { PageShell } from '@/components/layouts/PageShell';
 import { ButtonLink } from '@/components/ui/Button';
-import { Note } from '@/components/ui/States';
 import type { ObrigadoState } from '@/features/registration/api';
-import { useTerritoryName } from '@/features/registration/useTerritoryName';
-import { GroupInvite } from '@/features/whatsapp-groups/GroupInvite';
+import { ViraVotoGroup } from '@/features/whatsapp-groups/ViraVotoGroup';
 
 function fromRegistration(state: unknown): boolean {
   return (
@@ -13,35 +10,22 @@ function fromRegistration(state: unknown): boolean {
   );
 }
 
+/** Depois do cadastro: convite para o grupo único do vira-voto (D54). */
 export default function ObrigadoPage() {
-  const [sp] = useSearchParams();
   const location = useLocation();
-  const raw = sp.get('territorio');
-  const territoryId = raw && TerritoryId.safeParse(raw).success && raw !== 'mg' ? raw : null;
-  const { label } = useTerritoryName(territoryId);
   const fromForm = fromRegistration(location.state);
 
   return (
     <PageShell
-      title={fromForm ? 'Cadastro recebido' : 'Grupo da sua região'}
+      title={fromForm ? 'Cadastro recebido' : 'Grupo do vira-voto'}
       lead={
         fromForm
-          ? 'Você agora faz parte da mobilização da campanha de Lula em Minas. Seu cadastro foi registrado pelo servidor; veja abaixo o grupo de WhatsApp da sua região.'
+          ? 'Você agora faz parte da mobilização pela virada em Minas. Seu cadastro foi registrado; o próximo passo é entrar no grupo do vira-voto.'
           : undefined
       }
     >
       <div className="flex flex-col gap-6">
-        {territoryId ? (
-          <GroupInvite territoryId={territoryId} territoryName={label ?? 'a sua região'} />
-        ) : (
-          <Note tone="warning">
-            Nenhum território informado.{' '}
-            <Link to="/" className="underline">
-              Escolha sua cidade ou bairro no mapa
-            </Link>{' '}
-            para ver o grupo.
-          </Note>
-        )}
+        <ViraVotoGroup />
         {fromForm ? (
           <p className="text-secondary">
             Guardamos seu contato para a equipe da campanha falar com você. Para propor atividades
@@ -53,8 +37,8 @@ export default function ObrigadoPage() {
           </p>
         ) : null}
         <div className="flex flex-wrap gap-2">
-          <ButtonLink to={territoryId ? `/territorio/${territoryId}` : '/'} variant="secondary">
-            Voltar ao território
+          <ButtonLink to="/" variant="secondary">
+            Voltar ao início
           </ButtonLink>
           <ButtonLink to="/criar-atividade" variant="ghost">
             Propor atividade da campanha

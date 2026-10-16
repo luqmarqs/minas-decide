@@ -29,7 +29,8 @@ export const routes: RouteObject[] = [
       { path: 'atividade/:id', ...page(() => import('@/pages/AtividadePage')) },
       { path: 'participar', ...page(() => import('@/pages/ParticiparPage')) },
       { path: 'obrigado', ...page(() => import('@/pages/ObrigadoPage')) },
-      { path: 'propor-grupo', ...page(() => import('@/pages/ProporGrupoPage')) },
+      // D54: grupos por território deram lugar ao grupo único do vira-voto.
+      { path: 'propor-grupo', loader: () => redirect('/obrigado') },
       { path: 'criar-atividade', ...page(() => import('@/pages/CriarAtividadePage')) },
       { path: 'minhas-atividades', ...page(() => import('@/pages/MinhasAtividadesPage')) },
       { path: 'entrar', ...page(() => import('@/pages/EntrarPage')) },

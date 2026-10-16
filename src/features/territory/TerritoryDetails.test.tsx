@@ -55,10 +55,11 @@ describe('TerritoryDetails', () => {
     expect(screen.getByText(/Bairro de Vale Demo\/MG/)).toBeInTheDocument();
   });
 
-  it('shows honest unavailable states when the API is down (groups and agenda)', async () => {
+  it('shows the vira-voto group (D54) even when the API is down', async () => {
     stubFetch(); // API throws network error; snapshot falls back to demo
     renderDetails('mg-3106655');
-    expect(await screen.findByText(/Grupos: não foi possível verificar agora/)).toBeInTheDocument();
+    expect(await screen.findByText('Entre no grupo do vira-voto!')).toBeInTheDocument();
+    expect(screen.queryByText(/Propor (um )?grupo/)).not.toBeInTheDocument();
   });
 
   it('reports unknown territories instead of inventing one', async () => {

@@ -15,6 +15,7 @@ import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshotStatus';
 import { useMapUrlState } from '@/features/electoral-map/useMapUrlState';
 import { TerritorySearch } from '@/features/territory/TerritorySearch';
 import { HomeJoinSection } from '@/features/registration/HomeJoinSection';
+import { IzaQuote } from '@/features/manifesto/IzaQuote';
 import { Manifesto } from '@/features/manifesto/Manifesto';
 import { JoinCta } from '@/features/registration/JoinCta';
 import { scrollToJoin } from '@/features/registration/join';
@@ -146,6 +147,9 @@ export default function HomePage() {
 
       {/* Parte 1 — texto da campanha. */}
       <Manifesto />
+
+      {/* Citação da Iza Lourença (D54). */}
+      <IzaQuote />
 
       {/* Parte 2 — entenda a votação em Minas. A busca por cidade/bairro fica junto do mapa:
           ao lado do título no desktop, a toda a largura abaixo dele no celular. */}

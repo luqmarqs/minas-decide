@@ -20,7 +20,7 @@ import { SNAPSHOT_STATUS_LABEL } from '@/features/electoral-map/snapshotStatus';
 import { mapQuery } from '@/features/electoral-map/useMapUrlState';
 import { ActivityAgenda } from '@/features/activities/ActivityAgenda';
 import { DataQualityNote } from './DataQualityNote';
-import { GroupCard } from './GroupCard';
+import { ViraVotoGroup } from '@/features/whatsapp-groups/ViraVotoGroup';
 import { ResultsBlock, TurnoutCards } from './MetricBlocks';
 import { MobilizationBlock } from './MobilizationBlock';
 import { PresidentialComparisonBlock } from './PresidentialComparisonBlock';
@@ -340,13 +340,7 @@ export function TerritoryDetails({
 
       <DataQualityNote entry={entry} metrics={metrics} releaseId={snapshot.releaseId} />
 
-      {entry.type !== 'state' ? (
-        <GroupCard
-          territoryId={entry.id}
-          territoryName={entry.name}
-          municipalityName={entry.type === 'neighborhood' ? entry.municipality_name : entry.name}
-        />
-      ) : null}
+      <ViraVotoGroup variant="compact" />
 
       {entry.type !== 'state' ? (
         <Section title="Atividades próximas">

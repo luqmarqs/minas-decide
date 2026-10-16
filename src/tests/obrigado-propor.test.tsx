@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ObrigadoPage from '@/pages/ObrigadoPage';
 import ProporGrupoPage from '@/pages/ProporGrupoPage';
+import { isWhatsAppInviteUrl } from '@shared/contracts/groups.ts';
+import { VIRA_VOTO_GROUP_URL } from '@/lib/campaign';
 import { stubFetch } from './utils';
 import {
   apiError,
@@ -41,60 +43,22 @@ function renderObrigado() {
   );
 }
 
-describe('/obrigado', () => {
-  it('exact group: invite button with noopener/noreferrer and visible domain', async () => {
-    stubFetch((url) =>
-      url.startsWith('/api/v1/groups?')
-        ? Promise.resolve(ok({ items: [GROUP], fallback: 'exact' }))
-        : undefined,
-    );
+describe('/obrigado (D54: grupo único do vira-voto)', () => {
+  it('shows the vira-voto invite with noopener/noreferrer and visible domain, no group lookup', async () => {
+    const fetchMock = stubFetch();
     renderObrigado();
-    const link = await screen.findByRole('link', { name: /Abrir convite no WhatsApp/ });
-    expect(link).toHaveAttribute('href', GROUP.join_url);
+    expect(
+      screen.getByRole('heading', { name: 'Entre no grupo do vira-voto!' }),
+    ).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /Entrar no grupo/ });
+    expect(link).toHaveAttribute('href', VIRA_VOTO_GROUP_URL);
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(link).toHaveAttribute('target', '_blank');
+    expect(isWhatsAppInviteUrl(VIRA_VOTO_GROUP_URL)).toBe(true);
     expect(screen.getByText('chat.whatsapp.com')).toBeInTheDocument();
     expect(screen.getByText(/não sabe se você entrou/)).toBeInTheDocument();
-    // ADR 0005: no "sessão provisória" / magic-link texts anymore.
-    expect(screen.queryByText(/sessão provisória|link de confirmação/)).not.toBeInTheDocument();
-  });
-
-  it('municipality fallback explains it is the city group', async () => {
-    stubFetch((url) =>
-      url.startsWith('/api/v1/groups?')
-        ? Promise.resolve(
-            ok({ items: [{ ...GROUP, territory_id: 'mg-3106200' }], fallback: 'municipality' }),
-          )
-        : undefined,
-    );
-    renderObrigado();
-    expect(await screen.findByText('Grupo do município')).toBeInTheDocument();
-    expect(screen.getByText(/grupo aprovado da\s+cidade/)).toBeInTheDocument();
-  });
-
-  it('no group: CTA to propose a group for the territory', async () => {
-    stubFetch((url) =>
-      url.startsWith('/api/v1/groups?')
-        ? Promise.resolve(ok({ items: [], fallback: 'none' }))
-        : undefined,
-    );
-    renderObrigado();
-    const cta = await screen.findByRole('link', { name: /Propor um grupo para esta região/ });
-    expect(cta).toHaveAttribute('href', `/propor-grupo?territorio=${TERRITORY}`);
-    expect(screen.queryByRole('link', { name: /Abrir convite/ })).not.toBeInTheDocument();
-  });
-
-  it('never renders a non-official invite URL as a link', async () => {
-    stubFetch((url) =>
-      url.startsWith('/api/v1/groups?')
-        ? Promise.resolve(
-            ok({ items: [{ ...GROUP, join_url: 'https://evil.example/x' }], fallback: 'exact' }),
-          )
-        : undefined,
-    );
-    renderObrigado();
-    expect(await screen.findByText(/Ainda não há grupo aprovado/)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Abrir convite/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Propor um grupo/ })).not.toBeInTheDocument();
+    expect(callsTo(fetchMock, '/api/v1/groups')).toHaveLength(0);
   });
 });
 
