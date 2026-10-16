@@ -11,7 +11,7 @@ export interface BrandLockupProps {
 
 /**
  * Horizontal lockup of the official identity: sun + "MINAS" (Anton) +
- * "DECIDE" (Bungee Outline). Sized for the 56 px header; both fonts are preloaded
+ * "DECIDE" (Bungee Outline). Sized for the 56 px header (a bit smaller on phones, so the header actions fit); both fonts are preloaded
  * in index.html.
  */
 export function BrandLockup({ mono = false, label, className }: BrandLockupProps) {
@@ -24,14 +24,20 @@ export function BrandLockup({ mono = false, label, className }: BrandLockupProps
     >
       <SunMark
         size={38}
-        className={cn('mb-[3px] shrink-0', mono ? 'text-current' : 'text-(--brand-sun)')}
+        className={cn(
+          'mb-[3px] size-[30px] shrink-0 sm:size-[38px]',
+          mono ? 'text-current' : 'text-(--brand-sun)',
+        )}
       />
-      <span aria-hidden="true" className="brand-display text-[1.6rem] tracking-[0.01em]">
+      <span
+        aria-hidden="true"
+        className="brand-display text-[1.3rem] tracking-[0.01em] sm:text-[1.6rem]"
+      >
         MINAS
       </span>{' '}
       {/* whitespace is not rendered between flex items; it only keeps the visible text "MINAS DECIDE"
           matching the accessible name (axe label-content-name-mismatch). */}
-      <span aria-hidden="true" className="brand-outline text-[1.45rem]">
+      <span aria-hidden="true" className="brand-outline text-[1.15rem] sm:text-[1.45rem]">
         DECIDE
       </span>
     </span>

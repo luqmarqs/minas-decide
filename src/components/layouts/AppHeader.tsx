@@ -2,6 +2,7 @@ import { Link, NavLink } from 'react-router';
 import { BrandLockup } from '@/components/brand/BrandLockup';
 import { SessionMenu } from '@/components/layouts/SessionMenu';
 import { Icon } from '@/components/ui/Icon';
+import { buttonClasses } from '@/components/ui/buttonStyles';
 import { useBrandActive } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 
@@ -67,6 +68,22 @@ export function AppHeader() {
             Metodologia
           </NavLink>
         </nav>
+        {/* Propor atividade (pedido do proprietário, 2026-10-15): texto a partir de md; ícone
+            "+" com rótulo acessível nos celulares, onde o espaço é curto. */}
+        <Link
+          to="/criar-atividade"
+          className={buttonClasses('secondary', 'sm', 'hidden no-underline md:inline-flex')}
+        >
+          <Icon name="plus" size={16} />
+          Propor atividade
+        </Link>
+        <Link
+          to="/criar-atividade"
+          className="grid size-11 place-items-center rounded-md text-primary hover:bg-surface-alt md:hidden"
+          aria-label="Propor atividade"
+        >
+          <Icon name="plus" />
+        </Link>
         <Link
           to={{ pathname: '/', hash: 'busca' }}
           className="grid size-11 place-items-center rounded-md text-primary hover:bg-surface-alt md:hidden"
